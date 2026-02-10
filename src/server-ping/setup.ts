@@ -3,16 +3,16 @@ import type { ServerPingState } from './state';
 
 declare global {
   var serverPingSetup: {
-    onSetupStart: () => SetupStartResult;
+    onSetupStart: () => Promise<SetupStartResult>;
     onSetupSubmit: (args: {
       stepId: string;
       values: Record<string, unknown>;
     }) => Promise<SetupSubmitResult>;
-    onSetupCancel: () => void;
+    onSetupCancel: () => Promise<void>;
   };
 }
 
-function onSetupStart(): SetupStartResult {
+async function onSetupStart(): Promise<SetupStartResult> {
   console.log('[server-ping] onSetupStart');
   const defaultUrl = platform.env('BACKEND_URL') || platform.env('BACKEND_URL') || '';
 
@@ -117,7 +117,7 @@ async function onSetupSubmit(args: {
   return { status: 'error', errors: [{ field: '', message: `Unknown setup step: ${stepId}` }] };
 }
 
-function onSetupCancel(): void {
+async function onSetupCancel(): Promise<void> {
   console.log('[server-ping] Setup cancelled');
 }
 

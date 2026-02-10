@@ -141,7 +141,7 @@ async function onListOptions(): Promise<{ options: SkillOption[] }> {
   };
 }
 
-function onSetOption(args: { name: string; value: unknown }): void {
+async function onSetOption(args: { name: string; value: unknown }): Promise<void> {
   const { name, value } = args;
   const s = getSkillState();
 
@@ -174,14 +174,14 @@ function onSetOption(args: { name: string; value: unknown }): void {
 // Session lifecycle
 // ---------------------------------------------------------------------------
 
-function onSessionStart(args: { sessionId: string }): void {
+async function onSessionStart(args: { sessionId: string }): Promise<void> {
   const { sessionId } = args;
   const s = getSkillState();
   s.activeSessions.push(sessionId);
   console.log(`[server-ping] Session started: ${sessionId} (active: ${s.activeSessions.length})`);
 }
 
-function onSessionEnd(args: { sessionId: string }): void {
+async function onSessionEnd(args: { sessionId: string }): Promise<void> {
   const { sessionId } = args;
   const s = getSkillState();
   s.activeSessions = s.activeSessions.filter(sid => sid !== sessionId);
@@ -192,7 +192,7 @@ function onSessionEnd(args: { sessionId: string }): void {
 // Cron handler (legacy — now using setInterval instead)
 // ---------------------------------------------------------------------------
 
-function onCronTrigger(_scheduleId: string): void {
+async function onCronTrigger(_scheduleId: string): Promise<void> {
   // No longer using cron — ping is driven by setInterval in start()
 }
 
