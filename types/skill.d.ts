@@ -19,7 +19,7 @@ interface Skill {
   }) => Promise<SetupSubmitResult>;
   onSetupCancel?: () => Promise<void>;
   onOAuthComplete?: (args: OAuthCompleteArgs) => Promise<unknown>;
-  onDisconnect?: () => Promise<void>  ;
+  onDisconnect?: () => Promise<void>;
   publishState?: () => Promise<void>;
   onOAuthRevoked?: (args: OAuthRevokedArgs) => Promise<void>;
   onListOptions?: () => Promise<{ options: SkillOption[] }>;

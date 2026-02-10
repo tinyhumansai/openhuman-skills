@@ -41,7 +41,10 @@ async function stop(): Promise<void> {
   state.setPartial({ connection_status: 'disconnected', status: 'stopped' });
 }
 
-async function onLoad(params: { walletAddress?: string; walletAddresses?: string[] }): Promise<void> {
+async function onLoad(params: {
+  walletAddress?: string;
+  walletAddresses?: string[];
+}): Promise<void> {
   const s = globalThis.getWalletSkillState();
   if (params.walletAddress) {
     if (!s.config.walletAddresses.includes(params.walletAddress)) {
