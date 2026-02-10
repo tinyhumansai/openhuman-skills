@@ -14,6 +14,10 @@ export interface SkillConfig {
   pendingCode: boolean;
   /** When false (default), sensitive messages (password reset, OTP, 2FA, login links) are filtered out. */
   showSensitiveMessages?: boolean;
+  /** When false (default), group admin actions are not allowed. */
+  allowGroupAdminActions?: boolean;
+  /** When false (default), write actions are not allowed. */
+  allowWriteActions?: boolean;
 }
 
 export interface FormattedUser {

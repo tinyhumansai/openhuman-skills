@@ -1,6 +1,11 @@
 // Barrel export for the Telegram API layer.
 // Each file wraps raw TDLib requests into typed async functions.
 export {
+  setAuthenticationPhoneNumber,
+  checkAuthenticationCode,
+  checkAuthenticationPassword,
+} from './auth';
+export {
   getMe,
   getUser,
   getUserFullInfo,

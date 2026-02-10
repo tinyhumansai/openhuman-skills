@@ -158,6 +158,8 @@ export class TdLibBridge {
     const extra = String(++this.extraCounter);
     request['@extra'] = extra;
 
+    globalThis.console.log(`[tdlib-bridge] send: ${request['@type']} @extra=${extra}`);
+
     return new Promise<string>((resolve, reject) => {
       // Set up a 30-second timeout for the response
       const timer = setTimeout(() => {
@@ -292,10 +294,20 @@ export class TdLibBridge {
         continue;
       }
 
+      const msgType = msg['@type'] as string;
+
       // Filter by client ID — TDLib tags all responses
       const msgClientId = msg['@client_id'] as number | undefined;
       if (msgClientId !== undefined && msgClientId !== this.clientId) {
         continue; // Not for our client
+      }
+
+      // Log significant messages for debugging
+      if (msgType === 'error' || msgType === 'updateAuthorizationState' || msgType === 'ok') {
+        const authState = (msg as { authorization_state?: { '@type'?: string } }).authorization_state?.['@type'];
+        globalThis.console.log(
+          `[tdlib-bridge] ${msgType}${authState ? ` (${authState})` : ''}${msg['@extra'] ? ` @extra=${msg['@extra']}` : ''}${msgType === 'error' ? ` code=${msg.code} msg=${msg.message}` : ''}`,
+        );
       }
 
       // Check if this is a response to a pending send() request

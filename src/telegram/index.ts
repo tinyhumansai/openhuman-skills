@@ -14,10 +14,8 @@ import './sync';
 import type { TdLibClient as TdLibClientType, TdUpdate, TdUser } from './tdlib-client';
 import './tdlib-client';
 import tools from './tools/index';
-// registers globalThis.telegramSync
-// Import tool definitions
-// registers globalThis.telegramDb
 import './update-handlers';
+import { createSetupHandlers } from './setup';
 
 // Access TdLibClient from globalThis (workaround for esbuild bundling issues)
 const getTdLibClientClass = (): typeof TdLibClientType => {
@@ -301,53 +299,6 @@ function updateStorageStats(): void {
   }
 }
 
-/**
- * Send phone number for authentication.
- */
-async function sendPhoneNumber(phoneNumber: string): Promise<void> {
-  const s = globalThis.getTelegramSkillState();
-  if (!s.client) {
-    throw new Error('TDLib client not initialized');
-  }
-
-  console.log('[telegram] Sending phone number for auth...');
-  s.config.phoneNumber = phoneNumber;
-  s.config.pendingCode = true;
-  state.set('config', s.config);
-
-  await s.client.setAuthenticationPhoneNumber(phoneNumber);
-  console.log('[telegram] Phone number sent, waiting for code...');
-  publishState();
-}
-
-/**
- * Submit verification code.
- */
-async function submitCode(code: string): Promise<void> {
-  const s = globalThis.getTelegramSkillState();
-  if (!s.client) {
-    throw new Error('TDLib client not initialized');
-  }
-
-  console.log('[telegram] Submitting verification code...');
-  await s.client.checkAuthenticationCode(code);
-  console.log('[telegram] Code submitted');
-}
-
-/**
- * Submit 2FA password.
- */
-async function submitPassword(password: string): Promise<void> {
-  const s = globalThis.getTelegramSkillState();
-  if (!s.client) {
-    throw new Error('TDLib client not initialized');
-  }
-
-  console.log('[telegram] Submitting 2FA password...');
-  await s.client.checkAuthenticationPassword(password);
-  console.log('[telegram] Password submitted');
-}
-
 // ---------------------------------------------------------------------------
 // Lifecycle Hooks
 // ---------------------------------------------------------------------------
@@ -422,32 +373,32 @@ function stop(): void {
   state.set('status', 'stopped');
 }
 
-function onDisconnect(): void {
+async function onDisconnect(): Promise<void> {
   console.log('[telegram] Disconnecting skill and performing cleanup');
   const s = globalThis.getTelegramSkillState();
 
-  // If authenticated, log out from Telegram servers first
-  if (s.client && s.config.isAuthenticated) {
-    try {
+  try {
+    // If authenticated, log out from Telegram servers first
+    if (s.client && s.config.isAuthenticated) {
       console.log('[telegram] Logging out from Telegram servers');
-      s.client.logOut().catch(e => {
-        console.warn('[telegram] Error during logout:', e);
+      await s.client.logOut().catch(e => {
+        const errorMsg = e instanceof Error ? e.message : String(e);
+        console.warn('[telegram] Error during logout:', errorMsg);
       });
-    } catch (e) {
-      console.warn('[telegram] Error during logout:', e);
     }
-  }
 
-  // Destroy TDLib client
-  if (s.client) {
-    try {
-      s.client.destroy().catch(e => {
-        console.warn('[telegram] Error destroying client:', e);
+    // Destroy TDLib client
+    if (s.client) {
+      await s.client.destroy().catch(e => {
+        const errorMsg = e instanceof Error ? e.message : String(e);
+        console.warn('[telegram] Error destroying client:', errorMsg);
       });
-    } catch (e) {
-      console.warn('[telegram] Error destroying client:', e);
+
+      s.client = null;
     }
-    s.client = null;
+  } catch (e) {
+    const errorMsg = e instanceof Error ? e.message : String(e);
+    console.warn('[telegram] Error during disconnect:', errorMsg);
   }
 
   // Clear authentication state
@@ -475,273 +426,6 @@ function onCronTrigger(_scheduleId: string): void {
   // No-op: TDLib update loop handles everything
 }
 
-// ---------------------------------------------------------------------------
-// Setup Flow
-// ---------------------------------------------------------------------------
-
-function onSetupStart(): SetupStartResult {
-  const s = globalThis.getTelegramSkillState();
-
-  // Start client initialization in background
-  if (!s.client && !s.clientConnecting) {
-    initClient().catch(err => {
-      const errorMsg = err instanceof Error ? err.message : String(err);
-      onError({ type: 'network', message: errorMsg, source: 'initClient', recoverable: true });
-    });
-  }
-
-  return {
-    step: {
-      id: 'phone',
-      title: 'Connect Telegram Account',
-      description: 'Enter your phone number to connect your Telegram account.',
-      fields: [
-        {
-          name: 'phoneNumber',
-          type: 'text',
-          label: 'Phone Number',
-          description: 'International format (e.g., +1234567890)',
-          required: true,
-          placeholder: '+1234567890',
-        },
-      ],
-    },
-  };
-}
-
-async function onSetupSubmit(args: {
-  stepId: string;
-  values: Record<string, unknown>;
-}): Promise<SetupSubmitResult> {
-  const s = globalThis.getTelegramSkillState();
-  const { stepId, values } = args;
-
-  if (stepId === 'credentials') {
-    const apiId = parseInt((values.apiId as string) || '', 10);
-    const apiHash = ((values.apiHash as string) || '').trim();
-
-    console.log(
-      `[telegram] Setup: credentials step - apiId: ${apiId}, apiHash: ${apiHash ? '[set]' : '[empty]'}`
-    );
-
-    // Start client initialization in background
-    initClient().catch(err => {
-      const errorMsg = err instanceof Error ? err.message : String(err);
-      onError({ type: 'network', message: errorMsg, source: 'initClient', recoverable: true });
-    });
-
-    return {
-      status: 'next',
-      nextStep: {
-        id: 'phone',
-        title: 'Connect Telegram Account',
-        description:
-          'Enter your phone number to connect your Telegram account. Please wait a moment for the connection to establish.',
-        fields: [
-          {
-            name: 'phoneNumber',
-            type: 'text',
-            label: 'Phone Number',
-            description: 'International format (e.g., +1234567890)',
-            required: true,
-            placeholder: '+1234567890',
-          },
-        ],
-      },
-    };
-  }
-
-  if (stepId === 'phone') {
-    const phoneNumber = ((values.phoneNumber as string) || '').trim();
-
-    console.log(
-      `[telegram] Setup: phone step - number: ${phoneNumber ? phoneNumber.slice(0, 4) + '****' : '[empty]'}`
-    );
-    console.log(
-      `[telegram] Setup: client connected: ${s.client !== null}, connecting: ${s.clientConnecting}, authState: ${s.authState}`
-    );
-
-    // Enhanced phone number validation
-    if (!phoneNumber) {
-      return {
-        status: 'error',
-        errors: [{ field: 'phoneNumber', message: 'Phone number is required' }],
-      };
-    }
-
-    if (!phoneNumber.startsWith('+')) {
-      return {
-        status: 'error',
-        errors: [
-          {
-            field: 'phoneNumber',
-            message: 'Phone number must start with + (international format)',
-          },
-        ],
-      };
-    }
-
-    // Check if phone number contains only valid characters (+, digits, spaces, dashes)
-    const phoneRegex = /^\+[1-9]\d{1,14}$/;
-    const cleanPhone = phoneNumber.replace(/[\s\-()]/g, ''); // Remove formatting characters
-    if (!phoneRegex.test(cleanPhone)) {
-      return {
-        status: 'error',
-        errors: [
-          {
-            field: 'phoneNumber',
-            message: 'Invalid phone number format. Use international format: +1234567890',
-          },
-        ],
-      };
-    }
-
-    // Check if client is ready — retry initialization if needed
-    if (!s.client) {
-      if (!s.clientConnecting) {
-        // Client not connecting — kick off initialization again
-        initClient().catch(err => {
-          const errorMsg = err instanceof Error ? err.message : String(err);
-          onError({ type: 'network', message: errorMsg, source: 'initClient', recoverable: true });
-        });
-      }
-      return {
-        status: 'error',
-        errors: [
-          {
-            field: 'phoneNumber',
-            message: 'Connecting to Telegram... Please wait a moment and try again.',
-          },
-        ],
-      };
-    }
-
-    // Check auth state - should be waiting for phone number
-    if (s.authState !== 'waitPhoneNumber' && s.authState !== 'unknown') {
-      console.log(`[telegram] Unexpected auth state for phone step: ${s.authState}`);
-    }
-
-    // Send phone number (use cleaned format, async - errors handled via onError)
-    const cleanPhoneNumber = phoneNumber.replace(/[\s\-()]/g, ''); // Remove formatting characters
-    sendPhoneNumber(cleanPhoneNumber).catch(err => {
-      const errorMsg = err instanceof Error ? err.message : String(err);
-      onError({
-        type: 'auth',
-        message: errorMsg,
-        source: 'setAuthenticationPhoneNumber',
-        recoverable: true,
-      });
-    });
-
-    return {
-      status: 'next',
-      nextStep: {
-        id: 'code',
-        title: 'Enter Verification Code',
-        description:
-          'A verification code has been sent to your Telegram app or SMS. Enter it below.',
-        fields: [
-          {
-            name: 'code',
-            type: 'text',
-            label: 'Verification Code',
-            description: '5-digit code from Telegram',
-            required: true,
-            placeholder: '12345',
-          },
-        ],
-      },
-    };
-  }
-
-  if (stepId === 'code') {
-    const code = ((values.code as string) || '').trim();
-
-    console.log(`[telegram] Setup: code step - authState: ${s.authState}`);
-
-    if (!code) {
-      return {
-        status: 'error',
-        errors: [{ field: 'code', message: 'Verification code is required' }],
-      };
-    }
-
-    // Submit code (async)
-    submitCode(code).catch(err => {
-      const errorMsg = err instanceof Error ? err.message : String(err);
-      onError({
-        type: 'auth',
-        message: errorMsg,
-        source: 'checkAuthenticationCode',
-        recoverable: true,
-      });
-    });
-
-    // Check if we need 2FA password
-    // Give TDLib a moment to process
-    // In practice, the update handler will set authState
-    if (s.authState === 'waitPassword') {
-      return {
-        status: 'next',
-        nextStep: {
-          id: 'password',
-          title: 'Two-Factor Authentication',
-          description: s.passwordHint
-            ? `Enter your 2FA password. Hint: ${s.passwordHint}`
-            : 'Enter your 2FA password.',
-          fields: [
-            {
-              name: 'password',
-              type: 'password',
-              label: '2FA Password',
-              description: 'Your Telegram 2FA password',
-              required: true,
-            },
-          ],
-        },
-      };
-    }
-
-    // If already authenticated or will be soon, complete setup
-    return { status: 'complete' };
-  }
-
-  if (stepId === 'password') {
-    const password = ((values.password as string) || '').trim();
-
-    console.log('[telegram] Setup: password step');
-
-    if (!password) {
-      return {
-        status: 'error',
-        errors: [{ field: 'password', message: '2FA password is required' }],
-      };
-    }
-
-    // Submit password (async)
-    submitPassword(password).catch(err => {
-      const errorMsg = err instanceof Error ? err.message : String(err);
-      onError({
-        type: 'auth',
-        message: errorMsg,
-        source: 'checkAuthenticationPassword',
-        recoverable: true,
-      });
-    });
-
-    return { status: 'complete' };
-  }
-
-  return { status: 'error', errors: [{ field: '', message: `Unknown setup step: ${stepId}` }] };
-}
-
-function onSetupCancel(): void {
-  console.log('[telegram] Setup cancelled');
-  const s = globalThis.getTelegramSkillState();
-  s.config.pendingCode = false;
-  state.set('config', s.config);
-}
-
 function onListOptions(): { options: SkillOption[] } {
   const s = globalThis.getTelegramSkillState();
   return {
@@ -752,6 +436,18 @@ function onListOptions(): { options: SkillOption[] } {
         label: 'Show Sensitive Messages',
         value: s.config.showSensitiveMessages ?? false,
       },
+      {
+        name: 'allowGroupAdminActions',
+        type: 'boolean',
+        label: 'Allow Group Admin Actions',
+        value: s.config.allowGroupAdminActions ?? false,
+      },
+      {
+        name: 'allowWriteActions',
+        type: 'boolean',
+        label: 'Allow Write Actions',
+        value: s.config.allowWriteActions ?? false,
+      }
     ],
   };
 }
@@ -797,7 +493,7 @@ function publishState(): void {
     // Skill-specific fields
     authState: s.authState,
     pendingCode: s.config.pendingCode,
-    phoneNumber: s.config.phoneNumber ? s.config.phoneNumber.slice(0, 4) + '****' : null,
+    phoneNumber: s.config.phoneNumber,
     me: s.cache.me,
     dialogCount: s.cache.dialogs.length,
     lastSync: s.cache.lastSync,
@@ -915,7 +611,6 @@ const telegramStatusTool: ToolDefinition = {
   },
 };
 
-
 // ---------------------------------------------------------------------------
 // Skill Export
 // ---------------------------------------------------------------------------
@@ -952,6 +647,11 @@ function onError(args: SkillErrorArgs): void {
   publishState();
 }
 
+const { onSetupStart, onSetupSubmit, onSetupCancel } = createSetupHandlers({
+  initClient,
+  onError,
+  publishState,
+});
 
 const skill: Skill = {
   info: {
@@ -962,7 +662,7 @@ const skill: Skill = {
     auto_start: false,
     setup: { required: true, label: 'Configure Telegram' },
   },
-  tools: [telegramPingTool, telegramStatusTool,  ...tools],
+  tools: [telegramPingTool, telegramStatusTool, ...tools],
   init,
   start,
   stop,
