@@ -298,6 +298,36 @@ export async function createBridgeAPIs(
     },
   };
 
+  // TDLib — real TDLib FFI bridge for Telegram skill testing
+  let tdlibBridge: import('./tdlib-bridge').TdLibBridge | null = null;
+  let tdlibAvailable = false;
+  try {
+    const { TdLibBridge } = await import('./tdlib-bridge');
+    tdlibBridge = new TdLibBridge();
+    tdlibAvailable = tdlibBridge.isAvailable();
+    if (tdlibAvailable) {
+      globalThis.console.log('[bootstrap-live] TDLib bridge available');
+    }
+  } catch {
+    globalThis.console.log('[bootstrap-live] TDLib bridge not available (missing deps)');
+  }
+
+  const tdlib = tdlibAvailable && tdlibBridge
+    ? {
+        isAvailable: () => true,
+        createClient: (dir: string) => tdlibBridge!.createClient(dir),
+        send: (requestJson: string) => tdlibBridge!.send(requestJson),
+        receive: (timeoutMs: number) => tdlibBridge!.receive(timeoutMs),
+        destroy: () => tdlibBridge!.destroy(),
+      }
+    : {
+        isAvailable: () => false,
+        createClient: () => Promise.reject(new Error('TDLib not available')),
+        send: () => Promise.reject(new Error('TDLib not available')),
+        receive: () => Promise.resolve(null),
+        destroy: () => Promise.resolve(),
+      };
+
   // OAuth state — managed by the REPL/runner for dev mode
   let oauthCredential: {
     credentialId: string;
@@ -594,6 +624,7 @@ export async function createBridgeAPIs(
     cron,
     skills,
     oauth,
+    tdlib,
     // Hooks API stub - in live mode, hooks are handled by the Rust runtime.
     // This stub allows skills using hooks to load without errors.
     hooks: {
@@ -712,8 +743,12 @@ export async function createBridgeAPIs(
     onOAuthComplete: undefined,
     onOAuthRevoked: undefined,
     onHookTriggered: undefined,
-    // Cleanup hook for persistent DB and socket
+    // Cleanup hook for persistent DB, socket, and TDLib
     __cleanup: () => {
+      if (tdlibBridge && tdlibAvailable) {
+        tdlibBridge.destroy().catch(() => { /* best effort */ });
+        tdlibBridge = null;
+      }
       if (socket) {
         socket.disconnect();
         socket = null;

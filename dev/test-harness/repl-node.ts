@@ -561,6 +561,9 @@ ${c.bold}Commands:${c.reset}
   ${c.cyan}socket${c.reset}                      Show socket.io connection status
   ${c.cyan}emit <event> [json]${c.reset}         Emit a socket.io event
   ${c.cyan}disconnect${c.reset}                  Call onDisconnect()
+  ${c.cyan}tdlib${c.reset}                       Show TDLib availability and client status
+  ${c.cyan}tdlib send <json>${c.reset}           Send raw TDLib request and print response
+  ${c.cyan}tdlib receive${c.reset}               Wait 3s for next TDLib update
   ${c.cyan}reload${c.reset}                      Reload skill (stop + re-read + init + start)
   ${c.cyan}exit${c.reset} / ${c.cyan}quit${c.reset}                  Clean exit
 
@@ -1215,6 +1218,79 @@ async function main(): Promise<void> {
         case 'disconnect':
           cmdLifecycle(ctx.G, 'onDisconnect');
           break;
+
+        case 'tdlib': {
+          const tdlibApi = ctx.G.tdlib as {
+            isAvailable?: () => boolean;
+            send?: (json: string) => Promise<string>;
+            receive?: (ms: number) => Promise<unknown>;
+          } | undefined;
+
+          const tdlibAvailable = tdlibApi?.isAvailable?.() ?? false;
+
+          if (!rest) {
+            // Show TDLib status
+            console.log(`${c.bold}TDLib:${c.reset}`);
+            console.log(`  ${c.cyan}Available${c.reset}: ${tdlibAvailable ? `${c.green}yes${c.reset}` : `${c.red}no${c.reset}`}`);
+
+            // Try to get auth state from skill state
+            const stateApi = ctx.G.state as { get?: (key: string) => unknown } | undefined;
+            const skillState = ctx.G.globalThis as Record<string, unknown> | undefined;
+            const getState = skillState?.getTelegramSkillState as (() => Record<string, unknown>) | undefined;
+            if (getState) {
+              try {
+                const s = getState();
+                console.log(`  ${c.cyan}Auth State${c.reset}: ${s.authState ?? 'unknown'}`);
+                console.log(`  ${c.cyan}Connected${c.reset}: ${s.clientConnecting ? 'connecting...' : s.client ? `${c.green}yes${c.reset}` : `${c.red}no${c.reset}`}`);
+                if (s.clientError) console.log(`  ${c.cyan}Error${c.reset}: ${c.red}${s.clientError}${c.reset}`);
+              } catch {
+                // skill state not available
+              }
+            }
+            const config = stateApi?.get?.('config') as Record<string, unknown> | null;
+            if (config?.isAuthenticated) {
+              console.log(`  ${c.cyan}Authenticated${c.reset}: ${c.green}yes${c.reset}`);
+            }
+          } else if (rest.startsWith('send ')) {
+            // Send raw TDLib request
+            const jsonStr = rest.substring(5).trim();
+            if (!tdlibAvailable || !tdlibApi?.send) {
+              console.log(`${c.red}TDLib not available${c.reset}`);
+              break;
+            }
+            try {
+              const parsed = JSON.parse(jsonStr);
+              console.log(`${c.dim}Sending: ${JSON.stringify(parsed)}${c.reset}`);
+              const response = await tdlibApi.send(JSON.stringify(parsed));
+              const result = JSON.parse(response);
+              console.log(`${c.green}Response:${c.reset}`);
+              console.log(prettyJson(result));
+            } catch (e) {
+              console.log(`${c.red}TDLib send error: ${e}${c.reset}`);
+            }
+          } else if (rest === 'receive') {
+            // Wait for next update
+            if (!tdlibAvailable || !tdlibApi?.receive) {
+              console.log(`${c.red}TDLib not available${c.reset}`);
+              break;
+            }
+            console.log(`${c.dim}Waiting 3s for TDLib update...${c.reset}`);
+            try {
+              const update = await tdlibApi.receive(3000);
+              if (update) {
+                console.log(`${c.green}Update:${c.reset}`);
+                console.log(prettyJson(update));
+              } else {
+                console.log(`${c.dim}(no update received within 3s)${c.reset}`);
+              }
+            } catch (e) {
+              console.log(`${c.red}TDLib receive error: ${e}${c.reset}`);
+            }
+          } else {
+            console.log(`${c.red}Usage: tdlib | tdlib send <json> | tdlib receive${c.reset}`);
+          }
+          break;
+        }
 
         case 'reload': {
           console.log(`${c.dim}Reloading...${c.reset}`);
