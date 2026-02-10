@@ -13,7 +13,7 @@ export const getStatusTool: ToolDefinition = {
       },
     },
   },
-  execute(args: Record<string, unknown>): string {
+  async execute(args: Record<string, unknown>): Promise<string> {
     const s = (globalThis as any).getSkillState();
     const verbose = args.verbose === 'true';
 

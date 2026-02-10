@@ -33,7 +33,7 @@ const tools = [
         },
       },
     },
-    execute(args: Record<string, unknown>): string {
+    async execute(args: Record<string, unknown>): Promise<string> {
       const s = getState();
       const verbose = args.verbose === 'true';
 
@@ -114,7 +114,7 @@ const tools = [
         },
       },
     },
-    execute(args: Record<string, unknown>): string {
+    async execute(args: Record<string, unknown>): Promise<string> {
       const limit = typeof args.limit === 'number' ? args.limit : 10;
       const rows = db.all(`SELECT * FROM logs ORDER BY id DESC LIMIT ${limit}`, []);
       return JSON.stringify({ count: rows.length, rows });
@@ -126,7 +126,7 @@ const tools = [
     name: 'list-peers',
     description: 'List all registered skills in the runtime.',
     input_schema: { type: 'object', properties: {} },
-    execute(_args: Record<string, unknown>): string {
+    async execute(_args: Record<string, unknown>): Promise<string> {
       const peers = skills.list();
       return JSON.stringify({ count: peers.length, skills: peers });
     },

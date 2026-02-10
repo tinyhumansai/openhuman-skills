@@ -88,7 +88,7 @@ _g.getState = globalThis.getWalletSkillState;
 // Skill export
 // ---------------------------------------------------------------------------
 
-const tools = [listWalletsTool, listNetworksTool, getBalanceTool];
+const tools: ToolDefinition[] = [listWalletsTool, listNetworksTool, getBalanceTool];
 _g.tools = tools;
 
 const skill: Skill = {
@@ -106,7 +106,7 @@ const skill: Skill = {
   stop,
   onLoad,
   onSetupStart: globalThis.walletSetup.onSetupStart,
-  onSetupSubmit: globalThis.walletSetup.onSetupSubmit,
+  onSetupSubmit: async (args) => globalThis.walletSetup.onSetupSubmit(args),
   onSetupCancel: globalThis.walletSetup.onSetupCancel,
 };
 

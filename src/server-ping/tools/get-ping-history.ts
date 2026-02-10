@@ -15,7 +15,7 @@ export const getPingHistoryTool: ToolDefinition = {
       },
     },
   },
-  execute(args: Record<string, unknown>): string {
+  async execute(args: Record<string, unknown>): Promise<string> {
     const limit = Math.min(Math.max(parseInt(args.limit as string) || 20, 1), 100);
     const rows = db.all(
       'SELECT timestamp, url, status, latency_ms, success, error FROM ping_log ORDER BY id DESC LIMIT ?',

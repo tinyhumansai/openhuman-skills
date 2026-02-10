@@ -8,7 +8,7 @@ export const listPeerSkillsTool: ToolDefinition = {
   description:
     'List all other running skills in the system (demonstrates inter-skill communication).',
   input_schema: { type: 'object', properties: {} },
-  execute(): string {
+  async execute(): Promise<string> {
     try {
       const peers = skills.list();
       return JSON.stringify({ skills: peers });

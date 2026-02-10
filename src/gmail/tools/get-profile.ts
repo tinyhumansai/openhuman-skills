@@ -7,7 +7,7 @@ export const getProfileTool: ToolDefinition = {
   description:
     'Get Gmail user profile information including email address, total message counts, and account details.',
   input_schema: { type: 'object', properties: {}, required: [] },
-  execute(_args: Record<string, unknown>): string {
+  async execute(_args: Record<string, unknown>): Promise<string> {
     try {
       const gmailFetch = (globalThis as { gmailFetch?: (endpoint: string, options?: any) => any })
         .gmailFetch;

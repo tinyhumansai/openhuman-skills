@@ -6,7 +6,7 @@ export const getPingStatsTool: ToolDefinition = {
   description:
     'Get current ping statistics including uptime, total pings, failures, and latest latency.',
   input_schema: { type: 'object', properties: {} },
-  execute(): string {
+  async execute(): Promise<string> {
     const s = (globalThis as any).getSkillState();
 
     const uptimePct =

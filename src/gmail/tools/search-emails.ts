@@ -29,7 +29,7 @@ export const searchEmailsTool: ToolDefinition = {
     },
     required: ['query'],
   },
-  execute(args: Record<string, unknown>): string {
+  async execute(args: Record<string, unknown>): Promise<string> {
     try {
       const gmailFetch = (globalThis as { gmailFetch?: (endpoint: string, options?: any) => any })
         .gmailFetch;

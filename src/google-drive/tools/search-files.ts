@@ -23,7 +23,7 @@ export const searchFilesTool: ToolDefinition = {
     },
     required: ['query'],
   },
-  execute(args: Record<string, unknown>): string {
+  async execute(args: Record<string, unknown>): Promise<string> {
     try {
       const driveFetch = (globalThis as { driveFetch?: (e: string, o?: object) => any }).driveFetch;
       if (!driveFetch) {

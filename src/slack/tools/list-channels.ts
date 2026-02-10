@@ -25,7 +25,7 @@ export const listChannelsTool: ToolDefinition = {
     },
     required: [],
   },
-  execute(args: Record<string, unknown>): string {
+  async execute(args: Record<string, unknown>): Promise<string> {
     const config = state.get('config') as { botToken?: string } | null;
     if (!config?.botToken) {
       return JSON.stringify({ ok: false, error: 'Slack not connected. Complete setup first.' });

@@ -37,7 +37,7 @@ export const searchLocalTool: ToolDefinition = {
     },
     required: ['query'],
   },
-  execute(args: Record<string, unknown>): string {
+  async execute(args: Record<string, unknown>): Promise<string> {
     try {
       const query = (args.query as string) || '';
       if (!query) {

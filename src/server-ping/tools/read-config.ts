@@ -8,7 +8,7 @@ export const readConfigTool: ToolDefinition = {
   description:
     'Read the current skill configuration from the data directory (demonstrates data file I/O).',
   input_schema: { type: 'object', properties: {} },
-  execute(): string {
+  async execute(): Promise<string> {
     try {
       const raw = data.read('config.json');
       return raw ?? JSON.stringify({ error: 'No config file found' });

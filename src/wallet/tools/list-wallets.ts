@@ -3,8 +3,8 @@ export const listWalletsTool = {
   name: 'list_wallets',
   description:
     'List all wallet addresses configured for this skill (derived from your mnemonic in the app).',
-  input_schema: { type: 'object', properties: {} },
-  execute(): string {
+  input_schema: { type: 'object' as const, properties: {} },
+  async execute(): Promise<string> {
     const s = (globalThis as any).getState() as { config: { walletAddresses: string[] } };
     const wallets = s.config.walletAddresses.map((address: string, index: number) => ({
       index,

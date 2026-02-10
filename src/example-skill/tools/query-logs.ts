@@ -13,7 +13,7 @@ export const queryLogsTool: ToolDefinition = {
       },
     },
   },
-  execute(args: Record<string, unknown>): string {
+  async execute(args: Record<string, unknown>): Promise<string> {
     const limit = typeof args.limit === 'number' ? args.limit : 10;
     const rows = db.all(`SELECT * FROM logs ORDER BY id DESC LIMIT ${limit}`, []);
     return JSON.stringify({ count: rows.length, rows });

@@ -592,7 +592,7 @@ const telegramStatusTool: ToolDefinition = {
   name: 'telegram-status',
   description: 'Get current Telegram connection and authentication status.',
   input_schema: { type: 'object', properties: {}, required: [] },
-  execute(): string {
+  async execute(): Promise<string> {
     const s = globalThis.getTelegramSkillState();
     return JSON.stringify({
       connected: s.client !== null && s.client.initialized,

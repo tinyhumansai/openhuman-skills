@@ -64,7 +64,7 @@ const tools: ToolDefinition[] = [
       type: 'object',
       properties: { name: { type: 'string', description: 'Name to greet' } },
     },
-    execute(args: Record<string, unknown>): string {
+    async execute(args: Record<string, unknown>): Promise<string> {
       CONFIG.count++;
       const name = (args.name as string) || 'World';
       return JSON.stringify({ message: CONFIG.greeting + ', ' + name + '!', count: CONFIG.count });
@@ -74,7 +74,7 @@ const tools: ToolDefinition[] = [
     name: 'get-count',
     description: 'Get the greeting count',
     input_schema: { type: 'object', properties: {} },
-    execute(): string {
+    async execute(): Promise<string> {
       return JSON.stringify({ count: CONFIG.count });
     },
   },

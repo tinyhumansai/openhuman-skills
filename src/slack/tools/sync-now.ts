@@ -6,7 +6,7 @@ export const syncNowTool: ToolDefinition = {
     'Trigger an immediate sync of Slack channels and their recent messages into the skill database. ' +
     'Use this to refresh stored messages on demand. The skill also runs a periodic sync every 20 minutes.',
   input_schema: { type: 'object', properties: {}, required: [] },
-  execute(): string {
+  async execute(): Promise<string> {
     const config = state.get('config') as { botToken?: string } | null;
     if (!config?.botToken) {
       return JSON.stringify({ ok: false, error: 'Slack not connected. Complete setup first.' });

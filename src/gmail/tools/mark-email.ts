@@ -36,7 +36,7 @@ export const markEmailTool: ToolDefinition = {
     },
     required: ['message_ids', 'action'],
   },
-  execute(args: Record<string, unknown>): string {
+  async execute(args: Record<string, unknown>): Promise<string> {
     try {
       const gmailFetch = (globalThis as { gmailFetch?: (endpoint: string, options?: any) => any })
         .gmailFetch;

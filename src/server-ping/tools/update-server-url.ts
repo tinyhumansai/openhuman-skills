@@ -9,7 +9,7 @@ export const updateServerUrlTool: ToolDefinition = {
     properties: { url: { type: 'string', description: 'New server URL to monitor' } },
     required: ['url'],
   },
-  execute(args: Record<string, unknown>): string {
+  async execute(args: Record<string, unknown>): Promise<string> {
     const url = ((args.url as string) ?? '').trim();
     if (!url || !url.startsWith('http')) {
       return JSON.stringify({ error: 'Invalid URL — must start with http:// or https://' });

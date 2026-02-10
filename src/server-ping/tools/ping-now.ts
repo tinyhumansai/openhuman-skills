@@ -5,7 +5,7 @@ export const pingNowTool: ToolDefinition = {
   name: 'ping-now',
   description: 'Trigger an immediate ping to the configured server and return the result.',
   input_schema: { type: 'object', properties: {} },
-  execute(): string {
+  async execute(): Promise<string> {
     // doPing is exposed on globalThis by the main skill module
     (globalThis as { doPing?: () => void }).doPing?.();
     const s = (globalThis as any).getSkillState();

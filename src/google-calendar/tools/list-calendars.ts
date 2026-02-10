@@ -12,7 +12,7 @@ export const listCalendarsTool: ToolDefinition = {
     },
     required: [],
   },
-  execute(args: Record<string, unknown>): string {
+  async execute(args: Record<string, unknown>): Promise<string> {
     try {
       const calendarFetch = (globalThis as { calendarFetch?: (e: string, o?: object) => any })
         .calendarFetch;

@@ -14,7 +14,7 @@ export const getSheetValuesTool: ToolDefinition = {
     },
     required: ['spreadsheet_id', 'range'],
   },
-  execute(args: Record<string, unknown>): string {
+  async execute(args: Record<string, unknown>): Promise<string> {
     try {
       const driveFetch = (globalThis as { driveFetch?: (e: string, o?: object) => any }).driveFetch;
       if (!driveFetch) {

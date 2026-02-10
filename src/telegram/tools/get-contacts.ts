@@ -27,7 +27,7 @@ export const getContactsToolDefinition: ToolDefinition = {
     },
     required: [],
   },
-  execute(args: Record<string, unknown>): string {
+  async execute(args: Record<string, unknown>): Promise<string> {
     try {
       const contactsOnly = args.contacts_only === 'true';
       const search = args.search as string | undefined;

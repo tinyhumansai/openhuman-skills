@@ -2,8 +2,8 @@
 export const listNetworksTool = {
   name: 'list_networks',
   description: 'List all configured EVM blockchain networks with RPC endpoints.',
-  input_schema: { type: 'object', properties: {} },
-  execute(): string {
+  input_schema: { type: 'object' as const, properties: {} },
+  async execute(): Promise<string> {
     const s = (globalThis as any).getState() as {
       config: {
         networks: Array<{ chain_id: string; name: string; rpc_url: string; chain_type: string }>;
