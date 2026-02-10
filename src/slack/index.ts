@@ -1,22 +1,21 @@
 // slack/index.ts — Orchestrator
 // Import order matters: state first, then schema, helpers, API, setup, sync, handlers.
-import './skill-state';
-import './db/schema';
-import './db/helpers';
 import './api/slack';
+import './db/helpers';
+import './db/schema';
 import './setup';
+import './skill-state';
 import './sync';
-import './update-handlers';
 import {
-  listChannelsTool,
   getChannelTool,
   getMessagesTool,
-  sendMessageTool,
+  listChannelsTool,
   openDmTool,
+  sendMessageTool,
   syncNowTool,
 } from './tools';
-
 import type { SlackConfig } from './types';
+import './update-handlers';
 
 // ---------------------------------------------------------------------------
 // Inline display-text helper (also exposed on globalThis for bundled tools).

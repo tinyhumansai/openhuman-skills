@@ -1,19 +1,19 @@
 // server-ping/index.ts — Orchestrator
 // Comprehensive demo skill showcasing all V8 runtime capabilities.
-import './skill-state';
-import './db/schema';
 import './db/helpers';
+import './db/schema';
 import './setup';
+import './skill-state';
+import type { ServerPingState } from './skill-state';
 import {
-  getPingStatsTool,
   getPingHistoryTool,
-  pingNowTool,
+  getPingStatsTool,
   listPeerSkillsTool,
-  updateServerUrlTool,
+  pingNowTool,
   readConfigTool,
+  updateServerUrlTool,
 } from './tools';
 import type { SkillConfig } from './types';
-import type { ServerPingState } from './skill-state';
 
 // ---------------------------------------------------------------------------
 // Lifecycle hooks
@@ -230,7 +230,14 @@ async function doPing(): Promise<void> {
       console.log(`[server-ping] #${s.pingCount} ${response.status} ${latencyMs}ms`);
     }
 
-    globalThis.serverPingDb.logPing(timestamp, s.config.serverUrl, response.status, latencyMs, success, null);
+    globalThis.serverPingDb.logPing(
+      timestamp,
+      s.config.serverUrl,
+      response.status,
+      latencyMs,
+      success,
+      null
+    );
   } catch (e) {
     const latencyMs = Date.now() - startTime;
     s.failCount++;

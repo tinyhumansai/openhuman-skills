@@ -16,7 +16,19 @@ export function insertMessage(
   db.exec(
     `INSERT OR IGNORE INTO slack_messages (channel_id, user_id, ts, text, type, subtype, event_type, thread_ts, created_at, blocks_json, attachments_json)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [channelId, userId, ts, text, type, subtype, eventType, threadTs, createdAt, blocksJson, attachmentsJson]
+    [
+      channelId,
+      userId,
+      ts,
+      text,
+      type,
+      subtype,
+      eventType,
+      threadTs,
+      createdAt,
+      blocksJson,
+      attachmentsJson,
+    ]
   );
 }
 
@@ -25,9 +37,6 @@ export function deleteOlderThan(tsThreshold: string): void {
 }
 
 declare global {
-  var slackDb: {
-    insertMessage: typeof insertMessage;
-    deleteOlderThan: typeof deleteOlderThan;
-  };
+  var slackDb: { insertMessage: typeof insertMessage; deleteOlderThan: typeof deleteOlderThan };
 }
 globalThis.slackDb = { insertMessage, deleteOlderThan };

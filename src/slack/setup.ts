@@ -103,7 +103,12 @@ async function onSetupSubmit(args: {
   } catch (e) {
     return {
       status: 'error',
-      errors: [{ field: 'bot_token', message: `Failed to connect: ${globalThis.slackApi.formatApiError(e)}` }],
+      errors: [
+        {
+          field: 'bot_token',
+          message: `Failed to connect: ${globalThis.slackApi.formatApiError(e)}`,
+        },
+      ],
     };
   }
 }

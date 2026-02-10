@@ -1,5 +1,4 @@
 // API helper for Google Drive, Sheets, and Docs
-import type { GoogleDriveSkillState } from '../skill-state';
 
 export async function driveFetch(
   endpoint: string,
@@ -54,8 +53,6 @@ export async function driveFetch(
 }
 
 declare global {
-  var googleDriveApi: {
-    driveFetch: typeof driveFetch;
-  };
+  var googleDriveApi: { driveFetch: typeof driveFetch };
 }
 globalThis.googleDriveApi = { driveFetch };

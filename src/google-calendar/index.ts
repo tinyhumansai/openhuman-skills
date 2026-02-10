@@ -1,13 +1,13 @@
 // google-calendar/index.ts — Orchestrator
-import './skill-state';
 import './api/calendar';
+import './skill-state';
 import {
+  createEventTool,
+  deleteEventTool,
+  getEventTool,
   listCalendarsTool,
   listEventsTool,
-  getEventTool,
-  createEventTool,
   updateEventTool,
-  deleteEventTool,
 } from './tools';
 import type { SkillConfig } from './types';
 

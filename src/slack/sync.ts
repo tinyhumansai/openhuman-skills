@@ -1,5 +1,5 @@
 // Sync logic for Slack skill
-import { SYNC_MAX_CHANNELS, SYNC_WINDOW_DAYS, SYNC_MAX_PAGES_PER_CHANNEL } from './types';
+import { SYNC_MAX_CHANNELS, SYNC_MAX_PAGES_PER_CHANNEL, SYNC_WINDOW_DAYS } from './types';
 
 /** Returns Slack ts string for (now - days). */
 function slackTsDaysAgo(days: number): string {
@@ -32,7 +32,11 @@ async function performSync(): Promise<void> {
         do {
           const params: Record<string, unknown> = { types, exclude_archived: true, limit: 200 };
           if (cursor) params.cursor = cursor;
-          const listResult = await globalThis.slackApi.slackApiFetch('GET', '/conversations.list', params);
+          const listResult = await globalThis.slackApi.slackApiFetch(
+            'GET',
+            '/conversations.list',
+            params
+          );
           const raw = (listResult.channels as Record<string, unknown>[]) || [];
           for (const ch of raw) {
             const id = ch.id as string;
@@ -80,7 +84,11 @@ async function performSync(): Promise<void> {
         };
         if (cursor) params.cursor = cursor;
 
-        const historyResult = await globalThis.slackApi.slackApiFetch('GET', '/conversations.history', params);
+        const historyResult = await globalThis.slackApi.slackApiFetch(
+          'GET',
+          '/conversations.history',
+          params
+        );
         const messages = (historyResult.messages as Record<string, unknown>[]) || [];
         let storedThisPage = 0;
         for (const msg of messages) {
@@ -93,9 +101,7 @@ async function performSync(): Promise<void> {
             | ((m: Record<string, unknown>) => string)
             | undefined;
           const text =
-            typeof displayText === 'function'
-              ? displayText(msg)
-              : ((msg.text as string) ?? '');
+            typeof displayText === 'function' ? displayText(msg) : ((msg.text as string) ?? '');
           const type = (msg.type as string) ?? 'message';
           const subtype = (msg.subtype as string) ?? null;
           const threadTs = (msg.thread_ts as string) ?? null;
@@ -162,9 +168,7 @@ async function performSync(): Promise<void> {
 
 declare global {
   var slackPublishState: () => void;
-  var slackSync: {
-    performSync: typeof performSync;
-  };
+  var slackSync: { performSync: typeof performSync };
 }
 globalThis.slackSync = { performSync };
 

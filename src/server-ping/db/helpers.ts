@@ -14,11 +14,7 @@ export function logPing(
   );
 }
 
-export function getLatestPing(): {
-  latency_ms: number;
-  status: number;
-  success: number;
-} | null {
+export function getLatestPing(): { latency_ms: number; status: number; success: number } | null {
   return db.get(
     'SELECT latency_ms, status, success FROM ping_log ORDER BY id DESC LIMIT 1',
     []

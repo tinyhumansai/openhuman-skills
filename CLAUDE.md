@@ -454,7 +454,6 @@ mkdir -p src/my-skill/{api,tools,db,__tests__}
 ```
 
 3. Create the core files in this order:
-
    - `types.ts` — all type definitions
    - `state.ts` — state interface + globalThis registration
    - `db/schema.ts` — CREATE TABLE statements + globalThis registration
@@ -592,21 +591,27 @@ All `CREATE TABLE` and `CREATE INDEX` statements in one place:
 // db/schema.ts
 
 export function initializeSchema(): void {
-  db.exec(`CREATE TABLE IF NOT EXISTS items (
+  db.exec(
+    `CREATE TABLE IF NOT EXISTS items (
     id TEXT PRIMARY KEY,
     title TEXT NOT NULL,
     content TEXT,
     content_type TEXT DEFAULT 'text',
     synced_at TEXT NOT NULL,
     created_at TEXT DEFAULT (datetime('now'))
-  )`, []);
+  )`,
+    []
+  );
 
   db.exec(`CREATE INDEX IF NOT EXISTS idx_items_synced_at ON items(synced_at)`, []);
 
-  db.exec(`CREATE TABLE IF NOT EXISTS sync_state (
+  db.exec(
+    `CREATE TABLE IF NOT EXISTS sync_state (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
-  )`, []);
+  )`,
+    []
+  );
 }
 
 // Register on globalThis for access from index.ts
@@ -628,8 +633,7 @@ export function upsertItem(item: ApiItem): void {
     `INSERT INTO items (id, title, content, synced_at)
      VALUES (?, ?, ?, ?)
      ON CONFLICT(id) DO UPDATE SET title=?, content=?, synced_at=?`,
-    [item.id, item.title, item.content, item.updatedAt,
-     item.title, item.content, item.updatedAt]
+    [item.id, item.title, item.content, item.updatedAt, item.title, item.content, item.updatedAt]
   );
 }
 
@@ -638,10 +642,11 @@ export function getItemById(id: string): ItemRow | null {
 }
 
 export function searchItems(query: string, limit: number = 20): ItemRow[] {
-  return db.all(
-    'SELECT * FROM items WHERE title LIKE ? OR content LIKE ? LIMIT ?',
-    [`%${query}%`, `%${query}%`, limit]
-  ) as ItemRow[];
+  return db.all('SELECT * FROM items WHERE title LIKE ? OR content LIKE ? LIMIT ?', [
+    `%${query}%`,
+    `%${query}%`,
+    limit,
+  ]) as ItemRow[];
 }
 
 // Register on globalThis
@@ -661,7 +666,10 @@ One file per API domain with pure functions. Barrel-export from `api/index.ts`:
 
 ```typescript
 // api/items.ts
-export function fetchItems(apiKey: string, cursor?: string): { items: ApiItem[]; nextCursor?: string } {
+export function fetchItems(
+  apiKey: string,
+  cursor?: string
+): { items: ApiItem[]; nextCursor?: string } {
   const url = `https://api.example.com/items${cursor ? `?cursor=${cursor}` : ''}`;
   const response = net.fetch(url, {
     headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
@@ -725,14 +733,24 @@ export function onSetupStart(): SetupStartResult {
       description: 'Enter your API key',
       fields: [
         { name: 'apiKey', type: 'password', label: 'API Key', required: true },
-        { name: 'region', type: 'select', label: 'Region',
-          options: [{ label: 'US', value: 'us' }, { label: 'EU', value: 'eu' }] },
+        {
+          name: 'region',
+          type: 'select',
+          label: 'Region',
+          options: [
+            { label: 'US', value: 'us' },
+            { label: 'EU', value: 'eu' },
+          ],
+        },
       ],
     },
   };
 }
 
-export function onSetupSubmit(args: { stepId: string; values: Record<string, unknown> }): SetupSubmitResult {
+export function onSetupSubmit(args: {
+  stepId: string;
+  values: Record<string, unknown>;
+}): SetupSubmitResult {
   if (args.stepId === 'credentials') {
     const apiKey = args.values.apiKey as string;
     if (!apiKey) return { status: 'error', errors: [{ field: 'apiKey', message: 'Required' }] };
@@ -774,8 +792,9 @@ export function performInitialSync(onProgress?: (msg: string) => void): void {
     onProgress?.(`Synced ${totalSynced} items...`);
   } while (cursor);
 
-  db.exec(`INSERT OR REPLACE INTO sync_state (key, value) VALUES ('last_sync', ?)`,
-    [new Date().toISOString()]);
+  db.exec(`INSERT OR REPLACE INTO sync_state (key, value) VALUES ('last_sync', ?)`, [
+    new Date().toISOString(),
+  ]);
 }
 
 // Register on globalThis
@@ -791,13 +810,18 @@ The orchestrator that wires everything together:
 
 ```typescript
 // index.ts — import order matters
-import './skill-state';        // 1. State first
-import './db/schema';          // 2. DB schema registration
-import './db/helpers';         // 3. DB helpers registration
-import './sync';               // 4. Sync registration
-import * as api from './api';  // 5. API layer
+// 4. Sync registration
+import * as api from './api';
+// 2. DB schema registration
+import './db/helpers';
+// 1. State first
+import './db/schema';
+// 5. API layer
 import { onSetupStart, onSetupSubmit } from './setup';
-import { searchItemsTool, getItemTool, createItemTool } from './tools';
+import './skill-state';
+// 3. DB helpers registration
+import './sync';
+import { createItemTool, getItemTool, searchItemsTool } from './tools';
 
 function init(): void {
   globalThis.initializeMySkillSchema();
@@ -849,13 +873,13 @@ tools = [searchItemsTool, getItemTool, createItemTool];
 
 Every module that needs cross-module access registers on `globalThis`:
 
-| Module | Registers | Purpose |
-| --- | --- | --- |
-| `state.ts` | `globalThis.getMySkillState()` | State access |
-| `db/schema.ts` | `globalThis.initializeMySkillSchema()` | Schema creation |
-| `db/helpers.ts` | `globalThis.mySkillDb.*` | DB operations |
-| `sync.ts` | `globalThis.mySkillSync.*` | Sync operations |
-| `index.ts` | `globalThis.publishState()` etc. | Lifecycle helpers for tools |
+| Module          | Registers                              | Purpose                     |
+| --------------- | -------------------------------------- | --------------------------- |
+| `state.ts`      | `globalThis.getMySkillState()`         | State access                |
+| `db/schema.ts`  | `globalThis.initializeMySkillSchema()` | Schema creation             |
+| `db/helpers.ts` | `globalThis.mySkillDb.*`               | DB operations               |
+| `sync.ts`       | `globalThis.mySkillSync.*`             | Sync operations             |
+| `index.ts`      | `globalThis.publishState()` etc.       | Lifecycle helpers for tools |
 
 ### State Publishing
 

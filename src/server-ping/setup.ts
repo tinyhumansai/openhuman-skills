@@ -4,7 +4,10 @@ import type { ServerPingState } from './skill-state';
 declare global {
   var serverPingSetup: {
     onSetupStart: () => SetupStartResult;
-    onSetupSubmit: (args: { stepId: string; values: Record<string, unknown> }) => Promise<SetupSubmitResult>;
+    onSetupSubmit: (args: {
+      stepId: string;
+      values: Record<string, unknown>;
+    }) => Promise<SetupSubmitResult>;
     onSetupCancel: () => void;
   };
 }

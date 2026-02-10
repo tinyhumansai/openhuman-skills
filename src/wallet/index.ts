@@ -1,7 +1,7 @@
 // wallet/index.ts — Orchestrator
-import './skill-state';
 import './setup';
-import { listWalletsTool, listNetworksTool, getBalanceTool } from './tools';
+import './skill-state';
+import { getBalanceTool, listNetworksTool, listWalletsTool } from './tools';
 import { DEFAULT_NETWORKS, type NetworkConfig } from './types';
 
 // ---------------------------------------------------------------------------
@@ -106,7 +106,7 @@ const skill: Skill = {
   stop,
   onLoad,
   onSetupStart: globalThis.walletSetup.onSetupStart,
-  onSetupSubmit: async (args) => globalThis.walletSetup.onSetupSubmit(args),
+  onSetupSubmit: async args => globalThis.walletSetup.onSetupSubmit(args),
   onSetupCancel: globalThis.walletSetup.onSetupCancel,
 };
 

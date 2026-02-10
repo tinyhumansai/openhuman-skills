@@ -66,8 +66,6 @@ export function onServerEvent(event: string, payload: unknown): void {
 }
 
 declare global {
-  var slackUpdateHandlers: {
-    onServerEvent: typeof onServerEvent;
-  };
+  var slackUpdateHandlers: { onServerEvent: typeof onServerEvent };
 }
 globalThis.slackUpdateHandlers = { onServerEvent };

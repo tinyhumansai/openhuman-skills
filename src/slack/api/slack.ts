@@ -73,9 +73,6 @@ export function formatApiError(error: unknown): string {
 }
 
 declare global {
-  var slackApi: {
-    slackApiFetch: typeof slackApiFetch;
-    formatApiError: typeof formatApiError;
-  };
+  var slackApi: { slackApiFetch: typeof slackApiFetch; formatApiError: typeof formatApiError };
 }
 globalThis.slackApi = { slackApiFetch, formatApiError };

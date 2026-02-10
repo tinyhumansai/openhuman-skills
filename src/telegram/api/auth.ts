@@ -14,10 +14,7 @@ export async function setAuthenticationPhoneNumber(
 /**
  * Submit verification code.
  */
-export async function checkAuthenticationCode(
-  client: TdLibClient,
-  code: string
-): Promise<void> {
+export async function checkAuthenticationCode(client: TdLibClient, code: string): Promise<void> {
   await client.checkAuthenticationCode(code);
 }
 

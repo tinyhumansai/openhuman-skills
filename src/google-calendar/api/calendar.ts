@@ -51,8 +51,6 @@ export async function calendarFetch(
 }
 
 declare global {
-  var googleCalendarApi: {
-    calendarFetch: typeof calendarFetch;
-  };
+  var googleCalendarApi: { calendarFetch: typeof calendarFetch };
 }
 globalThis.googleCalendarApi = { calendarFetch };

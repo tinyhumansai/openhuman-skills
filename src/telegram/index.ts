@@ -5,6 +5,7 @@
 // registers globalThis.initializeTelegramSchema
 import './db/helpers';
 import './db/schema';
+import { createSetupHandlers } from './setup';
 import './state';
 import type { AuthorizationState } from './state';
 // registers globalThis.telegramDispatchUpdate
@@ -14,7 +15,6 @@ import type { TdLibClient as TdLibClientType, TdUpdate, TdUser } from './tdlib-c
 import './tdlib-client';
 import tools from './tools/index';
 import './update-handlers';
-import { createSetupHandlers } from './setup';
 
 // Access TdLibClient from globalThis (workaround for esbuild bundling issues)
 const getTdLibClientClass = (): typeof TdLibClientType => {
@@ -446,7 +446,7 @@ function onListOptions(): { options: SkillOption[] } {
         type: 'boolean',
         label: 'Allow Write Actions',
         value: s.config.allowWriteActions ?? false,
-      }
+      },
     ],
   };
 }
