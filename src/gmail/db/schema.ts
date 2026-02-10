@@ -1,6 +1,6 @@
 // Database schema initialization for Gmail skill
 // Creates SQLite tables for emails, threads, labels, and attachments
-import './skill-state';
+import '../state';
 
 /**
  * Initialize Gmail database schema

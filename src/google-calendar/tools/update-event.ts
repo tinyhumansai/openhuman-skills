@@ -1,5 +1,5 @@
 // Tool: google-calendar-update-event
-import '../skill-state';
+import '../state';
 
 export const updateEventTool: ToolDefinition = {
   name: 'google-calendar-update-event',

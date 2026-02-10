@@ -1,6 +1,6 @@
 // Tool: gmail-get-profile
 // Get Gmail user profile information
-import '../skill-state';
+import '../state';
 
 export const getProfileTool: ToolDefinition = {
   name: 'gmail-get-profile',

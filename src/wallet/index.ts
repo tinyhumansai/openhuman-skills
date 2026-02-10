@@ -1,6 +1,6 @@
 // wallet/index.ts — Orchestrator
 import './setup';
-import './skill-state';
+import './state';
 import { getBalanceTool, listNetworksTool, listWalletsTool } from './tools';
 import { DEFAULT_NETWORKS, type NetworkConfig } from './types';
 

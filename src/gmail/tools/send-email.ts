@@ -1,6 +1,6 @@
 // Tool: gmail-send-email
 // Send emails via Gmail API with support for attachments, HTML/text, and threading
-import '../skill-state';
+import '../state';
 
 export const sendEmailTool: ToolDefinition = {
   name: 'gmail-send-email',

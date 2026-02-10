@@ -1,5 +1,5 @@
 // Tool: google-calendar-delete-event
-import '../skill-state';
+import '../state';
 
 export const deleteEventTool: ToolDefinition = {
   name: 'google-calendar-delete-event',

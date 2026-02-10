@@ -1,6 +1,6 @@
 // Database helper functions for Gmail skill
 // CRUD operations for emails, threads, labels, and attachments
-import './skill-state';
+import '../state';
 import type {
   DatabaseAttachment,
   DatabaseEmail,
@@ -10,7 +10,7 @@ import type {
   GmailLabel,
   GmailMessage,
   GmailThread,
-} from './types';
+} from '../types';
 
 /**
  * Insert or update an email in the database

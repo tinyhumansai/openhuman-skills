@@ -1,5 +1,5 @@
 // Tool: google-drive-get-document (Docs API)
-import '../skill-state';
+import '../state';
 import { DOCS_BASE } from '../types';
 
 export const getDocumentTool: ToolDefinition = {

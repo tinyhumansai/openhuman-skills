@@ -1,6 +1,6 @@
 // Tool: google-drive-create-document
 // Creates a new Google Doc via Drive API (files with mimeType application/vnd.google-apps.document)
-import '../skill-state';
+import '../state';
 
 export const createDocumentTool: ToolDefinition = {
   name: 'google-drive-create-document',

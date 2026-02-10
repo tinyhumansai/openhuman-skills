@@ -1,6 +1,6 @@
 // Tool: gmail-mark-email
 // Mark emails as read/unread, important, starred, etc.
-import '../skill-state';
+import '../state';
 
 export const markEmailTool: ToolDefinition = {
   name: 'gmail-mark-email',

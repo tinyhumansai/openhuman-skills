@@ -1,5 +1,5 @@
 // Tool: google-calendar-list-events
-import '../skill-state';
+import '../state';
 
 export const listEventsTool: ToolDefinition = {
   name: 'google-calendar-list-events',

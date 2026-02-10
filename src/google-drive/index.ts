@@ -1,6 +1,6 @@
 // google-drive/index.ts — Orchestrator
 import './api/drive';
-import './skill-state';
+import './state';
 import {
   createDocumentTool,
   getDocumentTool,

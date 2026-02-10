@@ -1,5 +1,5 @@
 // Tool: google-drive-search-files
-import '../skill-state';
+import '../state';
 
 export const searchFilesTool: ToolDefinition = {
   name: 'google-drive-search-files',

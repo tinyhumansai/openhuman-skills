@@ -1,6 +1,6 @@
 // Tool: gmail-get-labels
 // Get all Gmail labels with counts and details
-import '../skill-state';
+import '../state';
 
 export const getLabelsTool: ToolDefinition = {
   name: 'gmail-get-labels',

@@ -1,5 +1,5 @@
 // Tool: google-drive-update-sheet-values (Sheets API)
-import '../skill-state';
+import '../state';
 import { SHEETS_BASE } from '../types';
 
 export const updateSheetValuesTool: ToolDefinition = {

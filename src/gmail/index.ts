@@ -1,10 +1,11 @@
 // Gmail skill main entry point
 // Gmail integration with OAuth bridge, email management, and real-time sync
 // Import all tools
-import './db-helpers';
-import './db-schema';
+import './db/helpers';
+import './db/schema';
+
 // Import modules to initialize state and expose functions on globalThis
-import './skill-state';
+import './state';
 import { getEmailTool } from './tools/get-email';
 import { getEmailsTool } from './tools/get-emails';
 import { getLabelsTool } from './tools/get-labels';

@@ -4,7 +4,7 @@ import './api/slack';
 import './db/helpers';
 import './db/schema';
 import './setup';
-import './skill-state';
+import './state';
 import './sync';
 import {
   getChannelTool,

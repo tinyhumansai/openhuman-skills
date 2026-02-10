@@ -1,5 +1,5 @@
 // Tool: google-drive-get-spreadsheet (Sheets API)
-import '../skill-state';
+import '../state';
 import { SHEETS_BASE } from '../types';
 
 export const getSpreadsheetTool: ToolDefinition = {

@@ -1,7 +1,7 @@
 // Tool: gmail-get-emails
 // Get emails with filtering and search capabilities
 import { isSensitiveText } from '../../helpers';
-import '../skill-state';
+import '../state';
 
 export const getEmailsTool: ToolDefinition = {
   name: 'gmail-get-emails',

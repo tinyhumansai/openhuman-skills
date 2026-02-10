@@ -1,5 +1,5 @@
 // Tool: google-drive-list-files
-import '../skill-state';
+import '../state';
 
 export const listFilesTool: ToolDefinition = {
   name: 'google-drive-list-files',
