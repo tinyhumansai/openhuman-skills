@@ -70,28 +70,31 @@ export async function searchPublicChat(
 
 /**
  * Block a user.
+ * TDLib method: setMessageSenderBlockList sender_id:MessageSender block_list:BlockList = Ok
  */
 export async function blockUser(client: TdLibClient, userId: number): Promise<void> {
   await client.send({
-    '@type': 'toggleMessageSenderIsBlocked',
+    '@type': 'setMessageSenderBlockList',
     sender_id: { '@type': 'messageSenderUser', user_id: userId },
-    is_blocked: true,
+    block_list: { '@type': 'blockListMain' },
   });
 }
 
 /**
  * Unblock a user.
+ * TDLib method: setMessageSenderBlockList sender_id:MessageSender block_list:BlockList = Ok
  */
 export async function unblockUser(client: TdLibClient, userId: number): Promise<void> {
   await client.send({
-    '@type': 'toggleMessageSenderIsBlocked',
+    '@type': 'setMessageSenderBlockList',
     sender_id: { '@type': 'messageSenderUser', user_id: userId },
-    is_blocked: false,
+    block_list: null,
   });
 }
 
 /**
  * Add a user as a saved contact.
+ * TDLib method: addContact user_id:int53 contact:importedContact share_phone_number:Bool = Ok
  */
 export async function addContact(
   client: TdLibClient,
@@ -99,12 +102,13 @@ export async function addContact(
 ): Promise<void> {
   await client.send({
     '@type': 'addContact',
+    user_id: contact.userId,
     contact: {
-      '@type': 'contact',
-      user_id: contact.userId,
+      '@type': 'importedContact',
+      phone_number: contact.phoneNumber || '',
       first_name: contact.firstName,
       last_name: contact.lastName || '',
-      phone_number: contact.phoneNumber || '',
+      note: null,
     },
     share_phone_number: false,
   });

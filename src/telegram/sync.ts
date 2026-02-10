@@ -101,7 +101,28 @@ async function performInitialSyncImpl(
       log(`Error loading contacts: ${err}`);
     }
 
-    // 5. Mark sync as complete
+    // 5. Load chat folders
+    log('Loading chat folders...');
+    try {
+      const s = globalThis.getTelegramSkillState();
+      const folderInfos = s.chatFolderInfos || [];
+      if (folderInfos.length > 0) {
+        for (const info of folderInfos) {
+          try {
+            await api.getChatFolder(client, info.id);
+          } catch {
+            // Folder may not be accessible, ignore
+          }
+        }
+        log(`Loaded ${folderInfos.length} chat folders`);
+      } else {
+        log('No chat folders found');
+      }
+    } catch (err) {
+      log(`Error loading chat folders: ${err}`);
+    }
+
+    // 6. Mark sync as complete
     globalThis.telegramDb.setSyncState('initial_sync_completed', 'true');
     globalThis.telegramDb.setSyncState('last_sync_time', String(Date.now()));
     log('Initial sync completed!');

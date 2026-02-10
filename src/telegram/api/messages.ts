@@ -46,6 +46,7 @@ export async function getMessage(
 
 /**
  * Send a text message to a chat.
+ * TDLib method: sendMessage chat_id:int53 message_thread_id:int53 reply_to:InputMessageReplyTo options:messageSendOptions input_message_content:InputMessageContent = Message
  */
 export async function sendMessage(
   client: TdLibClient,
@@ -55,6 +56,8 @@ export async function sendMessage(
 ): Promise<TdMessage> {
   const request: Record<string, unknown> = {
     chat_id: chatId,
+    topic_id: null,
+    options: null,
     input_message_content: {
       '@type': 'inputMessageText',
       text: { '@type': 'formattedText', text },
@@ -71,6 +74,7 @@ export async function sendMessage(
 
 /**
  * Search messages in a specific chat.
+ * TDLib method: searchChatMessages chat_id:int53 query:string from_message_id:int53 offset:int32 limit:int32 sender_id:MessageSender filter:SearchMessagesFilter topic_id:int53 saved_messages_topic_id:int53 = FoundChatMessages
  */
 export async function searchChatMessages(
   client: TdLibClient,
@@ -88,7 +92,8 @@ export async function searchChatMessages(
     limit,
     sender_id: null,
     filter: null,
-    message_thread_id: 0,
+    topic_id: null,
+    saved_messages_topic_id: null,
   });
 
   return (response as { messages?: TdMessage[] }).messages || [];
@@ -96,34 +101,33 @@ export async function searchChatMessages(
 
 /**
  * Search messages across all chats.
+ * TDLib method: searchMessages chat_list:ChatList only_in_channels:Bool query:string offset:string limit:int32 filter:SearchMessagesFilter min_date:int32 max_date:int32 = FoundMessages
  */
 export async function searchMessages(
   client: TdLibClient,
   query: string,
   limit: number = 20,
-  offsetDate: number = 0,
-  offsetChatId: number = 0,
-  offsetMessageId: number = 0
-): Promise<TdMessage[]> {
+  offset: string = ''
+): Promise<{ messages: TdMessage[]; next_offset?: string }> {
   const response = await client.send({
     '@type': 'searchMessages',
     chat_list: { '@type': 'chatListMain' },
     only_in_channels: false,
     query,
-    offset_date: offsetDate,
-    offset_chat_id: offsetChatId,
-    offset_message_id: offsetMessageId,
+    offset,
     limit,
     filter: null,
     min_date: 0,
     max_date: 0,
   });
 
-  return (response as { messages?: TdMessage[] }).messages || [];
+  const result = response as { messages?: TdMessage[]; next_offset?: string };
+  return { messages: result.messages || [], next_offset: result.next_offset };
 }
 
 /**
  * Forward messages from one chat to another.
+ * TDLib method: forwardMessages chat_id:int53 topic_id:int53 from_chat_id:int53 message_ids:vector<int53> options:messageSendOptions send_copy:Bool remove_caption:Bool = Messages
  */
 export async function forwardMessages(
   client: TdLibClient,
@@ -134,8 +138,10 @@ export async function forwardMessages(
   const response = await client.send({
     '@type': 'forwardMessages',
     chat_id: chatId,
+    topic_id: null,
     from_chat_id: fromChatId,
     message_ids: messageIds,
+    options: null,
     send_copy: false,
     remove_caption: false,
   });
@@ -145,6 +151,7 @@ export async function forwardMessages(
 
 /**
  * Mark messages as read in a chat.
+ * TDLib method: viewMessages chat_id:int53 message_ids:vector<int53> source:MessageSource force_read:Bool = Ok
  */
 export async function viewMessages(
   client: TdLibClient,
@@ -155,6 +162,7 @@ export async function viewMessages(
     '@type': 'viewMessages',
     chat_id: chatId,
     message_ids: messageIds,
+    source: { '@type': 'messageSourceChatHistory' },
     force_read: true,
   });
 }
@@ -244,6 +252,7 @@ export async function unpinChatMessage(
 
 /**
  * Get a shareable link to a specific message.
+ * TDLib method: getMessageLink chat_id:int53 message_id:int53 media_timestamp:int32 for_album:Bool in_message_thread:Bool = MessageLink
  */
 export async function getMessageLink(
   client: TdLibClient,
@@ -255,6 +264,7 @@ export async function getMessageLink(
       '@type': 'getMessageLink',
       chat_id: chatId,
       message_id: messageId,
+      media_timestamp: 0,
       for_album: false,
       in_message_thread: false,
     });

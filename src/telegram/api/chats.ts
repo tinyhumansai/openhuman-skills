@@ -12,9 +12,17 @@ export async function loadChats(client: TdLibClient, limit: number = 20): Promis
 
 /**
  * Get chat IDs from the main chat list.
+ * TDLib method: getChats chat_list:ChatList limit:int32 = Chats
  */
-export async function getChats(client: TdLibClient): Promise<{ chat_ids?: number[] }> {
-  return (await client.send({ '@type': 'getChats', chat_list: { '@type': 'chatListMain' } })) as {
+export async function getChats(
+  client: TdLibClient,
+  limit: number = 100
+): Promise<{ chat_ids?: number[] }> {
+  return (await client.send({
+    '@type': 'getChats',
+    chat_list: { '@type': 'chatListMain' },
+    limit,
+  })) as {
     chat_ids?: number[];
   };
 }
@@ -100,6 +108,7 @@ export async function createPrivateChat(
 
 /**
  * Create a new basic group chat.
+ * TDLib method: createNewBasicGroupChat user_ids:vector<int53> title:string message_auto_delete_time:int32 = Chat
  */
 export async function createNewBasicGroupChat(
   client: TdLibClient,
@@ -110,12 +119,14 @@ export async function createNewBasicGroupChat(
     '@type': 'createNewBasicGroupChat',
     user_ids: userIds,
     title,
+    message_auto_delete_time: 0,
   });
   return response as Record<string, unknown>;
 }
 
 /**
  * Create a new supergroup or channel.
+ * TDLib method: createNewSupergroupChat title:string is_forum:Bool is_channel:Bool description:string location:chatLocation message_auto_delete_time:int32 for_import:Bool = Chat
  */
 export async function createNewSupergroupChat(
   client: TdLibClient,
@@ -126,8 +137,12 @@ export async function createNewSupergroupChat(
   const response = await client.send({
     '@type': 'createNewSupergroupChat',
     title,
+    is_forum: false,
     is_channel: isChannel,
     description: description || '',
+    location: null,
+    message_auto_delete_time: 0,
+    for_import: false,
   });
   return response as Record<string, unknown>;
 }

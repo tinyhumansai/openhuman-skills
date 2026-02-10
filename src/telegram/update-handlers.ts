@@ -5,6 +5,7 @@ import './db/helpers';
 import type { TdUpdate } from './tdlib-client';
 import type {
   TdMessageContent,
+  TdUpdateChatFolders,
   TdUpdateChatLastMessage,
   TdUpdateChatPosition,
   TdUpdateChatReadInbox,
@@ -56,6 +57,7 @@ const updateHandlers: Record<string, (update: TdUpdate) => void> = {
   updateChatLastMessage: handleUpdateChatLastMessage,
   updateChatReadInbox: handleUpdateChatReadInbox,
   updateChatUnreadMentionCount: handleUpdateChatUnreadMentionCount,
+  updateChatFolders: handleUpdateChatFolders,
   updateNewMessage: handleUpdateNewMessage,
   updateMessageContent: handleUpdateMessageContent,
   updateMessageEdited: handleUpdateMessageEdited,
@@ -155,6 +157,19 @@ function handleUpdateChatReadInbox(update: TdUpdate): void {
   if (!data.chat_id) return;
 
   globalThis.telegramDb.updateChatUnreadCount(data.chat_id, data.unread_count);
+}
+
+/**
+ * Handle chat folders update.
+ * Caches folder info list in skill state for use by getChatFolders.
+ */
+function handleUpdateChatFolders(update: TdUpdate): void {
+  const data = update as unknown as TdUpdateChatFolders;
+  if (!data.chat_folders) return;
+
+  const s = globalThis.getTelegramSkillState();
+  s.chatFolderInfos = data.chat_folders;
+  console.log(`[telegram] Updated chat folders: ${data.chat_folders.length} folders`);
 }
 
 /**

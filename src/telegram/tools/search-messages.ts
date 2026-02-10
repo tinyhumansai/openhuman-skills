@@ -99,10 +99,10 @@ export const searchMessagesGlobalToolDefinition: ToolDefinition = {
 
       const limit = Math.min(parseInt((args.limit as string) || '20', 10), 50);
 
-      const messages = await api.searchMessages(s.client, query, limit);
+      const result = await api.searchMessages(s.client, query, limit);
 
       const showSensitive = s.config.showSensitiveMessages ?? false;
-      const formatted = messages
+      const formatted = result.messages
         .map(msg => {
           const text =
             msg.content?.['@type'] === 'messageText'

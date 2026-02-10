@@ -2,6 +2,7 @@
 // Tools and lifecycle functions access state through globalThis.getSkillState()
 // This pattern works in both production V8 runtime and test harness sandbox.
 import type { TdLibClient } from './tdlib-client';
+import type { TdChatFolderInfo } from './types';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -97,6 +98,7 @@ export interface TelegramState {
   workerTimeoutId: ReturnType<typeof setTimeout> | null;
   sync: SyncState;
   storage: StorageState;
+  chatFolderInfos: TdChatFolderInfo[];
 }
 
 // ---------------------------------------------------------------------------
@@ -135,6 +137,7 @@ function initSkillState(): TelegramState {
     workerTimeoutId: null,
     sync: { inProgress: false, completed: false, lastSyncTime: null, error: null },
     storage: { chatCount: 0, messageCount: 0, contactCount: 0, unreadCount: 0 },
+    chatFolderInfos: [],
   };
 
   globalThis.__telegramSkillState = state;

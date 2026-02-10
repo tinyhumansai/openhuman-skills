@@ -234,6 +234,29 @@ export interface TdUpdateUserStatus {
   status: TdUserStatus;
 }
 
+/**
+ * TDLib chat folder info (lightweight metadata from updateChatFolders).
+ */
+export interface TdChatFolderInfo {
+  '@type': 'chatFolderInfo';
+  id: number;
+  name: { '@type': 'chatFolderName'; text: { '@type': 'formattedText'; text: string }; animate_custom_emoji: boolean };
+  icon?: { '@type': 'chatFolderIcon'; name?: string };
+  color_id?: number;
+  is_shareable?: boolean;
+  has_my_invite_links?: boolean;
+}
+
+/**
+ * TDLib updateChatFolders update.
+ */
+export interface TdUpdateChatFolders {
+  '@type': 'updateChatFolders';
+  chat_folders: TdChatFolderInfo[];
+  main_chat_list_position: number;
+  are_tags_enabled: boolean;
+}
+
 // ---------------------------------------------------------------------------
 // Database Row Types
 // ---------------------------------------------------------------------------

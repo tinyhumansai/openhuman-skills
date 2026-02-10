@@ -2,13 +2,41 @@
 import type TdLibClient from '../tdlib-client';
 
 /**
- * Get all chat folders (filters).
+ * Get a single chat folder by ID.
+ * TDLib method: getChatFolder chat_folder_id:int32 = ChatFolder
+ */
+export async function getChatFolder(
+  client: TdLibClient,
+  chatFolderId: number
+): Promise<Record<string, unknown>> {
+  const response = await client.send({ '@type': 'getChatFolder', chat_folder_id: chatFolderId });
+  return response as Record<string, unknown>;
+}
+
+/**
+ * Get all chat folders by reading cached folder infos from skill state
+ * and fetching full details for each via getChatFolder.
+ *
+ * Note: TDLib does not have a "getChatFolders" method. Folder info is
+ * delivered via updateChatFolders and cached in skill state.
  */
 export async function getChatFolders(
   client: TdLibClient
-): Promise<{ chat_folders?: Record<string, unknown>[]; main_chat_list_position?: number }> {
-  const response = await client.send({ '@type': 'getChatFolders' });
-  return response as { chat_folders?: Record<string, unknown>[]; main_chat_list_position?: number };
+): Promise<{ chat_folders: Record<string, unknown>[]; main_chat_list_position?: number }> {
+  const s = globalThis.getTelegramSkillState();
+  const folderInfos = s.chatFolderInfos || [];
+
+  const folders: Record<string, unknown>[] = [];
+  for (const info of folderInfos) {
+    try {
+      const folder = await getChatFolder(client, info.id);
+      folders.push({ ...folder, id: info.id });
+    } catch (err) {
+      console.warn(`[telegram] Failed to get folder ${info.id}:`, err);
+    }
+  }
+
+  return { chat_folders: folders };
 }
 
 /**
@@ -55,14 +83,17 @@ export async function deleteChatFolder(
 
 /**
  * Get the list of chats in a chat folder.
+ * TDLib does not have getChatFolderChats — we get the folder and return its chat IDs.
  */
 export async function getChatFolderChats(
   client: TdLibClient,
-  chatFolderInfoId: number
-): Promise<{ chat_ids?: number[] }> {
-  const response = await client.send({
-    '@type': 'getChatFolderChats',
-    chat_folder_id: chatFolderInfoId,
-  });
-  return response as { chat_ids?: number[] };
+  chatFolderId: number
+): Promise<{ chat_ids: number[] }> {
+  const folder = await getChatFolder(client, chatFolderId);
+  const pinnedIds = (folder.pinned_chat_ids as number[]) || [];
+  const includedIds = (folder.included_chat_ids as number[]) || [];
+
+  // Combine pinned + included, deduplicating
+  const allIds = [...new Set([...pinnedIds, ...includedIds])];
+  return { chat_ids: allIds };
 }

@@ -68,6 +68,7 @@ export {
   getStickerSet,
 } from './media';
 export {
+  getChatFolder,
   getChatFolders,
   createChatFolder,
   editChatFolder,

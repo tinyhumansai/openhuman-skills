@@ -15,13 +15,18 @@ export const getChatFoldersToolDefinition: ToolDefinition = {
       if (!s.client) throw new Error('Telegram is not connected. Complete setup and log in first.');
 
       const result = await api.getChatFolders(s.client);
-      const folders = (result.chat_folders || []).map((folder: Record<string, unknown>) => ({
-        id: folder.id,
-        title: folder.title,
-        icon_name: (folder.icon as Record<string, unknown>)?.name,
-        included_chat_count: (folder.included_chat_ids as number[])?.length ?? 0,
-        excluded_chat_count: (folder.excluded_chat_ids as number[])?.length ?? 0,
-      }));
+      const folders = (result.chat_folders || []).map((folder: Record<string, unknown>) => {
+        // chatFolder.name is a chatFolderName object: { text: { text: "..." } }
+        const nameObj = folder.name as { text?: { text?: string } } | undefined;
+        const title = nameObj?.text?.text ?? (folder.title as string) ?? '';
+        return {
+          id: folder.id,
+          title,
+          icon_name: (folder.icon as Record<string, unknown>)?.name,
+          included_chat_count: (folder.included_chat_ids as number[])?.length ?? 0,
+          excluded_chat_count: (folder.excluded_chat_ids as number[])?.length ?? 0,
+        };
+      });
 
       return JSON.stringify({ success: true, count: folders.length, folders });
     } catch (err) {
@@ -90,13 +95,18 @@ export const createChatFolderToolDefinition: ToolDefinition = {
 
       const folder: Record<string, unknown> = {
         '@type': 'chatFolder',
-        title,
+        name: {
+          '@type': 'chatFolderName',
+          text: { '@type': 'formattedText', text: title },
+          animate_custom_emoji: false,
+        },
         included_chat_ids: args.included_chat_ids
           ? (args.included_chat_ids as string).split(',').map(id => parseInt(id.trim(), 10))
           : [],
         excluded_chat_ids: args.excluded_chat_ids
           ? (args.excluded_chat_ids as string).split(',').map(id => parseInt(id.trim(), 10))
           : [],
+        pinned_chat_ids: [],
         include_contacts: args.include_contacts === 'true',
         include_non_contacts: args.include_non_contacts === 'true',
         include_groups: args.include_groups === 'true',
@@ -180,7 +190,13 @@ export const editChatFolderToolDefinition: ToolDefinition = {
 
       const folder: Record<string, unknown> = { '@type': 'chatFolder' };
 
-      if (args.title) folder.title = args.title;
+      if (args.title) {
+        folder.name = {
+          '@type': 'chatFolderName',
+          text: { '@type': 'formattedText', text: args.title as string },
+          animate_custom_emoji: false,
+        };
+      }
       if (args.included_chat_ids) {
         folder.included_chat_ids = (args.included_chat_ids as string)
           .split(',')

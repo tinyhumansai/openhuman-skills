@@ -114,6 +114,7 @@ export async function sendAnimation(
 
 /**
  * Search for stickers by emoji or keyword.
+ * TDLib method: searchStickers sticker_type:StickerType emojis:string query:string input_language_codes:vector<string> offset:int32 limit:int32 = Stickers
  */
 export async function searchStickers(
   client: TdLibClient,
@@ -125,6 +126,9 @@ export async function searchStickers(
       '@type': 'searchStickers',
       sticker_type: { '@type': 'stickerTypeRegular' },
       emojis: query,
+      query: '',
+      input_language_codes: [],
+      offset: 0,
       limit,
     });
     return response as { stickers?: Record<string, unknown>[] };
