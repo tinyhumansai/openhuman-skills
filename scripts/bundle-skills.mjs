@@ -167,7 +167,7 @@ for (const skillName of skills) {
     bundledCode = bundledCode.replace(
       /(sensitive_filter_\w+) = \(init_sensitive_filter\(\), __toCommonJS\(sensitive_filter_exports\)\)/g,
       (_, varName) =>
-        `${varName} = (init_sensitive_filter(), { __esModule: true, isSensitiveText: typeof exports.isSensitiveText === "function" ? exports.isSensitiveText : function() { return false; } })`
+        `${varName} = (init_sensitive_filter(), { __esModule: true, isSensitiveText: typeof exports.isSensitiveText === "function" ? exports.isSensitiveText : function() { return true; } })`
     );
 
     // Remove the default esbuild header and add our CommonJS shim header
