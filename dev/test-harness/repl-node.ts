@@ -76,7 +76,7 @@ interface ToolDef {
     }>;
     required?: string[];
   };
-  execute: (args: Record<string, unknown>) => string;
+  execute: (args: Record<string, unknown>) => string | Promise<string>;
 }
 
 interface SetupField {
@@ -620,7 +620,7 @@ async function cmdCall(G: G, rest: string, rl: readline.Interface): Promise<void
   }
 
   try {
-    const rawResult = tool.execute(args);
+    const rawResult = await tool.execute(args);
     let parsed: unknown;
     try { parsed = JSON.parse(rawResult); } catch { parsed = rawResult; }
     console.log(`\n${c.green}Result:${c.reset}`);
@@ -1199,16 +1199,58 @@ async function main(): Promise<void> {
     completer,
   });
 
+  // Patch globalThis.console so async log messages (TDLib updates, socket events,
+  // skill console.log, etc.) don't corrupt the readline prompt.
+  // When we're waiting for input, clear the line before logging and redraw after.
+  const origConsole = {
+    log: globalThis.console.log.bind(globalThis.console),
+    info: globalThis.console.info.bind(globalThis.console),
+    warn: globalThis.console.warn.bind(globalThis.console),
+    error: globalThis.console.error.bind(globalThis.console),
+    debug: globalThis.console.debug.bind(globalThis.console),
+  };
+  let atPrompt = false;
+
+  function replSafeWrite(orig: (...a: unknown[]) => void, ...args: unknown[]) {
+    if (atPrompt) {
+      // Clear the current line, print the log message, then redraw the prompt
+      process.stdout.write('\x1b[2K\r');
+      orig(...args);
+      // Redraw prompt + whatever the user has typed so far
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const rl = replRl as any;
+      const line: string = rl.line ?? '';
+      const cursor: number = rl.cursor ?? line.length;
+      process.stdout.write(prompt + line);
+      // Move cursor back if user wasn't at end of line
+      const moveBack = line.length - cursor;
+      if (moveBack > 0) {
+        process.stdout.write(`\x1b[${moveBack}D`);
+      }
+    } else {
+      orig(...args);
+    }
+  }
+
+  globalThis.console.log = (...a: unknown[]) => replSafeWrite(origConsole.log, ...a);
+  globalThis.console.info = (...a: unknown[]) => replSafeWrite(origConsole.info, ...a);
+  globalThis.console.warn = (...a: unknown[]) => replSafeWrite(origConsole.warn, ...a);
+  globalThis.console.error = (...a: unknown[]) => replSafeWrite(origConsole.error, ...a);
+  globalThis.console.debug = (...a: unknown[]) => replSafeWrite(origConsole.debug, ...a);
+
   const prompt = `${c.cyan}${skillId}${c.reset}${c.dim}>${c.reset} `;
   let running = true;
 
   while (running) {
     let line: string;
     try {
+      atPrompt = true;
       line = await replRl.question(prompt);
     } catch {
       // EOF or error
       break;
+    } finally {
+      atPrompt = false;
     }
 
     const trimmed = line.trim();
@@ -1434,7 +1476,13 @@ async function main(): Promise<void> {
     }
   }
 
-  // Clean exit
+  // Restore original console and clean exit
+  globalThis.console.log = origConsole.log;
+  globalThis.console.info = origConsole.info;
+  globalThis.console.warn = origConsole.warn;
+  globalThis.console.error = origConsole.error;
+  globalThis.console.debug = origConsole.debug;
+
   console.log(`\n${c.dim}Shutting down...${c.reset}`);
   if (typeof ctx.G.stop === 'function') {
     try {
