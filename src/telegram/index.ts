@@ -379,6 +379,7 @@ function init(): void {
     s.config.isAuthenticated = saved.isAuthenticated || false;
     s.config.dataDir = saved.dataDir || '';
     s.config.pendingCode = saved.pendingCode || false;
+    s.config.showSensitiveMessages = saved.showSensitiveMessages ?? s.config.showSensitiveMessages;
   }
 
   console.log(`[telegram] Authenticated: ${s.config.isAuthenticated}`);
@@ -679,6 +680,28 @@ function onSetupCancel(): void {
   state.set('config', s.config);
 }
 
+function onListOptions(): { options: SkillOption[] } {
+  const s = globalThis.getTelegramSkillState();
+  return {
+    options: [
+      {
+        name: 'showSensitiveMessages',
+        type: 'boolean',
+        label: 'Show Sensitive Messages',
+        value: s.config.showSensitiveMessages ?? false,
+      },
+    ],
+  };
+}
+
+function onSetOption(args: { name: string; value: unknown }): void {
+  const s = globalThis.getTelegramSkillState();
+  if (args.name === 'showSensitiveMessages') {
+    s.config.showSensitiveMessages = Boolean(args.value);
+    state.set('config', s.config);
+  }
+}
+
 function publishState(): void {
   const s = globalThis.getTelegramSkillState();
   const isConnected = s.client !== null && s.client.initialized;
@@ -920,6 +943,8 @@ const skill: Skill = {
   onSetupStart,
   onSetupSubmit,
   onSetupCancel,
+  onListOptions,
+  onSetOption,
 };
 
 export default skill;

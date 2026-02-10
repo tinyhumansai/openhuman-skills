@@ -967,9 +967,20 @@ async function main(): Promise<void> {
     }
   }
 
+  // Validate CLI skill id: must be a built skill (e.g. gmail, server-ping), not "{}" or invalid
+  const skills = discoverSkills();
+  if (skillId && skills.length > 0) {
+    const valid = skills.some((s) => s.id === skillId);
+    if (!valid) {
+      console.log(
+        `${c.yellow}Unknown skill "${skillId}". Use a built skill id (e.g. gmail, server-ping) or pick below.${c.reset}\n`
+      );
+      skillId = undefined;
+    }
+  }
+
   // If no skill specified, let user pick
   if (!skillId) {
-    const skills = discoverSkills();
     if (skills.length === 0) {
       console.log(`${c.red}No compiled skills found. Run 'yarn build' first.${c.reset}`);
       rl.close();

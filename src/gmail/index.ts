@@ -17,6 +17,7 @@ import type { SkillConfig } from './types';
 // ---------------------------------------------------------------------------
 // Gmail API helper (uses oauth.fetch proxy)
 // ---------------------------------------------------------------------------
+const GMAIL_API_PREFIX = '/gmail/v1';
 
 function gmailFetch(
   endpoint: string,
@@ -28,22 +29,45 @@ function gmailFetch(
   } = {}
 ): { success: boolean; data?: any; error?: { code: number; message: string } } {
   const credential = oauth.getCredential();
+
   if (!credential) {
+    console.log('[gmail] gmailFetch: no credential (OAuth not connected)');
     return {
       success: false,
       error: { code: 401, message: 'Gmail not connected. Complete OAuth setup first.' },
     };
   }
 
+  const method = options.method || 'GET';
+  const path = endpoint.startsWith('/')
+    ? GMAIL_API_PREFIX + endpoint
+    : GMAIL_API_PREFIX + '/' + endpoint;
+
+  console.log(
+    `[gmail] gmailFetch: path=${path} method=${method} credentialId=${credential.credentialId || '(none)'} isValid=${credential.isValid}`
+  );
+
   try {
-    const response = oauth.fetch(endpoint, {
-      method: options.method || 'GET',
+    const response = oauth.fetch(path, {
+      method,
       headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
       body: options.body,
       timeout: options.timeout || 30,
     });
 
     const s = globalThis.getGmailSkillState();
+
+    if (response.status === 401) {
+      const bodyPreview = response.body ? response.body.slice(0, 200) : '(empty)';
+      console.log(
+        `[gmail] gmailFetch: 401 Unauthorized path=${path} credentialId=${credential.credentialId} body=${bodyPreview}`
+      );
+    } else if (response.status >= 400) {
+      const bodyPreview = response.body ? response.body.slice(0, 200) : '(empty)';
+      console.log(
+        `[gmail] gmailFetch: error path=${path} status=${response.status} body=${bodyPreview}`
+      );
+    }
 
     // Update rate limit info from headers
     if (response.headers['x-ratelimit-remaining']) {
@@ -95,6 +119,7 @@ function init(): void {
     s.config.syncIntervalMinutes = saved.syncIntervalMinutes || s.config.syncIntervalMinutes;
     s.config.maxEmailsPerSync = saved.maxEmailsPerSync || s.config.maxEmailsPerSync;
     s.config.notifyOnNewEmails = saved.notifyOnNewEmails ?? s.config.notifyOnNewEmails;
+    s.config.showSensitiveMessages = saved.showSensitiveMessages ?? s.config.showSensitiveMessages;
   }
 
   // Load sync status
@@ -294,6 +319,12 @@ function onListOptions(): { options: SkillOption[] } {
         label: 'Notify on New Emails',
         value: s.config.notifyOnNewEmails,
       },
+      {
+        name: 'showSensitiveMessages',
+        type: 'boolean',
+        label: 'Show Sensitive Messages',
+        value: s.config.showSensitiveMessages ?? false,
+      },
     ],
   };
 }
@@ -328,6 +359,10 @@ function onSetOption(args: { name: string; value: unknown }): void {
 
     case 'notifyOnNewEmails':
       s.config.notifyOnNewEmails = Boolean(args.value);
+      break;
+
+    case 'showSensitiveMessages':
+      s.config.showSensitiveMessages = Boolean(args.value);
       break;
   }
 

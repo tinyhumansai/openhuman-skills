@@ -162,6 +162,14 @@ for (const skillName of skills) {
 
     let bundledCode = result.outputFiles[0].text;
 
+    // Fix common/sensitive-filter export: the module writes to global `exports` but the bundle
+    // assigns from sensitive_filter_exports (which stays empty). Use global exports.isSensitiveText.
+    bundledCode = bundledCode.replace(
+      /(sensitive_filter_\w+) = \(init_sensitive_filter\(\), __toCommonJS\(sensitive_filter_exports\)\)/g,
+      (_, varName) =>
+        `${varName} = (init_sensitive_filter(), { __esModule: true, isSensitiveText: typeof exports.isSensitiveText === "function" ? exports.isSensitiveText : function() { return true; } })`
+    );
+
     // Remove the default esbuild header and add our CommonJS shim header
     bundledCode = bundledCode.replace(/^\/\* Bundled skill with esbuild \*\/\n"use strict";\n/, '');
     bundledCode = SKILL_HEADER + bundledCode;

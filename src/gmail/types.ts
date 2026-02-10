@@ -7,6 +7,7 @@ export interface SkillConfig {
   syncIntervalMinutes: number;
   maxEmailsPerSync: number;
   notifyOnNewEmails: boolean;
+  showSensitiveMessages?: boolean;
 }
 
 export interface GmailProfile {

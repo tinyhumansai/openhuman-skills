@@ -1,5 +1,6 @@
 // Tool: gmail-get-email
 // Get full details of a specific email by ID
+import { isSensitiveText } from '../../helpers';
 import '../skill-state';
 
 export const getEmailTool: ToolDefinition = {
@@ -140,6 +141,26 @@ export const getEmailTool: ToolDefinition = {
           created_at: new Date(localEmail.created_at * 1000).toISOString(),
           updated_at: new Date(localEmail.updated_at * 1000).toISOString(),
         };
+      }
+
+      // If sensitive and user has not opted in to show sensitive, return redacted response.
+      // Consistent with search-emails: only check subject and snippet (not full body).
+      const s = globalThis.getGmailSkillState();
+      const showSensitive = s.config.showSensitiveMessages ?? false;
+      if (!showSensitive) {
+        const textToCheck = (result.headers?.subject || '') + ' ' + (result.snippet || '');
+        if (isSensitiveText(textToCheck)) {
+          return JSON.stringify({
+            success: true,
+            email: {
+              id: result.id,
+              subject: '[Sensitive - hidden]',
+              snippet: null,
+              body: null,
+              sensitive_hidden: true,
+            },
+          });
+        }
       }
 
       return JSON.stringify({ success: true, email: result });

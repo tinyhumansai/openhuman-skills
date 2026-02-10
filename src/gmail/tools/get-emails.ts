@@ -1,5 +1,6 @@
 // Tool: gmail-get-emails
 // Get emails with filtering and search capabilities
+import { isSensitiveText } from '../../helpers';
 import '../skill-state';
 
 export const getEmailsTool: ToolDefinition = {
@@ -140,9 +141,19 @@ export const getEmailsTool: ToolDefinition = {
         }
       }
 
+      // Filter out sensitive emails unless user opted in to show them
+      const s = globalThis.getGmailSkillState();
+      const showSensitive = s.config.showSensitiveMessages ?? false;
+      const filteredEmails = showSensitive
+        ? emails
+        : emails.filter(
+            (e: { subject?: string; snippet?: string }) =>
+              !isSensitiveText((e.subject || '') + ' ' + (e.snippet || ''))
+          );
+
       return JSON.stringify({
         success: true,
-        emails,
+        emails: filteredEmails,
         total_count: messageList.resultSizeEstimate,
         next_page_token: messageList.nextPageToken || null,
         query: args.query || null,

@@ -1,5 +1,6 @@
 // Tool: gmail-search-emails
 // Advanced email search using Gmail query syntax
+import { isSensitiveText } from '../../helpers';
 import '../skill-state';
 
 export const searchEmailsTool: ToolDefinition = {
@@ -151,15 +152,25 @@ export const searchEmailsTool: ToolDefinition = {
         }
       }
 
+      // Filter out sensitive emails unless user opted in to show them
+      const s = globalThis.getGmailSkillState();
+      const showSensitive = s.config.showSensitiveMessages ?? false;
+      const filteredEmails = showSensitive
+        ? emails
+        : emails.filter(
+            (e: { subject?: string; snippet?: string }) =>
+              !isSensitiveText((e.subject || '') + ' ' + (e.snippet || ''))
+          );
+
       // Sort by relevance score (highest first)
-      emails.sort((a, b) => b.relevance_score - a.relevance_score);
+      filteredEmails.sort((a, b) => b.relevance_score - a.relevance_score);
 
       return JSON.stringify({
         success: true,
-        emails,
+        emails: filteredEmails,
         query,
         total_estimate: searchResults.resultSizeEstimate,
-        returned_count: emails.length,
+        returned_count: filteredEmails.length,
         next_page_token: searchResults.nextPageToken || null,
         search_tips: generateSearchTips(query),
       });

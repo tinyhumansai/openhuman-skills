@@ -32,6 +32,7 @@ function initGmailSkillState(): GmailSkillState {
       syncIntervalMinutes: 15,
       maxEmailsPerSync: 100,
       notifyOnNewEmails: true,
+      showSensitiveMessages: false,
     },
     profile: null,
     syncStatus: {

@@ -12,6 +12,8 @@ export interface SkillConfig {
   isAuthenticated: boolean;
   dataDir: string; // TDLib data directory path
   pendingCode: boolean;
+  /** When false (default), sensitive messages (password reset, OTP, 2FA, login links) are filtered out. */
+  showSensitiveMessages?: boolean;
 }
 
 export interface FormattedUser {
@@ -112,7 +114,13 @@ declare global {
  */
 function initSkillState(): TelegramState {
   const state: TelegramState = {
-    config: { phoneNumber: '', isAuthenticated: false, dataDir: '', pendingCode: false },
+    config: {
+      phoneNumber: '',
+      isAuthenticated: false,
+      dataDir: '',
+      pendingCode: false,
+      showSensitiveMessages: false,
+    },
     cache: { me: null, dialogs: [], lastSync: 0 },
     client: null,
     clientConnecting: false,
