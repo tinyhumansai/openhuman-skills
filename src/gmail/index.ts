@@ -100,7 +100,7 @@ async function gmailFetch(
 // Lifecycle hooks
 // ---------------------------------------------------------------------------
 
-function init(): void {
+async function init(): Promise<void> {
   console.log(`[gmail] Initializing on ${platform.os()}`);
   const s = globalThis.getGmailSkillState();
 
@@ -136,7 +136,7 @@ function init(): void {
   console.log(`[gmail] Initialized. Connected: ${isConnected}`);
 }
 
-function start(): void {
+async function start(): Promise<void> {
   console.log('[gmail] Starting skill...');
   const s = globalThis.getGmailSkillState();
   const credential = oauth.getCredential();
@@ -160,7 +160,7 @@ function start(): void {
   }
 }
 
-function stop(): void {
+async function stop(): Promise<void> {
   console.log('[gmail] Stopping skill...');
   const s = globalThis.getGmailSkillState();
 
@@ -180,7 +180,7 @@ function stop(): void {
   console.log('[gmail] Skill stopped');
 }
 
-function onCronTrigger(scheduleId: string): void {
+async function onCronTrigger(scheduleId: string): Promise<void> {
   console.log(`[gmail] Cron triggered: ${scheduleId}`);
 
   if (scheduleId === 'gmail-sync') {
@@ -188,13 +188,13 @@ function onCronTrigger(scheduleId: string): void {
   }
 }
 
-function onSessionStart(args: { sessionId: string }): void {
+async function onSessionStart(args: { sessionId: string }): Promise<void> {
   const s = globalThis.getGmailSkillState();
   s.activeSessions.push(args.sessionId);
   console.log(`[gmail] Session started: ${args.sessionId} (${s.activeSessions.length} active)`);
 }
 
-function onSessionEnd(args: { sessionId: string }): void {
+async function onSessionEnd(args: { sessionId: string }): Promise<void> {
   const s = globalThis.getGmailSkillState();
   const index = s.activeSessions.indexOf(args.sessionId);
   if (index > -1) {
@@ -232,7 +232,7 @@ async function onOAuthComplete(args: OAuthCompleteArgs): Promise<OAuthCompleteRe
   console.log(`[gmail] Connected as ${s.config.userEmail || args.accountLabel || 'unknown'}`);
 }
 
-function onOAuthRevoked(args: OAuthRevokedArgs): void {
+async function onOAuthRevoked(args: OAuthRevokedArgs): Promise<void> {
   console.log(`[gmail] OAuth revoked: ${args.reason}`);
   const s = globalThis.getGmailSkillState();
 
@@ -249,7 +249,7 @@ function onOAuthRevoked(args: OAuthRevokedArgs): void {
   }
 }
 
-function onDisconnect(): void {
+async function onDisconnect(): Promise<void> {
   console.log('[gmail] Disconnecting...');
   const s = globalThis.getGmailSkillState();
 
@@ -278,7 +278,7 @@ function onDisconnect(): void {
 // Options system
 // ---------------------------------------------------------------------------
 
-function onListOptions(): { options: SkillOption[] } {
+async function onListOptions(): Promise<{ options: SkillOption[] }> {
   const s = globalThis.getGmailSkillState();
 
   return {
@@ -329,7 +329,7 @@ function onListOptions(): { options: SkillOption[] } {
   };
 }
 
-function onSetOption(args: { name: string; value: unknown }): void {
+async function onSetOption(args: { name: string; value: unknown }): Promise<void> {
   const s = globalThis.getGmailSkillState();
   const credential = oauth.getCredential();
 

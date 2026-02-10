@@ -3,6 +3,7 @@
 // Provides tools for Telegram API access with native TDLib bindings.
 // Import skill state (initializes globalThis.getTelegramSkillState)
 // registers globalThis.initializeTelegramSchema
+import { getMe } from './api';
 import './db/helpers';
 import './db/schema';
 import { createSetupHandlers } from './setup';
@@ -521,71 +522,6 @@ function publishState(): void {
 // ---------------------------------------------------------------------------
 
 /**
- * telegram-ping tool - Check Telegram connectivity.
- */
-const telegramPingTool: ToolDefinition = {
-  name: 'telegram-ping',
-  description: 'Check if Telegram servers are reachable and get latency information.',
-  input_schema: { type: 'object', properties: {}, required: [] },
-  async execute(): Promise<string> {
-    const s = globalThis.getTelegramSkillState();
-    const endpoints = [
-      'https://telegram.org',
-      'https://api.telegram.org',
-      'https://core.telegram.org',
-    ];
-
-    const results: Array<{
-      endpoint: string;
-      success: boolean;
-      latency_ms: number | null;
-      error?: string;
-    }> = [];
-
-    for (const endpoint of endpoints) {
-      const startTime = Date.now();
-      try {
-        const response = await net.fetch(endpoint, { method: 'HEAD', timeout: 5000 });
-        const latency = Date.now() - startTime;
-        results.push({
-          endpoint,
-          success: response.status >= 200 && response.status < 300,
-          latency_ms: latency,
-        });
-      } catch (err) {
-        results.push({
-          endpoint,
-          success: false,
-          latency_ms: null,
-          error: err instanceof Error ? err.message : String(err),
-        });
-      }
-    }
-
-    const successCount = results.filter(r => r.success).length;
-    const avgLatency =
-      successCount > 0
-        ? Math.round(
-            results
-              .filter(r => r.success && r.latency_ms !== null)
-              .reduce((sum, r) => sum + (r.latency_ms || 0), 0) / successCount
-          )
-        : null;
-
-    return JSON.stringify({
-      success: successCount > 0,
-      message:
-        successCount > 0
-          ? `Telegram is reachable (${successCount}/${endpoints.length} endpoints)`
-          : 'Unable to reach Telegram servers',
-      avg_latency_ms: avgLatency,
-      is_authenticated: s.config.isAuthenticated,
-      endpoints: results,
-    });
-  },
-};
-
-/**
  * telegram-status tool - Get current connection status.
  */
 const telegramStatusTool: ToolDefinition = {
@@ -615,17 +551,25 @@ const telegramStatusTool: ToolDefinition = {
 // ---------------------------------------------------------------------------
 
 async function onPing(): Promise<PingResult> {
+  console.log('[telegram] onPing');
   const s = globalThis.getTelegramSkillState();
   if (!s.client || !s.client.initialized) {
+    console.log('[telegram] onPing: TDLib client not connected');
     return { ok: false, errorType: 'network', errorMessage: 'TDLib client not connected' };
   }
   if (!s.config.isAuthenticated || s.authState !== 'ready') {
+    console.log('[telegram] onPing: Not authenticated (state: ${s.authState})');
     return {
       ok: false,
       errorType: 'auth',
       errorMessage: `Not authenticated (state: ${s.authState})`,
     };
   }
+
+  console.log('[telegram] onPing: Getting me');
+  const me = await getMe(s.client);
+  console.log('[telegram] onPing:', JSON.stringify(me));
+
   return { ok: true };
 }
 
@@ -661,7 +605,7 @@ const skill: Skill = {
     auto_start: false,
     setup: { required: true, label: 'Configure Telegram' },
   },
-  tools: [telegramPingTool, telegramStatusTool, ...tools],
+  tools: [telegramStatusTool, ...tools],
   init,
   start,
   stop,

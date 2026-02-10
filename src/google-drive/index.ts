@@ -17,7 +17,7 @@ import type { SkillConfig } from './types';
 // Lifecycle
 // ---------------------------------------------------------------------------
 
-function init(): void {
+async function init(): Promise<void> {
   console.log(`[google-drive] Initializing on ${platform.os()}`);
   const s = globalThis.getGoogleDriveSkillState();
   const saved = state.get('config') as Partial<SkillConfig> | null;
@@ -29,24 +29,24 @@ function init(): void {
   console.log(`[google-drive] Initialized. Connected: ${isConnected}`);
 }
 
-function start(): void {
+async function start(): Promise<void> {
   console.log('[google-drive] Starting skill...');
   publishSkillState();
 }
 
-function stop(): void {
+async function stop(): Promise<void> {
   console.log('[google-drive] Stopping skill...');
   const s = globalThis.getGoogleDriveSkillState();
   state.set('config', s.config);
   console.log('[google-drive] Skill stopped');
 }
 
-function onSessionStart(args: { sessionId: string }): void {
+async function onSessionStart(args: { sessionId: string }): Promise<void> {
   const s = globalThis.getGoogleDriveSkillState();
   s.activeSessions.push(args.sessionId);
 }
 
-function onSessionEnd(args: { sessionId: string }): void {
+async function onSessionEnd(args: { sessionId: string }): Promise<void> {
   const s = globalThis.getGoogleDriveSkillState();
   const i = s.activeSessions.indexOf(args.sessionId);
   if (i > -1) s.activeSessions.splice(i, 1);
@@ -61,14 +61,14 @@ async function onOAuthComplete(args: OAuthCompleteArgs): Promise<void> {
   publishSkillState();
 }
 
-function onOAuthRevoked(_args: OAuthRevokedArgs): void {
+async function onOAuthRevoked(_args: OAuthRevokedArgs): Promise<void> {
   const s = globalThis.getGoogleDriveSkillState();
   s.config = { credentialId: '', userEmail: '' };
   state.set('config', s.config);
   publishSkillState();
 }
 
-function onDisconnect(): void {
+async function onDisconnect(): Promise<void> {
   oauth.revoke();
   const s = globalThis.getGoogleDriveSkillState();
   s.config = { credentialId: '', userEmail: '' };

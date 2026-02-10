@@ -1,6 +1,6 @@
 // Database schema initialization for Notion skill
 // Creates SQLite tables for pages, databases, users, and sync state
-import './skill-state';
+import '../state';
 
 /**
  * Initialize Notion database schema

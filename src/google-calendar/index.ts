@@ -15,7 +15,7 @@ import type { SkillConfig } from './types';
 // Lifecycle
 // ---------------------------------------------------------------------------
 
-function init(): void {
+async function init(): Promise<void> {
   console.log(`[google-calendar] Initializing on ${platform.os()}`);
   const s = globalThis.getGoogleCalendarSkillState();
   const saved = state.get('config') as Partial<SkillConfig> | null;
@@ -27,24 +27,24 @@ function init(): void {
   console.log(`[google-calendar] Initialized. Connected: ${isConnected}`);
 }
 
-function start(): void {
+async function start(): Promise<void> {
   console.log('[google-calendar] Starting skill...');
   publishSkillState();
 }
 
-function stop(): void {
+async function stop(): Promise<void> {
   console.log('[google-calendar] Stopping skill...');
   const s = globalThis.getGoogleCalendarSkillState();
   state.set('config', s.config);
   console.log('[google-calendar] Skill stopped');
 }
 
-function onSessionStart(args: { sessionId: string }): void {
+async function onSessionStart(args: { sessionId: string }): Promise<void> {
   const s = globalThis.getGoogleCalendarSkillState();
   s.activeSessions.push(args.sessionId);
 }
 
-function onSessionEnd(args: { sessionId: string }): void {
+async function onSessionEnd(args: { sessionId: string }): Promise<void> {
   const s = globalThis.getGoogleCalendarSkillState();
   const i = s.activeSessions.indexOf(args.sessionId);
   if (i > -1) s.activeSessions.splice(i, 1);
@@ -59,14 +59,14 @@ async function onOAuthComplete(args: OAuthCompleteArgs): Promise<void> {
   publishSkillState();
 }
 
-function onOAuthRevoked(_args: OAuthRevokedArgs): void {
+async function onOAuthRevoked(_args: OAuthRevokedArgs): Promise<void> {
   const s = globalThis.getGoogleCalendarSkillState();
   s.config = { credentialId: '', userEmail: '' };
   state.set('config', s.config);
   publishSkillState();
 }
 
-function onDisconnect(): void {
+async function onDisconnect(): Promise<void> {
   oauth.revoke();
   const s = globalThis.getGoogleCalendarSkillState();
   s.config = { credentialId: '', userEmail: '' };

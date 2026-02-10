@@ -23,7 +23,7 @@ function getSkillState(): ServerPingState {
   return (globalThis as any).getSkillState();
 }
 
-function init(): void {
+async function init(): Promise<void> {
   console.log(`[server-ping] Initializing on ${platform.os()}`);
   globalThis.initializeServerPingSchema();
   const s = getSkillState();
@@ -57,7 +57,7 @@ function init(): void {
   console.log(`[server-ping] Config loaded — target: ${s.config.serverUrl}`);
 }
 
-function start(): void {
+async function start(): Promise<void> {
   const s = getSkillState();
 
   if (!s.config.serverUrl) {
@@ -82,7 +82,7 @@ function start(): void {
   publishState();
 }
 
-function stop(): void {
+async function stop(): Promise<void> {
   console.log('[server-ping] Stopping');
   const s = getSkillState();
 
@@ -99,7 +99,7 @@ function stop(): void {
 // Options (runtime-configurable)
 // ---------------------------------------------------------------------------
 
-function onListOptions(): { options: SkillOption[] } {
+async function onListOptions(): Promise<{ options: SkillOption[] }> {
   const s = getSkillState();
   return {
     options: [

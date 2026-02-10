@@ -10,7 +10,7 @@ import type { NotionSkillConfig } from './state';
 import { performSync } from './sync';
 import tools from './tools/index';
 
-function init(): void {
+async function init(): Promise<void> {
   console.log('[notion] Initializing');
   const s = getNotionSkillState();
 
@@ -54,7 +54,7 @@ function init(): void {
   publishState();
 }
 
-function start(): void {
+async function start(): Promise<void> {
   const s = getNotionSkillState();
 
   if (!oauth.getCredential()) {
@@ -68,7 +68,7 @@ function start(): void {
   console.log(`[notion] Scheduled sync every ${s.config.syncIntervalMinutes} minutes`);
 }
 
-function stop(): void {
+async function stop(): Promise<void> {
   console.log('[notion] Stopping');
   const s = getNotionSkillState();
 
@@ -81,7 +81,7 @@ function stop(): void {
   console.log('[notion] Stopped');
 }
 
-function onCronTrigger(scheduleId: string): void {
+async function onCronTrigger(scheduleId: string): Promise<void> {
   console.log(`[notion] Cron triggered: ${scheduleId}`);
 
   if (scheduleId === 'notion-sync') {
@@ -93,12 +93,12 @@ function onCronTrigger(scheduleId: string): void {
 // Session lifecycle
 // ---------------------------------------------------------------------------
 
-function onSessionStart(args: { sessionId: string }): void {
+async function onSessionStart(args: { sessionId: string }): Promise<void> {
   const s = getNotionSkillState();
   s.activeSessions.push(args.sessionId);
 }
 
-function onSessionEnd(args: { sessionId: string }): void {
+async function onSessionEnd(args: { sessionId: string }): Promise<void> {
   const s = getNotionSkillState();
   const index = s.activeSessions.indexOf(args.sessionId);
   if (index > -1) {
@@ -130,7 +130,7 @@ async function onOAuthComplete(args: OAuthCompleteArgs): Promise<OAuthCompleteRe
   publishState();
 }
 
-function onOAuthRevoked(args: OAuthRevokedArgs): void {
+async function onOAuthRevoked(args: OAuthRevokedArgs): Promise<void> {
   console.log(`[notion] OAuth revoked — reason: ${args.reason}`);
   const s = getNotionSkillState();
 
@@ -141,7 +141,7 @@ function onOAuthRevoked(args: OAuthRevokedArgs): void {
   publishState();
 }
 
-function onDisconnect(): void {
+async function onDisconnect(): Promise<void> {
   console.log('[notion] Disconnecting');
   const s = getNotionSkillState();
 
@@ -153,7 +153,7 @@ function onDisconnect(): void {
   publishState();
 }
 
-function onSync(): void {
+async function onSync(): Promise<void> {
   console.log('[notion] Syncing');
   performSync();
 }
@@ -162,7 +162,7 @@ function onSync(): void {
 // Options system
 // ---------------------------------------------------------------------------
 
-function onListOptions(): { options: SkillOption[] } {
+async function onListOptions(): Promise<{ options: SkillOption[] }> {
   const s = getNotionSkillState();
 
   return {
@@ -200,7 +200,7 @@ function onListOptions(): { options: SkillOption[] } {
   };
 }
 
-function onSetOption(args: { name: string; value: unknown }): void {
+async function onSetOption(args: { name: string; value: unknown }): Promise<void> {
   const s = getNotionSkillState();
   const credential = oauth.getCredential();
 
@@ -231,7 +231,7 @@ function onSetOption(args: { name: string; value: unknown }): void {
 // State publishing
 // ---------------------------------------------------------------------------
 
-function publishState(): void {
+async function publishState(): Promise<void> {
   const s = getNotionSkillState();
   const isConnected = !!oauth.getCredential();
 

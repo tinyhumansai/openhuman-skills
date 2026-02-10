@@ -136,7 +136,7 @@ const tools = [
 // ─── Lifecycle: init() ──────────────────────────────────────────────
 // Called once when the skill is first loaded.
 // Use this to create database tables and load persisted config.
-function init(): void {
+async function init(): Promise<void> {
   const s = getState();
 
   // Create database table for logs
@@ -164,7 +164,7 @@ function init(): void {
 // ─── Lifecycle: start() ─────────────────────────────────────────────
 // Called when the skill should begin active work.
 // Register cron schedules, hooks, and publish initial state.
-function start(): void {
+async function start(): Promise<void> {
   const s = getState();
   s.isRunning = true;
 
@@ -207,7 +207,7 @@ function start(): void {
 
 // ─── Lifecycle: stop() ──────────────────────────────────────────────
 // Called on shutdown. Unregister cron schedules and persist state.
-function stop(): void {
+async function stop(): Promise<void> {
   const s = getState();
   s.isRunning = false;
 
@@ -278,12 +278,12 @@ async function onCronTrigger(scheduleId: string): Promise<void> {
 
 // ─── Lifecycle: onSessionStart / onSessionEnd ───────────────────────
 // Called when the user starts or ends an AI conversation.
-function onSessionStart(_args: { sessionId: string }): void {
+async function onSessionStart(_args: { sessionId: string }): Promise<void> {
   const s = getState();
   if (s.config.verbose) console.log('[example-skill] Session started');
 }
 
-function onSessionEnd(_args: { sessionId: string }): void {
+async function onSessionEnd(_args: { sessionId: string }): Promise<void> {
   const s = getState();
   if (s.config.verbose) console.log('[example-skill] Session ended');
 }
@@ -291,7 +291,7 @@ function onSessionEnd(_args: { sessionId: string }): void {
 // ─── Setup Flow (3-step wizard) ─────────────────────────────────────
 // Multi-step configuration wizard presented to the user on first run.
 
-function onSetupStart(): SetupStartResult {
+async function onSetupStart(): Promise<SetupStartResult> {
   return {
     step: {
       id: 'credentials',
@@ -409,7 +409,7 @@ async function onSetupSubmit(args: {
   return { status: 'error', errors: [{ field: '', message: 'Unknown step' }] };
 }
 
-function onSetupCancel(): void {
+async function onSetupCancel(): Promise<void> {
   // Reset config to defaults if setup is cancelled
   const s = getState();
   s.config = { ...DEFAULT_CONFIG };
@@ -440,7 +440,7 @@ function onSetupCancel(): void {
 // }
 
 // ─── Disconnect ─────────────────────────────────────────────────────
-function onDisconnect(): void {
+async function onDisconnect(): Promise<void> {
   // Clean up credentials when user disconnects the skill
   state.delete('config');
   const s = getState();
@@ -450,7 +450,7 @@ function onDisconnect(): void {
 // ─── Options System ─────────────────────────────────────────────────
 // Runtime-configurable settings the user can change without re-running setup.
 
-function onListOptions(): { options: SkillOption[] } {
+async function onListOptions(): Promise<{ options: SkillOption[] }> {
   const s = getState();
   return {
     options: [
@@ -485,7 +485,7 @@ function onListOptions(): { options: SkillOption[] } {
   };
 }
 
-function onSetOption(args: { name: string; value: unknown }): void {
+async function onSetOption(args: { name: string; value: unknown }): Promise<void> {
   const s = getState();
 
   if (args.name === 'refreshInterval') {
@@ -505,7 +505,7 @@ function onSetOption(args: { name: string; value: unknown }): void {
 // ─── Helpers ────────────────────────────────────────────────────────
 
 /** Publish current state to the frontend for real-time display */
-function publishState(): void {
+async function publishState(): Promise<void> {
   const s = getState();
   state.setPartial({
     status: s.isRunning ? 'running' : 'stopped',
