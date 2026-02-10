@@ -1,6 +1,6 @@
 // Tool: notion-sync-status
 // Returns current sync status and statistics
-import { getNotionSkillState } from '../skill-state';
+import { getNotionSkillState } from '../state';
 
 export const syncStatusTool: ToolDefinition = {
   name: 'sync-status',

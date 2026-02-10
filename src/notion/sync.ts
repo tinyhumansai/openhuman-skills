@@ -16,10 +16,9 @@ import {
   upsertDatabaseRow,
   upsertPage,
   upsertUser,
-} from './db-helpers';
+} from './db/helpers';
 import { fetchBlockTreeText } from './helpers';
-import { getNotionSkillState } from './skill-state';
-import './skill-state';
+import { getNotionSkillState } from './state';
 
 // ---------------------------------------------------------------------------
 // Main sync orchestrator

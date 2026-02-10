@@ -1,6 +1,6 @@
 // Tool: notion-sync-now
 // Triggers an immediate sync and returns the result
-import { getNotionSkillState } from '../skill-state';
+import { getNotionSkillState } from '../state';
 import { performSync } from '../sync';
 
 export const syncNowTool: ToolDefinition = {

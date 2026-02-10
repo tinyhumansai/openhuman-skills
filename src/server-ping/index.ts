@@ -3,8 +3,8 @@
 import './db/helpers';
 import './db/schema';
 import './setup';
-import './skill-state';
-import type { ServerPingState } from './skill-state';
+import './state';
+import type { ServerPingState } from './state';
 import {
   getPingHistoryTool,
   getPingStatsTool,

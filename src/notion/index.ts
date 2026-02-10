@@ -3,18 +3,12 @@
 // Supports pages, databases, blocks, users, comments, and local search.
 // Authentication is handled via the platform OAuth bridge.
 import './api/index';
-import './db-helpers';
-import { getEntityCounts } from './db-helpers';
-import './db-schema';
-import { initializeNotionSchema } from './db-schema';
-import { getNotionSkillState } from './skill-state';
-import type { NotionSkillConfig } from './skill-state';
+import { getEntityCounts } from './db/helpers';
+import { initializeNotionSchema } from './db/schema';
+import { getNotionSkillState } from './state';
+import type { NotionSkillConfig } from './state';
 import { performSync } from './sync';
 import tools from './tools/index';
-
-// ---------------------------------------------------------------------------
-// Lifecycle hooks
-// ---------------------------------------------------------------------------
 
 function init(): void {
   console.log('[notion] Initializing');

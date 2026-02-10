@@ -1,10 +1,6 @@
 // Database helper functions for Notion skill
 // CRUD operations for pages, databases, users, and sync state
-import './skill-state';
-
-// ---------------------------------------------------------------------------
-// Types for database rows
-// ---------------------------------------------------------------------------
+import '../state';
 
 export interface LocalPage {
   id: string;

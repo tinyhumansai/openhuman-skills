@@ -1,6 +1,6 @@
 // Tool: notion-summarize-pages
 // AI summarization is now handled by the backend server.
-import '../skill-state';
+import '../state';
 
 export const summarizePagesTool: ToolDefinition = {
   name: 'summarize-pages',

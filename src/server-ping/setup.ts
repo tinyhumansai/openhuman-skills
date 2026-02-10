@@ -1,5 +1,5 @@
 // Setup wizard for server-ping skill
-import type { ServerPingState } from './skill-state';
+import type { ServerPingState } from './state';
 
 declare global {
   var serverPingSetup: {
