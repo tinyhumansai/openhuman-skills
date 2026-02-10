@@ -17,7 +17,7 @@ export const getChatStatsToolDefinition: ToolDefinition = {
     },
     required: ['chat_id'],
   },
-  execute(args: Record<string, unknown>): string {
+  async execute(args: Record<string, unknown>): Promise<string> {
     try {
       const chatId = args.chat_id as string;
       if (!chatId) {

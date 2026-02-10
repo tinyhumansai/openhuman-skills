@@ -33,7 +33,7 @@ export const getChatsToolDefinition: ToolDefinition = {
     },
     required: [],
   },
-  execute(args: Record<string, unknown>): string {
+  async execute(args: Record<string, unknown>): Promise<string> {
     try {
       const type = args.type as ChatType | undefined;
       const unreadOnly = args.unread_only === 'true';
