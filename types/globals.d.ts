@@ -197,7 +197,7 @@ interface ToolDefinition {
   name: string;
   description: string;
   input_schema: ToolInputSchema;
-  execute: (args: Record<string, unknown>) => string | Promise<string>;
+  execute: (args: Record<string, unknown>) => Promise<string>;
 }
 
 interface ToolInputSchema {
