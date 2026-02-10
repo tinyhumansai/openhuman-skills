@@ -1,0 +1,76 @@
+{
+  "id": "google-drive",
+  "name": "Google Drive",
+  "runtime": "quickjs",
+  "entry": "index.js",
+  "version": "1.0.0",
+  "ignoreInProduction": true,
+  "description": "Google Drive, Sheets, and Docs integration — list and search files, read/export Drive files, read and write Google Sheets, read and create Google Docs with OAuth2.",
+  "auto_start": false,
+  "platforms": ["windows", "macos", "linux", "android", "ios"],
+  "setup": {
+    "required": true,
+    "label": "Connect Google Drive",
+    "oauth": {
+      "provider": "google",
+      "scopes": [
+        "https://www.googleapis.com/auth/drive.readonly",
+        "https://www.googleapis.com/auth/drive.file",
+        "https://www.googleapis.com/auth/spreadsheets",
+        "https://www.googleapis.com/auth/spreadsheets.readonly",
+        "https://www.googleapis.com/auth/documents",
+        "https://www.googleapis.com/auth/documents.readonly"
+      ],
+      "apiBaseUrl": "https://www.googleapis.com/drive/v3"
+    }
+  },
+  "entity_schema": {
+    "entity_types": [
+      {
+        "type": "google-drive.file",
+        "label": "Drive File",
+        "description": "A file or folder in Google Drive.",
+        "properties": [
+          { "name": "id", "type": "string", "description": "File ID" },
+          { "name": "name", "type": "string", "description": "File name" },
+          { "name": "mime_type", "type": "string", "description": "MIME type" },
+          {
+            "name": "modified_time",
+            "type": "string",
+            "description": "Last modified (ISO 8601)",
+            "optional": true
+          },
+          { "name": "web_view_link", "type": "string", "description": "Web link", "optional": true }
+        ]
+      },
+      {
+        "type": "google-drive.spreadsheet",
+        "label": "Google Sheet",
+        "description": "A Google Sheets spreadsheet.",
+        "properties": [
+          { "name": "id", "type": "string", "description": "Spreadsheet ID" },
+          { "name": "title", "type": "string", "description": "Spreadsheet title" },
+          { "name": "sheet_names", "type": "string", "description": "Comma-separated sheet names" }
+        ]
+      },
+      {
+        "type": "google-drive.document",
+        "label": "Google Doc",
+        "description": "A Google Docs document.",
+        "properties": [
+          { "name": "id", "type": "string", "description": "Document ID" },
+          { "name": "title", "type": "string", "description": "Document title" }
+        ]
+      }
+    ],
+    "relationship_types": [
+      {
+        "type": "file_in_folder",
+        "source_type": "google-drive.file",
+        "target_type": "google-drive.file",
+        "description": "File is inside this folder.",
+        "cardinality": "many_to_one"
+      }
+    ]
+  }
+}

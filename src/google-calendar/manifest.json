@@ -1,0 +1,85 @@
+{
+  "id": "google-calendar",
+  "name": "Google Calendar",
+  "runtime": "quickjs",
+  "entry": "index.js",
+  "version": "1.0.0",
+  "ignoreInProduction": true,
+  "description": "Google Calendar integration via Google API — list calendars and events, create, update, and delete events with OAuth2 authentication.",
+  "auto_start": false,
+  "platforms": ["windows", "macos", "linux", "android", "ios"],
+  "setup": {
+    "required": true,
+    "label": "Connect Google Calendar",
+    "oauth": {
+      "provider": "google",
+      "scopes": [
+        "https://www.googleapis.com/auth/calendar",
+        "https://www.googleapis.com/auth/calendar.events"
+      ],
+      "apiBaseUrl": "https://www.googleapis.com/calendar/v3"
+    }
+  },
+  "entity_schema": {
+    "entity_types": [
+      {
+        "type": "google-calendar.calendar",
+        "label": "Google Calendar",
+        "description": "A calendar in Google Calendar.",
+        "properties": [
+          { "name": "id", "type": "string", "description": "Calendar ID" },
+          { "name": "name", "type": "string", "description": "Calendar name" },
+          {
+            "name": "timezone",
+            "type": "string",
+            "description": "Calendar timezone",
+            "optional": true
+          },
+          {
+            "name": "primary",
+            "type": "boolean",
+            "description": "Whether this is the primary calendar",
+            "optional": true
+          }
+        ]
+      },
+      {
+        "type": "google-calendar.event",
+        "label": "Calendar Event",
+        "description": "An event in Google Calendar.",
+        "properties": [
+          { "name": "title", "type": "string", "description": "Event title/summary" },
+          { "name": "start", "type": "string", "description": "Event start time (ISO 8601)" },
+          { "name": "end", "type": "string", "description": "Event end time (ISO 8601)" },
+          {
+            "name": "location",
+            "type": "string",
+            "description": "Event location",
+            "optional": true
+          },
+          {
+            "name": "description",
+            "type": "string",
+            "description": "Event description",
+            "optional": true
+          },
+          {
+            "name": "all_day",
+            "type": "boolean",
+            "description": "Whether this is an all-day event",
+            "optional": true
+          }
+        ]
+      }
+    ],
+    "relationship_types": [
+      {
+        "type": "event_belongs_to_calendar",
+        "source_type": "google-calendar.event",
+        "target_type": "google-calendar.calendar",
+        "description": "Event belongs to this calendar.",
+        "cardinality": "many_to_one"
+      }
+    ]
+  }
+}
