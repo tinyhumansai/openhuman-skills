@@ -14,7 +14,7 @@ import type { SkillConfig } from './types';
 // Drive/Sheets/Docs API helper — path relative to manifest apiBaseUrl, or pass baseUrl for Sheets/Docs
 // ---------------------------------------------------------------------------
 
-function driveFetch(
+async function driveFetch(
   endpoint: string,
   options: {
     method?: string;
@@ -23,7 +23,7 @@ function driveFetch(
     timeout?: number;
     baseUrl?: string;
   } = {}
-): { success: boolean; data?: unknown; error?: { code: number; message: string } } {
+): Promise<{ success: boolean; data?: unknown; error?: { code: number; message: string } }> {
   if (!oauth.getCredential()) {
     return {
       success: false,
@@ -32,7 +32,7 @@ function driveFetch(
   }
 
   try {
-    const response = oauth.fetch(endpoint, {
+    const response = await oauth.fetch(endpoint, {
       method: options.method || 'GET',
       headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
       body: options.body,
@@ -105,7 +105,7 @@ function onSessionEnd(args: { sessionId: string }): void {
   if (i > -1) s.activeSessions.splice(i, 1);
 }
 
-function onOAuthComplete(args: OAuthCompleteArgs): void {
+async function onOAuthComplete(args: OAuthCompleteArgs): Promise<void> {
   console.log(`[google-drive] OAuth complete: ${args.provider}`);
   const s = globalThis.getGoogleDriveSkillState();
   s.config.credentialId = args.credentialId;
@@ -148,16 +148,8 @@ function publishSkillState(): void {
 const _g = globalThis as Record<string, unknown>;
 _g.driveFetch = driveFetch;
 _g.publishSkillState = publishSkillState;
-_g.init = init;
-_g.start = start;
-_g.stop = stop;
-_g.onSessionStart = onSessionStart;
-_g.onSessionEnd = onSessionEnd;
-_g.onOAuthComplete = onOAuthComplete;
-_g.onOAuthRevoked = onOAuthRevoked;
-_g.onDisconnect = onDisconnect;
 
-tools = [
+const tools: ToolDefinition[] = [
   listFilesTool,
   getFileTool,
   searchFilesTool,
@@ -167,3 +159,25 @@ tools = [
   getDocumentTool,
   createDocumentTool,
 ];
+
+const skill: Skill = {
+  info: {
+    id: 'google-drive',
+    name: 'Google Drive',
+    version: '1.0.0',
+    description: 'Google Drive integration',
+    auto_start: true,
+    setup: { required: true, label: 'Google Drive' },
+  },
+  tools,
+  init,
+  start,
+  stop,
+  onSessionStart,
+  onSessionEnd,
+  onOAuthComplete,
+  onOAuthRevoked,
+  onDisconnect,
+};
+
+export default skill;

@@ -200,10 +200,10 @@ function onSetupStart(): SetupStartResult {
   };
 }
 
-function onSetupSubmit(args: {
+async function onSetupSubmit(args: {
   stepId: string;
   values: Record<string, unknown>;
-}): SetupSubmitResult {
+}): Promise<SetupSubmitResult> {
   const { stepId, values } = args;
 
   if (stepId !== 'bot_token') {
@@ -230,20 +230,21 @@ function onSetupSubmit(args: {
 
   // Validate token by calling auth.test
   try {
-    const response = net.fetch(`${SLACK_BASE_URL}/auth.test`, {
+    const response = await net.fetch(`${SLACK_BASE_URL}/auth.test`, {
       method: 'GET',
       headers: { Authorization: `Bearer ${rawToken}`, 'Content-Type': 'application/json' },
       timeout: 15000,
     });
 
     if (response.status !== 200) {
+      const responseBody = await response.body;
       return {
         status: 'error',
-        errors: [{ field: 'bot_token', message: `Slack API error: ${response.status}` }],
+        errors: [{ field: 'bot_token', message: `Slack API error: ${responseBody}` }],
       };
     }
 
-    const auth = JSON.parse(response.body) as {
+    const auth = JSON.parse(await response.body) as {
       ok?: boolean;
       team?: string;
       url?: string;
@@ -386,7 +387,7 @@ function slackTsDaysAgo(days: number): string {
   return `${sec}.000000`;
 }
 
-function performSync(): void {
+async function performSync(): Promise<void> {
   if (!CONFIG.botToken) {
     return;
   }
@@ -404,13 +405,13 @@ function performSync(): void {
   try {
     const seen = new Set<string>();
 
-    const listAllChannels = (types: string): void => {
+    const listAllChannels = async (types: string): Promise<void> => {
       try {
         let cursor: string | undefined;
         do {
           const params: Record<string, unknown> = { types, exclude_archived: true, limit: 200 };
           if (cursor) params.cursor = cursor;
-          const listResult = slackApiFetch('GET', '/conversations.list', params);
+          const listResult = await slackApiFetch('GET', '/conversations.list', params);
           const raw = (listResult.channels as Record<string, unknown>[]) || [];
           for (const ch of raw) {
             const id = ch.id as string;
@@ -458,7 +459,7 @@ function performSync(): void {
         };
         if (cursor) params.cursor = cursor;
 
-        const historyResult = slackApiFetch('GET', '/conversations.history', params);
+        const historyResult = await slackApiFetch('GET', '/conversations.history', params);
         const messages = (historyResult.messages as Record<string, unknown>[]) || [];
         let storedThisPage = 0;
         for (const msg of messages) {
@@ -540,11 +541,11 @@ function performSync(): void {
 // Slack API helper (exposed on globalThis for tools)
 // ---------------------------------------------------------------------------
 
-function slackApiFetch(
+async function slackApiFetch(
   method: string,
   endpoint: string,
   params?: Record<string, unknown>
-): Record<string, unknown> {
+): Promise<{ messages: Record<string, unknown>[]; response_metadata: { next_cursor?: string } }> {
   const token = CONFIG.botToken;
   if (!token) {
     throw new Error('Slack not connected. Please complete setup first.');
@@ -568,7 +569,7 @@ function slackApiFetch(
     body = JSON.stringify(params);
   }
 
-  const response = net.fetch(fullUrl, {
+  const response = await net.fetch(fullUrl, {
     method: method.toUpperCase(),
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     body,
@@ -579,13 +580,21 @@ function slackApiFetch(
     throw new Error('Slack rate limited. Please try again in a moment.');
   }
 
-  const parsed = JSON.parse(response.body) as Record<string, unknown>;
+  const parsed = JSON.parse(await response.body) as {
+    ok: boolean;
+    error?: string;
+    messages?: Record<string, unknown>[];
+    response_metadata?: { next_cursor?: string };
+  };
   if (!parsed.ok && response.status >= 400) {
-    const err = parsed.error as string | undefined;
+    const err = parsed.error;
     throw new Error(err || `Slack API error: ${response.status}`);
   }
 
-  return parsed;
+  return {
+    messages: parsed.messages || [],
+    response_metadata: parsed.response_metadata || { next_cursor: undefined },
+  };
 }
 
 function formatApiError(error: unknown): string {
@@ -632,8 +641,6 @@ const skill: Skill = {
   info: {
     id: 'slack',
     name: 'Slack',
-    runtime: 'v8',
-    entry: 'index.js',
     version: '1.0.0',
     description:
       'Full-fledged Slack bot: read and send messages, receive real-time events, periodic sync to DB, and store all messages in the skill DB.',

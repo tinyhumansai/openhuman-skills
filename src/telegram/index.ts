@@ -512,7 +512,10 @@ function onSetupStart(): SetupStartResult {
   };
 }
 
-function onSetupSubmit(args: SetupSubmitArgs): SetupSubmitResult {
+async function onSetupSubmit(args: {
+  stepId: string;
+  values: Record<string, unknown>;
+}): Promise<SetupSubmitResult> {
   const s = globalThis.getTelegramSkillState();
   const { stepId, values } = args;
 

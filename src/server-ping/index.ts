@@ -160,10 +160,10 @@ function onSetupStart(): SetupStartResult {
   };
 }
 
-function onSetupSubmit(args: {
+async function onSetupSubmit(args: {
   stepId: string;
   values: Record<string, unknown>;
-}): SetupSubmitResult {
+}): Promise<SetupSubmitResult> {
   const { stepId, values } = args;
   const s = getSkillState();
 

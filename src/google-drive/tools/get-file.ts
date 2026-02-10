@@ -17,7 +17,7 @@ export const getFileTool: ToolDefinition = {
     },
     required: ['file_id'],
   },
-  execute(args: Record<string, unknown>): string {
+  async execute(args: Record<string, unknown>): Promise<string> {
     try {
       const driveFetch = (globalThis as { driveFetch?: (e: string, o?: object) => any }).driveFetch;
       if (!driveFetch) {
@@ -37,7 +37,7 @@ export const getFileTool: ToolDefinition = {
       if (exportFormat) {
         const path = `/drive/v3/files/${encodeURIComponent(fileId)}/export?mimeType=${encodeURIComponent(exportFormat)}`;
         // Export returns raw body (text/plain, etc.), not JSON — use oauth.fetch directly
-        const response = oauth.fetch(path, { method: 'GET', timeout: 30 });
+        const response = await oauth.fetch(path, { method: 'GET', timeout: 30 });
         if (response.status >= 200 && response.status < 300) {
           return JSON.stringify({
             success: true,

@@ -13,7 +13,10 @@ interface Skill {
   stop: () => void;
   onCronTrigger?: (scheduleId: string) => void;
   onSetupStart?: () => SetupStartResult;
-  onSetupSubmit?: (args: { stepId: string; values: Record<string, unknown> }) => SetupSubmitResult;
+  onSetupSubmit?: (args: {
+    stepId: string;
+    values: Record<string, unknown>;
+  }) => Promise<SetupSubmitResult>;
   onSetupCancel?: () => void;
   onOAuthComplete?: (args: OAuthCompleteArgs) => Promise<unknown>;
   onDisconnect?: () => void;
