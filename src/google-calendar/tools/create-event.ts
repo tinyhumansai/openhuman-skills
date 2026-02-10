@@ -48,21 +48,86 @@ export const createEventTool: ToolDefinition = {
         });
       }
       const calendarId = (args.calendar_id as string) || 'primary';
-      const allDay =
-        Boolean(args.start_date) ||
-        (Boolean(args.end_date) && !args.start_date_time && !args.end_date_time);
-      const start: Record<string, string> = allDay
-        ? { date: (args.start_date as string) || (args.end_date as string) }
-        : {
-            dateTime: (args.start_date_time as string) || new Date().toISOString(),
-            timeZone: (args.time_zone as string) || 'UTC',
-          };
-      const end: Record<string, string> = allDay
-        ? { date: (args.end_date as string) || (args.start_date as string) || start.date }
-        : {
-            dateTime: (args.end_date_time as string) || start.dateTime,
-            timeZone: (args.time_zone as string) || 'UTC',
-          };
+
+      // Input validation: require either all-day pair or timed pair; reject mixing; no zero-length
+      const hasStartDate = typeof args.start_date === 'string' && args.start_date.length > 0;
+      const hasEndDate = typeof args.end_date === 'string' && args.end_date.length > 0;
+      const hasStartDateTime =
+        typeof args.start_date_time === 'string' && (args.start_date_time as string).length > 0;
+      const hasEndDateTime =
+        typeof args.end_date_time === 'string' && (args.end_date_time as string).length > 0;
+
+      const allDayPair = hasStartDate && hasEndDate && !hasStartDateTime && !hasEndDateTime;
+      const timedPair = hasStartDateTime && hasEndDateTime && !hasStartDate && !hasEndDate;
+
+      if (!allDayPair && !timedPair) {
+        if (hasStartDate && !hasEndDate) {
+          return JSON.stringify({
+            success: false,
+            error: 'start_date requires end_date for all-day events',
+          });
+        }
+        if (hasEndDate && !hasStartDate) {
+          return JSON.stringify({
+            success: false,
+            error: 'end_date requires start_date for all-day events',
+          });
+        }
+        if (hasStartDateTime && !hasEndDateTime) {
+          return JSON.stringify({
+            success: false,
+            error: 'start_date_time requires end_date_time for timed events',
+          });
+        }
+        if (hasEndDateTime && !hasStartDateTime) {
+          return JSON.stringify({
+            success: false,
+            error: 'end_date_time requires start_date_time for timed events',
+          });
+        }
+        if ((hasStartDate || hasEndDate) && (hasStartDateTime || hasEndDateTime)) {
+          return JSON.stringify({
+            success: false,
+            error:
+              'Do not mix date (all-day) and dateTime (timed) fields; use either start_date/end_date or start_date_time/end_date_time',
+          });
+        }
+        return JSON.stringify({
+          success: false,
+          error:
+            'Provide either start_date and end_date (all-day) or start_date_time and end_date_time (timed)',
+        });
+      }
+
+      const tz = (args.time_zone as string) || 'UTC';
+      let start: Record<string, string>;
+      let end: Record<string, string>;
+
+      if (allDayPair) {
+        const startDate = args.start_date as string;
+        const endDate = args.end_date as string;
+        if (startDate === endDate) {
+          return JSON.stringify({
+            success: false,
+            error:
+              'start_date and end_date must differ (zero-length all-day events are not allowed)',
+          });
+        }
+        start = { date: startDate };
+        end = { date: endDate };
+      } else {
+        const startDt = args.start_date_time as string;
+        const endDt = args.end_date_time as string;
+        if (startDt === endDt) {
+          return JSON.stringify({
+            success: false,
+            error:
+              'start_date_time and end_date_time must differ (zero-length events are not allowed)',
+          });
+        }
+        start = { dateTime: startDt, timeZone: tz };
+        end = { dateTime: endDt, timeZone: tz };
+      }
       const body = {
         summary: args.summary,
         description: args.description,

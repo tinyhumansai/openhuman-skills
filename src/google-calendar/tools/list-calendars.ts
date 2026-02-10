@@ -35,7 +35,7 @@ export const listCalendarsTool: ToolDefinition = {
         });
       }
       const data = response.data as { items?: Array<Record<string, unknown>> };
-      const items = data.items || [];
+      const items = Array.isArray(data.items) ? data.items : [];
       const calendars = items.map((c: Record<string, unknown>) => ({
         id: c.id,
         summary: c.summary,

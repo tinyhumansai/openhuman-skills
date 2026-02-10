@@ -47,9 +47,9 @@ export const listFilesTool: ToolDefinition = {
       const pageSize = Math.min(Number(args.page_size) || 50, 1000);
       const orderBy = (args.order_by as string) || 'modifiedTime desc';
       const pageToken = args.page_token as string | undefined;
-      const trashed = Boolean(args.include_trashed);
-      const qParts: string[] = [`'${folderId}' in parents`, 'trashed = false'];
-      if (trashed) qParts[1] = 'trashed = true';
+      const includeTrashed = Boolean(args.include_trashed);
+      const qParts: string[] = [`'${folderId}' in parents`];
+      if (!includeTrashed) qParts.push('trashed = false');
       const fields =
         'nextPageToken, files(id, name, mimeType, size, modifiedTime, webViewLink, parents)';
       const paramParts: string[] = [

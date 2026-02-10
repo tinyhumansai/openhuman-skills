@@ -37,12 +37,14 @@ export const updateSheetValuesTool: ToolDefinition = {
       }
       const spreadsheetId = args.spreadsheet_id as string;
       const range = args.range as string;
-      const values = args.values as unknown[][];
+      const values = args.values as unknown[];
       const valueInputOption = (args.value_input_option as string) || 'USER_ENTERED';
-      if (!spreadsheetId || !range || !Array.isArray(values)) {
+      const is2DArray = Array.isArray(values) && values.every((row: unknown) => Array.isArray(row));
+      if (!spreadsheetId || !range || !is2DArray) {
         return JSON.stringify({
           success: false,
-          error: 'spreadsheet_id, range, and values (2D array) are required',
+          error:
+            'spreadsheet_id, range, and values (2D array) are required; values must be a 2D array',
         });
       }
       const path = `/v4/spreadsheets/${encodeURIComponent(spreadsheetId)}/values/${encodeURIComponent(range)}?valueInputOption=${valueInputOption}`;

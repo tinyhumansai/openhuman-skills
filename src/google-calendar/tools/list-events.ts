@@ -46,12 +46,13 @@ export const listEventsTool: ToolDefinition = {
         });
       }
       const calendarId = (args.calendar_id as string) || 'primary';
-      const params: string[] = ['singleEvents=true'];
+      const params: string[] = [];
       if (args.time_min) params.push(`timeMin=${encodeURIComponent(args.time_min as string)}`);
       if (args.time_max) params.push(`timeMax=${encodeURIComponent(args.time_max as string)}`);
       const maxResults = Math.min(Number(args.max_results) || 50, 2500);
       params.push(`maxResults=${maxResults}`);
-      if (args.single_events === false) params.push('singleEvents=false');
+      if (args.single_events === true) params.push('singleEvents=true');
+      else if (args.single_events === false) params.push('singleEvents=false');
       const orderBy = (args.order_by as string) || 'startTime';
       params.push(`orderBy=${orderBy}`);
       const path = `/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?${params.join('&')}`;

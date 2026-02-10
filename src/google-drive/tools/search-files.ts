@@ -35,8 +35,18 @@ export const searchFilesTool: ToolDefinition = {
           error: 'Google Drive not connected. Complete OAuth setup first.',
         });
       }
-      const query = args.query as string;
-      const pageSize = Math.min(Number(args.page_size) || 50, 1000);
+      const query = typeof args.query === 'string' ? args.query.trim() : '';
+      if (!query) {
+        return JSON.stringify({
+          success: false,
+          error: 'query is required and must be a non-empty string',
+        });
+      }
+      const parsedPageSize = Number(args.page_size);
+      const pageSize = Math.max(
+        1,
+        Math.min(Number.isNaN(parsedPageSize) ? 50 : parsedPageSize, 1000)
+      );
       const pageToken = args.page_token as string | undefined;
       const fields =
         'nextPageToken, files(id, name, mimeType, size, modifiedTime, webViewLink, parents)';

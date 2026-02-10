@@ -51,16 +51,38 @@ export const updateEventTool: ToolDefinition = {
       if (args.summary != null) body.summary = args.summary;
       if (args.description != null) body.description = args.description;
       if (args.location != null) body.location = args.location;
-      if (args.start_date != null || args.end_date != null) {
-        body.start = { date: (args.start_date as string) || (args.end_date as string) };
-        body.end = { date: (args.end_date as string) || (args.start_date as string) };
-      } else if (args.start_date_time != null || args.end_date_time != null) {
-        const tz = (args.time_zone as string) || 'UTC';
+
+      const hasStartDate =
+        typeof args.start_date === 'string' && (args.start_date as string).length > 0;
+      const hasStartDateTime =
+        typeof args.start_date_time === 'string' && (args.start_date_time as string).length > 0;
+      const hasEndDate = typeof args.end_date === 'string' && (args.end_date as string).length > 0;
+      const hasEndDateTime =
+        typeof args.end_date_time === 'string' && (args.end_date_time as string).length > 0;
+
+      if (hasStartDate && hasStartDateTime) {
+        return JSON.stringify({
+          success: false,
+          error: 'Do not mix start_date and start_date_time; use one or the other',
+        });
+      }
+      if (hasEndDate && hasEndDateTime) {
+        return JSON.stringify({
+          success: false,
+          error: 'Do not mix end_date and end_date_time; use one or the other',
+        });
+      }
+
+      const tz = (args.time_zone as string) || 'UTC';
+      if (hasStartDate) {
+        body.start = { date: args.start_date as string };
+      } else if (hasStartDateTime) {
         body.start = { dateTime: args.start_date_time as string, timeZone: tz };
-        body.end = {
-          dateTime: (args.end_date_time as string) || (args.start_date_time as string),
-          timeZone: tz,
-        };
+      }
+      if (hasEndDate) {
+        body.end = { date: args.end_date as string };
+      } else if (hasEndDateTime) {
+        body.end = { dateTime: args.end_date_time as string, timeZone: tz };
       }
       if (Array.isArray(args.attendees)) {
         body.attendees = (args.attendees as string[]).map((email: string) => ({ email }));
