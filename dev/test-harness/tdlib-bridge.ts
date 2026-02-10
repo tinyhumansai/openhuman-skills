@@ -18,6 +18,8 @@
  *   destroy()                   → Promise<void>
  */
 
+import { createRequire } from 'module';
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -69,12 +71,12 @@ export class TdLibBridge {
   /** Attempt to load koffi + prebuilt-tdlib. Failures just set available=false. */
   private loadFFI(): void {
     try {
-      // Dynamic require to avoid hard dependency — if packages are missing,
-      // isAvailable() simply returns false.
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const koffi = require('koffi');
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { getTdjson } = require('prebuilt-tdlib');
+      // Use createRequire for ESM compatibility — bare require() is not available
+      // when running under tsx/ESM. createRequire gives us a CJS-compatible require
+      // that can load native .node addons (koffi) and platform binaries (prebuilt-tdlib).
+      const esmRequire = createRequire(import.meta.url);
+      const koffi = esmRequire('koffi');
+      const { getTdjson } = esmRequire('prebuilt-tdlib');
 
       const libPath: string = getTdjson();
       const lib = koffi.load(libPath);

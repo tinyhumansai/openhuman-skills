@@ -710,6 +710,8 @@ export async function createBridgeAPIs(
     DataView,
     TextEncoder,
     TextDecoder,
+    AbortController,
+    AbortSignal,
     // Base64
     btoa: (str: string): string => NodeBuffer.from(str, 'binary').toString('base64'),
     atob: (str: string): string => NodeBuffer.from(str, 'base64').toString('binary'),
