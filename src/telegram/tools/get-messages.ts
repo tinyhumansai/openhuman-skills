@@ -91,14 +91,20 @@ export const getMessagesToolDefinition: ToolDefinition = {
               !isSensitiveText((formatted.text as string) || '')
           );
 
+      // Pagination metadata from unfiltered page so paging is not prematurely stopped
+      const hasMore = formattedMessages.length === limit;
+      const oldestId =
+        formattedMessages.length > 0
+          ? (formattedMessages[formattedMessages.length - 1] as Record<string, unknown>).id
+          : null;
+
       return JSON.stringify({
         success: true,
         chat_id: chatId,
         count: filteredMessages.length,
         messages: filteredMessages,
-        has_more: filteredMessages.length === limit,
-        oldest_id:
-          filteredMessages.length > 0 ? filteredMessages[filteredMessages.length - 1].id : null,
+        has_more: hasMore,
+        oldest_id: oldestId,
       });
     } catch (err) {
       return JSON.stringify({
