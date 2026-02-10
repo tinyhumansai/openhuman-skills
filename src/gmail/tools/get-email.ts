@@ -1,6 +1,6 @@
 // Tool: gmail-get-email
 // Get full details of a specific email by ID
-import { isSensitiveText } from '../../common/sensitive-filter';
+import { isSensitiveText } from '../../helpers';
 import '../skill-state';
 
 export const getEmailTool: ToolDefinition = {

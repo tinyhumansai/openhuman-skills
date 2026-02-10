@@ -1,6 +1,6 @@
 // Tool: gmail-search-emails
 // Advanced email search using Gmail query syntax
-import { isSensitiveText } from '../../common/sensitive-filter';
+import { isSensitiveText } from '../../helpers';
 import '../skill-state';
 
 export const searchEmailsTool: ToolDefinition = {

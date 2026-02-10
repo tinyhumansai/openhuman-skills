@@ -332,8 +332,11 @@ if (!existsSync(srcDir)) {
   process.exit(1);
 }
 
+// Directories under src/ that are not skills (shared helpers, etc.) — skip validation
+const SKIP_DIRS = ['helpers'];
+
 const skillDirs = readdirSync(srcDir, { withFileTypes: true })
-  .filter(d => d.isDirectory())
+  .filter(d => d.isDirectory() && !SKIP_DIRS.includes(d.name))
   .map(d => d.name)
   .sort();
 
