@@ -11,7 +11,7 @@ export async function getSupergroupMembers(
   offset: number = 0,
   limit: number = 50
 ): Promise<{ total_count?: number; members?: Record<string, unknown>[] }> {
-  const request: Record<string, unknown> = {
+  const request: { '@type': string; [key: string]: unknown } = {
     '@type': 'getSupergroupMembers',
     supergroup_id: supergroupId,
     offset,
@@ -44,7 +44,7 @@ export async function searchChatMembers(
   limit: number = 50,
   filter?: string
 ): Promise<{ total_count?: number; members?: Record<string, unknown>[] }> {
-  const request: Record<string, unknown> = {
+  const request: { '@type': string; [key: string]: unknown } = {
     '@type': 'searchChatMembers',
     chat_id: chatId,
     query,

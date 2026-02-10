@@ -7,7 +7,7 @@ import './db-helpers';
 // Import modules to register globalThis functions
 import './db-schema';
 import './skill-state';
-import type { AuthorizationState, SetupSubmitArgs } from './skill-state';
+import type { AuthorizationState } from './skill-state';
 // registers globalThis.telegramDispatchUpdate
 import './sync';
 // Import TDLib client wrapper - this also assigns TdLibClient to globalThis

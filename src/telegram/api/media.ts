@@ -12,7 +12,7 @@ export async function sendPhoto(
   caption?: string,
   replyToMessageId?: number
 ): Promise<TdMessage> {
-  const request: Record<string, unknown> = {
+  const request: { '@type': string; [key: string]: unknown } = {
     '@type': 'sendMessage',
     chat_id: chatId,
     input_message_content: {
@@ -40,7 +40,7 @@ export async function sendDocument(
   caption?: string,
   replyToMessageId?: number
 ): Promise<TdMessage> {
-  const request: Record<string, unknown> = {
+  const request: { '@type': string; [key: string]: unknown } = {
     '@type': 'sendMessage',
     chat_id: chatId,
     input_message_content: {
@@ -67,7 +67,7 @@ export async function sendSticker(
   stickerId: string,
   replyToMessageId?: number
 ): Promise<TdMessage> {
-  const request: Record<string, unknown> = {
+  const request: { '@type': string; [key: string]: unknown } = {
     '@type': 'sendMessage',
     chat_id: chatId,
     input_message_content: {
@@ -94,7 +94,7 @@ export async function sendAnimation(
   caption?: string,
   replyToMessageId?: number
 ): Promise<TdMessage> {
-  const request: Record<string, unknown> = {
+  const request: { '@type': string; [key: string]: unknown } = {
     '@type': 'sendMessage',
     chat_id: chatId,
     input_message_content: {
