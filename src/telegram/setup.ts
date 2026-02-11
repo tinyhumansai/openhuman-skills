@@ -137,7 +137,7 @@ export function createSetupHandlers(deps: TelegramSetupDeps): {
         `[telegram] Setup: credentials step - apiId: ${apiId}, apiHash: ${apiHash ? '[set]' : '[empty]'}`
       );
 
-      initClient().catch(err => {
+      await initClient().catch(err => {
         const errorMsg = err instanceof Error ? err.message : String(err);
         onError({ type: 'network', message: errorMsg, source: 'initClient', recoverable: true });
       });
@@ -230,6 +230,7 @@ export function createSetupHandlers(deps: TelegramSetupDeps): {
       }
 
       if (s.authState === 'ready') {
+        console.log('[telegram] Auth state is ready');
         return { status: 'complete' };
       }
 
@@ -292,7 +293,7 @@ export function createSetupHandlers(deps: TelegramSetupDeps): {
       }
 
       const cleanPhoneNumber = phoneNumber.replace(/[\s\-()]/g, '');
-      sendPhoneNumber(cleanPhoneNumber).catch(err => {
+      await sendPhoneNumber(cleanPhoneNumber).catch(err => {
         const errorMsg = err instanceof Error ? err.message : String(err);
         onError({
           type: 'auth',
@@ -335,7 +336,7 @@ export function createSetupHandlers(deps: TelegramSetupDeps): {
         };
       }
 
-      submitCode(code).catch(err => {
+      await submitCode(code).catch(err => {
         const errorMsg = err instanceof Error ? err.message : String(err);
         onError({
           type: 'auth',
@@ -382,7 +383,7 @@ export function createSetupHandlers(deps: TelegramSetupDeps): {
         };
       }
 
-      submitPassword(password).catch(err => {
+      await submitPassword(password).catch(err => {
         const errorMsg = err instanceof Error ? err.message : String(err);
         onError({
           type: 'auth',

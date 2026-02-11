@@ -20,6 +20,7 @@ import { fileURLToPath } from 'url';
 import vm from 'vm';
 import { config as loadDotenv } from 'dotenv';
 import { createBridgeAPIs, getLiveState } from './bootstrap-live';
+import { createGhostInput, type SuggestionSource } from './ghost-input';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -568,6 +569,7 @@ ${c.bold}Commands:${c.reset}
   ${c.cyan}exit${c.reset} / ${c.cyan}quit${c.reset}                  Clean exit
 
 ${c.dim}Mode: live (real HTTP via curl, persistent storage, socket.io)${c.reset}
+${c.dim}Tip: Tab or Right arrow accepts ghost text suggestions${c.reset}
 `);
 }
 
@@ -948,7 +950,7 @@ function cmdEmit(G: G, rest: string): void {
   }
 }
 
-// ─── Tab Completion ──────────────────────────────────────────────
+// ─── Commands & Completion ──────────────────────────────────────────
 
 const ALL_COMMANDS = [
   'help', 'tools', 'call', 'init', 'start', 'stop', 'cron', 'session',
@@ -956,59 +958,131 @@ const ALL_COMMANDS = [
   'socket', 'emit', 'disconnect', 'tdlib', 'reload', 'exit', 'quit',
 ];
 
-function buildCompleter(getCtx: () => { G: G }): (line: string) => [string[], string] {
-  return (line: string): [string[], string] => {
-    const trimmed = line.trimStart();
-    const spaceIdx = trimmed.indexOf(' ');
+// ─── Suggestion Sources (for ghost text) ────────────────────────────
 
-    if (spaceIdx === -1) {
-      // Completing the command name
-      const hits = ALL_COMMANDS.filter(cmd => cmd.startsWith(trimmed.toLowerCase()));
-      return [hits.length ? hits : ALL_COMMANDS, trimmed];
-    }
+function buildSuggestionSources(getCtx: () => { G: G }): SuggestionSource[] {
+  // Helper: return the untyped suffix if `full` starts with `typed`, else null
+  function suffix(typed: string, full: string): string | null {
+    if (full.startsWith(typed) && full.length > typed.length) return full.slice(typed.length);
+    return null;
+  }
 
-    // Completing arguments after the command
-    const cmd = trimmed.substring(0, spaceIdx).toLowerCase();
-    const argPart = trimmed.substring(spaceIdx + 1);
-
-    switch (cmd) {
-      case 'call': {
-        const toolNames = getTools(getCtx().G).map(t => t.name);
-        const hits = toolNames.filter(n => n.startsWith(argPart));
-        return [hits.length ? hits : toolNames, argPart];
+  // 1. Command name completion (first word)
+  const commandSource: SuggestionSource = {
+    suggest(line) {
+      const trimmed = line.trimStart();
+      if (trimmed.includes(' ')) return null;
+      for (const cmd of ALL_COMMANDS) {
+        const s = suffix(trimmed.toLowerCase(), cmd);
+        if (s !== null) return s;
       }
-      case 'cron': {
-        const scheduleIds = Object.keys(getLiveState().cronSchedules);
-        const hits = scheduleIds.filter(id => id.startsWith(argPart));
-        return [hits.length ? hits : scheduleIds, argPart];
-      }
-      case 'option': {
-        if (argPart.includes(' ')) return [[], argPart];
-        try {
-          const fn = getCtx().G.onListOptions as (() => { options: Array<{ name: string }> }) | undefined;
-          if (typeof fn === 'function') {
-            const result = fn();
-            const names = result.options.map(o => o.name);
-            const hits = names.filter(n => n.startsWith(argPart));
-            return [hits.length ? hits : names, argPart];
-          }
-        } catch { /* ignore */ }
-        return [[], argPart];
-      }
-      case 'session': {
-        const subs = ['start', 'end'];
-        const hits = subs.filter(s => s.startsWith(argPart));
-        return [hits.length ? hits : subs, argPart];
-      }
-      case 'tdlib': {
-        const subs = ['send', 'receive'];
-        const hits = subs.filter(s => s.startsWith(argPart));
-        return [hits.length ? hits : subs, argPart];
-      }
-      default:
-        return [[], argPart];
-    }
+      return null;
+    },
   };
+
+  // 2. Tool name after "call "
+  const toolNameSource: SuggestionSource = {
+    suggest(line) {
+      const match = line.match(/^call\s+(\S*)$/i);
+      if (!match) return null;
+      const partial = match[1];
+      const tools = getTools(getCtx().G);
+      for (const t of tools) {
+        const s = suffix(partial, t.name);
+        if (s !== null) return s;
+      }
+      return null;
+    },
+  };
+
+  // 3. Arg template after "call <tool> "
+  const argTemplateSource: SuggestionSource = {
+    suggest(line) {
+      const match = line.match(/^call\s+(\S+)\s+$/i);
+      if (!match) return null;
+      const toolName = match[1];
+      const tool = getTools(getCtx().G).find(t => t.name === toolName);
+      if (!tool?.input_schema?.properties) return null;
+      const props = tool.input_schema.properties;
+      const keys = Object.keys(props);
+      if (keys.length === 0) return null;
+      // Build a JSON template with placeholders
+      const template: Record<string, unknown> = {};
+      for (const key of keys) {
+        const prop = props[key];
+        if (prop.enum && prop.enum.length > 0) template[key] = prop.enum[0];
+        else if (prop.default !== undefined) template[key] = prop.default;
+        else if (prop.type === 'number' || prop.type === 'integer') template[key] = 0;
+        else if (prop.type === 'boolean') template[key] = false;
+        else template[key] = '';
+      }
+      return JSON.stringify(template);
+    },
+  };
+
+  // 4. Cron IDs after "cron "
+  const cronSource: SuggestionSource = {
+    suggest(line) {
+      const match = line.match(/^cron\s+(\S*)$/i);
+      if (!match) return null;
+      const partial = match[1];
+      const ids = Object.keys(getLiveState().cronSchedules);
+      for (const id of ids) {
+        const s = suffix(partial, id);
+        if (s !== null) return s;
+      }
+      return null;
+    },
+  };
+
+  // 5. Option names after "option "
+  const optionSource: SuggestionSource = {
+    suggest(line) {
+      const match = line.match(/^option\s+(\S*)$/i);
+      if (!match) return null;
+      const partial = match[1];
+      try {
+        const fn = getCtx().G.onListOptions as (() => { options: Array<{ name: string }> }) | undefined;
+        if (typeof fn !== 'function') return null;
+        const result = fn();
+        for (const opt of result.options) {
+          const s = suffix(partial, opt.name);
+          if (s !== null) return s;
+        }
+      } catch { /* ignore */ }
+      return null;
+    },
+  };
+
+  // 6. Session actions after "session "
+  const sessionSource: SuggestionSource = {
+    suggest(line) {
+      const match = line.match(/^session\s+(\S*)$/i);
+      if (!match) return null;
+      const partial = match[1];
+      for (const sub of ['start', 'end']) {
+        const s = suffix(partial, sub);
+        if (s !== null) return s;
+      }
+      return null;
+    },
+  };
+
+  // 7. TDLib subcommands after "tdlib "
+  const tdlibSource: SuggestionSource = {
+    suggest(line) {
+      const match = line.match(/^tdlib\s+(\S*)$/i);
+      if (!match) return null;
+      const partial = match[1];
+      for (const sub of ['send', 'receive']) {
+        const s = suffix(partial, sub);
+        if (s !== null) return s;
+      }
+      return null;
+    },
+  };
+
+  return [commandSource, toolNameSource, argTemplateSource, cronSource, optionSource, sessionSource, tdlibSource];
 }
 
 // ─── Main ──────────────────────────────────────────────────────────
@@ -1186,22 +1260,17 @@ async function main(): Promise<void> {
   }
 
   // REPL loop
-  console.log(`\n${c.dim}Type 'help' for commands. Tab completion available.${c.reset}`);
+  console.log(`\n${c.dim}Type 'help' for commands. Tab/Right arrow accepts ghost suggestions.${c.reset}`);
 
   // Close the initial readline (used for skill selection & setup prompts)
-  // and create a new one with tab completion for the interactive REPL
   rl.close();
 
-  const completer = buildCompleter(() => ctx);
-  const replRl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-    completer,
-  });
+  const prompt = `${c.cyan}${skillId}${c.reset}${c.dim}>${c.reset} `;
+  const sources = buildSuggestionSources(() => ctx);
+  const ghostInput = createGhostInput(process.stdin, process.stdout, { prompt, sources });
 
   // Patch globalThis.console so async log messages (TDLib updates, socket events,
-  // skill console.log, etc.) don't corrupt the readline prompt.
-  // When we're waiting for input, clear the line before logging and redraw after.
+  // skill console.log, etc.) don't corrupt the prompt.
   const origConsole = {
     log: globalThis.console.log.bind(globalThis.console),
     info: globalThis.console.info.bind(globalThis.console),
@@ -1209,27 +1278,9 @@ async function main(): Promise<void> {
     error: globalThis.console.error.bind(globalThis.console),
     debug: globalThis.console.debug.bind(globalThis.console),
   };
-  let atPrompt = false;
 
   function replSafeWrite(orig: (...a: unknown[]) => void, ...args: unknown[]) {
-    if (atPrompt) {
-      // Clear the current line, print the log message, then redraw the prompt
-      process.stdout.write('\x1b[2K\r');
-      orig(...args);
-      // Redraw prompt + whatever the user has typed so far
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const rl = replRl as any;
-      const line: string = rl.line ?? '';
-      const cursor: number = rl.cursor ?? line.length;
-      process.stdout.write(prompt + line);
-      // Move cursor back if user wasn't at end of line
-      const moveBack = line.length - cursor;
-      if (moveBack > 0) {
-        process.stdout.write(`\x1b[${moveBack}D`);
-      }
-    } else {
-      orig(...args);
-    }
+    ghostInput.interruptForLog(() => orig(...args));
   }
 
   globalThis.console.log = (...a: unknown[]) => replSafeWrite(origConsole.log, ...a);
@@ -1238,19 +1289,21 @@ async function main(): Promise<void> {
   globalThis.console.error = (...a: unknown[]) => replSafeWrite(origConsole.error, ...a);
   globalThis.console.debug = (...a: unknown[]) => replSafeWrite(origConsole.debug, ...a);
 
-  const prompt = `${c.cyan}${skillId}${c.reset}${c.dim}>${c.reset} `;
+  // Helper: create a temporary readline for sub-prompts (setup wizard, tool args, etc.)
+  // Ghost input releases raw mode before these run, so normal readline works fine.
+  function createTempRl(): readline.Interface {
+    return readline.createInterface({ input: process.stdin, output: process.stdout });
+  }
+
   let running = true;
 
   while (running) {
     let line: string;
     try {
-      atPrompt = true;
-      line = await replRl.question(prompt);
+      line = await ghostInput.question();
     } catch {
       // EOF or error
       break;
-    } finally {
-      atPrompt = false;
     }
 
     const trimmed = line.trim();
@@ -1270,9 +1323,11 @@ async function main(): Promise<void> {
           cmdTools(ctx.G);
           break;
 
-        case 'call':
-          await cmdCall(ctx.G, rest, replRl);
+        case 'call': {
+          const tmpRl = createTempRl();
+          try { await cmdCall(ctx.G, rest, tmpRl); } finally { tmpRl.close(); }
           break;
+        }
 
         case 'init':
           await cmdLifecycle(ctx.G, 'init');
@@ -1294,13 +1349,17 @@ async function main(): Promise<void> {
           await cmdSession(ctx.G, rest);
           break;
 
-        case 'setup':
-          await runSetupWizard(ctx.G, replRl);
+        case 'setup': {
+          const tmpRl = createTempRl();
+          try { await runSetupWizard(ctx.G, tmpRl); } finally { tmpRl.close(); }
           break;
+        }
 
-        case 'oauth':
-          await runOAuthFlow(ctx.G, ctx.manifest, replRl, backendUrl, jwtToken);
+        case 'oauth': {
+          const tmpRl = createTempRl();
+          try { await runOAuthFlow(ctx.G, ctx.manifest, tmpRl, backendUrl, jwtToken); } finally { tmpRl.close(); }
           break;
+        }
 
         case 'options':
           await cmdOptions(ctx.G);
@@ -1493,7 +1552,7 @@ async function main(): Promise<void> {
     }
   }
   ctx.cleanup();
-  replRl.close();
+  ghostInput.destroy();
   console.log(`${c.dim}Bye!${c.reset}`);
 }
 
