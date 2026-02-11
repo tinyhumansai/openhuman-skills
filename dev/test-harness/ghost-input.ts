@@ -39,12 +39,6 @@ const CLEAR_LINE = `${ESC}[2K\r`;
 const DIM = `${ESC}[2m`;
 const RESET = `${ESC}[0m`;
 
-/** Strip ANSI escape sequences to get visible character count. */
-function visibleLength(s: string): number {
-  // eslint-disable-next-line no-control-regex
-  return s.replace(/\x1b\[[0-9;]*m/g, '').length;
-}
-
 // ─── Factory ────────────────────────────────────────────────────────
 
 export function createGhostInput(
