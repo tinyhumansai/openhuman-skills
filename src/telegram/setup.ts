@@ -54,7 +54,11 @@ export function createSetupHandlers(deps: TelegramSetupDeps): {
   async function onSetupStart(): Promise<SetupStartResult> {
     const s = globalThis.getTelegramSkillState();
 
-    if (!s.client && !s.clientConnecting || s.authState === 'closed' || s.authState === 'unknown') {
+    if (
+      (!s.client && !s.clientConnecting) ||
+      s.authState === 'closed' ||
+      s.authState === 'unknown'
+    ) {
       await initClient().catch(err => {
         const errorMsg = err instanceof Error ? err.message : String(err);
         onError({ type: 'network', message: errorMsg, source: 'initClient', recoverable: true });
