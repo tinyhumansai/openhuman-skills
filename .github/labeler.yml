@@ -5,7 +5,7 @@ new-skill:
   - changed-files:
       - any-glob-to-any-file: 'skills/*/SKILL.md'
     all:
-      - head-branch: ['^(?!main$)']
+      - head-branch: 'main'
 
 skill-update:
   - changed-files:

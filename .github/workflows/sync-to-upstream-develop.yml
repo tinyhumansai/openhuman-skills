@@ -1,0 +1,44 @@
+name: Sync to upstream/develop
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: sync-to-upstream-develop
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build and upload
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Sync to upstream/develop
+        run: |
+          mkdir -p public
+          cp -r * public/
+          cp -r *.husky public/
+
+          rm public/CLAUDE.md
+          rm -rf public/.claude
+          rm -rf public/.github/workflows
+          mv public/.github/workflows_public public/.github/workflows
+
+      - name: Update GH repo
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          external_repository: alphahumanxyz/skills
+          publish_dir: ./public
+          publish_branch: develop
+          user_name: "github-actions[bot]"
+          user_email: "github-actions[bot]@users.noreply.github.com"
+          commit_message: "chore: update develop branch [skip ci]"
