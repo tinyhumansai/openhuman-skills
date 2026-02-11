@@ -200,21 +200,21 @@ async function initClient(): Promise<void> {
   }
 }
 
-/**
- * Get default data directory for TDLib files.
- */
-function getDefaultDataDir(): string {
-  // Use the skill's data directory if available via platform
-  // Otherwise use a reasonable default
-  const os = platform.os();
-  if (os === 'windows') {
-    return 'C:/Users/Public/AlphaHuman/telegram';
-  } else if (os === 'macos') {
-    return '/tmp/alphahuman/telegram.macos';
-  } else {
-    return '/tmp/alphahuman/telegram';
-  }
-}
+// /**
+//  * Get default data directory for TDLib files.
+//  */
+// function getDefaultDataDir(): string {
+//   // Use the skill's data directory if available via platform
+//   // Otherwise use a reasonable default
+//   const os = platform.os();
+//   if (os === 'windows') {
+//     return 'C:/Users/Public/AlphaHuman/telegram';
+//   } else if (os === 'macos') {
+//     return '/tmp/alphahuman/telegram.macos';
+//   } else {
+//     return '/tmp/alphahuman/telegram';
+//   }
+// }
 
 /**
  * Load current user info after authentication.
