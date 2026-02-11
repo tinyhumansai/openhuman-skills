@@ -30,7 +30,7 @@ export function createSetupHandlers(deps: TelegramSetupDeps): {
     s.config.phoneNumber = phoneNumber;
     s.config.pendingCode = true;
     state.set('config', s.config);
-    await setAuthenticationPhoneNumber(s.client, phoneNumber);
+    setAuthenticationPhoneNumber(s.client, phoneNumber);
     console.log('[telegram] Phone number sent, waiting for code...');
     publishState();
   }
@@ -39,7 +39,7 @@ export function createSetupHandlers(deps: TelegramSetupDeps): {
     const s = globalThis.getTelegramSkillState();
     if (!s.client) throw new Error('TDLib client not initialized');
     console.log('[telegram] Submitting verification code...');
-    await checkAuthenticationCode(s.client, code);
+    checkAuthenticationCode(s.client, code);
     console.log('[telegram] Code submitted');
   }
 
@@ -47,15 +47,15 @@ export function createSetupHandlers(deps: TelegramSetupDeps): {
     const s = globalThis.getTelegramSkillState();
     if (!s.client) throw new Error('TDLib client not initialized');
     console.log('[telegram] Submitting 2FA password...');
-    await checkAuthenticationPassword(s.client, password);
+    checkAuthenticationPassword(s.client, password);
     console.log('[telegram] Password submitted');
   }
 
   async function onSetupStart(): Promise<SetupStartResult> {
     const s = globalThis.getTelegramSkillState();
 
-    if (!s.client && !s.clientConnecting) {
-      initClient().catch(err => {
+    if (!s.client && !s.clientConnecting || s.authState === 'closed' || s.authState === 'unknown') {
+      await initClient().catch(err => {
         const errorMsg = err instanceof Error ? err.message : String(err);
         onError({ type: 'network', message: errorMsg, source: 'initClient', recoverable: true });
       });
@@ -128,6 +128,9 @@ export function createSetupHandlers(deps: TelegramSetupDeps): {
   }): Promise<SetupSubmitResult> {
     const s = globalThis.getTelegramSkillState();
     const { stepId, values } = args;
+
+    console.log('[telegram] onSetupSubmit:', JSON.stringify(args));
+    console.log('[telegram] Auth state:', s.authState);
 
     if (stepId === 'credentials') {
       const apiId = parseInt((values.apiId as string) || '', 10);

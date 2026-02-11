@@ -105,6 +105,7 @@ function handleUpdate(update: TdUpdate): void {
  * Initialize the TDLib client and start the update loop.
  */
 async function initClient(): Promise<void> {
+  console.log('[telegram] initClient');
   const s = globalThis.getTelegramSkillState();
 
   // Check if client already exists or is being created
@@ -210,7 +211,7 @@ function getDefaultDataDir(): string {
   if (os === 'windows') {
     return 'C:/Users/Public/AlphaHuman/telegram';
   } else if (os === 'macos') {
-    return '/tmp/alphahuman/telegram';
+    return '/tmp/alphahuman/telegram.macos';
   } else {
     return '/tmp/alphahuman/telegram';
   }
@@ -371,26 +372,6 @@ async function start(): Promise<void> {
 
 async function stop(): Promise<void> {
   console.log('[telegram] Stopping skill');
-  const s = globalThis.getTelegramSkillState();
-
-  // Destroy TDLib client
-  if (s.client) {
-    try {
-      s.client.destroy().catch(e => {
-        console.warn('[telegram] Error destroying client:', e);
-      });
-    } catch (e) {
-      console.warn('[telegram] Error destroying client:', e);
-    }
-    s.client = null;
-  }
-
-  // Save config
-  state.set('config', s.config);
-  state.set('status', 'stopped');
-}
-
-async function onDisconnect(): Promise<void> {
   console.log('[telegram] Disconnecting skill and performing cleanup');
   const s = globalThis.getTelegramSkillState();
 
@@ -431,7 +412,7 @@ async function onDisconnect(): Promise<void> {
 
   // Save cleared config
   state.set('config', s.config);
-  state.set('status', 'disconnected');
+  state.set('status', 'stopped');
 
   // Publish updated state to frontend
   publishState();
@@ -626,7 +607,6 @@ const skill: Skill = {
   init,
   start,
   stop,
-  onDisconnect,
   onCronTrigger,
   onSetupStart,
   onSetupSubmit,
