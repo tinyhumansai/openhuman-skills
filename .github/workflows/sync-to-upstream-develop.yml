@@ -39,9 +39,10 @@ jobs:
         with:
           external_repository: alphahumanxyz/alphahuman
           publish_dir: ./public
-          publish_branch: develop
-          user_name: 'github-actions[bot]'
-          user_email: 'github-actions[bot]@users.noreply.github.com'
-          full_commit_message: 'chore: update develop branch [skip ci]'
+          publish_branch: main
+          user_name: "github-actions[bot]"
+          user_email: "github-actions[bot]@users.noreply.github.com"
+          full_commit_message: "chore: update develop branch [skip ci]"
           personal_token: ${{ secrets.XGITHUB_TOKEN }}
-          exclude_assets: ''
+          exclude_assets: ""
+          force_orphan: true
