@@ -39,7 +39,7 @@ jobs:
           external_repository: alphahumanxyz/skills
           publish_dir: ./public
           publish_branch: develop
-          user_name: "github-actions[bot]"
-          user_email: "github-actions[bot]@users.noreply.github.com"
-          commit_message: "chore: update develop branch [skip ci]"
+          user_name: 'github-actions[bot]'
+          user_email: 'github-actions[bot]@users.noreply.github.com'
+          commit_message: 'chore: update develop branch [skip ci]'
           github_token: ${{ secrets.XGITHUB_TOKEN }}

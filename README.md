@@ -44,8 +44,8 @@ AlphaHuman is not a chatbot, browser extension, or cloud-only service. It is a n
 
 ### Windows
 
-| Architecture | Download |
-| ------------ | -------- |
+| Architecture | Download                                                                                                |
+| ------------ | ------------------------------------------------------------------------------------------------------- |
 | x64          | [`.msi`](https://github.com/alphahumanxyz/alphahuman/releases/latest/download/AlphaHuman_x64_en-US.msi) |
 
 ### Linux
@@ -66,15 +66,15 @@ Browse all releases: [github.com/alphahumanxyz/alphahuman/releases](https://gith
 
 AlphaHuman uses a pluggable **skills** architecture. Each skill connects to an external service, syncs relevant data locally, and exposes tools that you (or the AI) can use. Skills run in a sandboxed environment with their own database, storage, and permissions.
 
-| Skill            | Status      | Description                                                     |
-| ---------------- | ----------- | --------------------------------------------------------------- |
-| Telegram         | Available   | Chats, messages, contacts, search, admin tools, AI summaries    |
-| Notion           | Available   | Pages, databases, blocks, users, comments, search, local sync   |
-| Gmail            | In Progress | Email management, labels, search, send/receive with OAuth2      |
-| Google Calendar  | In Progress | Calendars, events, scheduling with OAuth2                       |
-| Google Drive     | In Progress | Files, Sheets, Docs with OAuth2                                 |
-| Slack            | In Progress | Messages, channels, real-time events                            |
-| Web3 Wallets     | Planned     | EVM wallet management, balance checks, network monitoring       |
+| Skill           | Status      | Description                                                   |
+| --------------- | ----------- | ------------------------------------------------------------- |
+| Telegram        | Available   | Chats, messages, contacts, search, admin tools, AI summaries  |
+| Notion          | Available   | Pages, databases, blocks, users, comments, search, local sync |
+| Gmail           | In Progress | Email management, labels, search, send/receive with OAuth2    |
+| Google Calendar | In Progress | Calendars, events, scheduling with OAuth2                     |
+| Google Drive    | In Progress | Files, Sheets, Docs with OAuth2                               |
+| Slack           | In Progress | Messages, channels, real-time events                          |
+| Web3 Wallets    | Planned     | EVM wallet management, balance checks, network monitoring     |
 
 ## Privacy-First
 
