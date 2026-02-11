@@ -3,19 +3,17 @@
 // Provides tools for Telegram API access with native TDLib bindings.
 // Import skill state (initializes globalThis.getTelegramSkillState)
 // registers globalThis.initializeTelegramSchema
-import { getMe } from './api';
+// Import TDLib client wrapper - this also assigns TdLibClient to globalThis
+// registers globalThis.telegramDispatchUpdate
 import './db/helpers';
 import './db/schema';
-import { createSetupHandlers } from './setup';
-import './state';
-import type { AuthorizationState } from './state';
-// registers globalThis.telegramDispatchUpdate
 import './sync';
-// Import TDLib client wrapper - this also assigns TdLibClient to globalThis
-import type { TdLibClient as TdLibClientType, TdUpdate, TdUser } from './tdlib-client';
-import './tdlib-client';
-import tools from './tools/index';
 import './update-handlers';
+import { createSetupHandlers } from './setup';
+import { getMe } from './api';
+import tools from './tools/index';
+import type { AuthorizationState } from './state';
+import type { TdLibClient as TdLibClientType, TdUpdate, TdUser } from './tdlib-client';
 
 // Access TdLibClient from globalThis (workaround for esbuild bundling issues)
 const getTdLibClientClass = (): typeof TdLibClientType => {
