@@ -78,10 +78,7 @@ export const markEmailTool: ToolDefinition = {
 
       for (const messageId of messageIds) {
         try {
-          const response = await api.batchModifyMessages({
-            ids: [messageId],
-            ...labelOperations,
-          });
+          const response = await api.batchModifyMessages({ ids: [messageId], ...labelOperations });
 
           if (response.success) {
             results.push({ message_id: messageId, success: true, action });

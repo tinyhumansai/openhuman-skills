@@ -48,10 +48,7 @@ export async function gmailFetch(
 
     if (response.status === 429) {
       s.lastApiError = 'Rate limited';
-      return {
-        success: false,
-        error: { code: 429, message: 'Rate limited. Try again later.' },
-      };
+      return { success: false, error: { code: 429, message: 'Rate limited. Try again later.' } };
     }
 
     if (response.status >= 200 && response.status < 300) {

@@ -1,5 +1,4 @@
 // Shared formatting and utility functions for the Gmail skill.
-
 import { isSensitiveText } from '../helpers';
 
 // Re-export for convenience
@@ -8,9 +7,7 @@ export { isSensitiveText };
 /**
  * Parse email addresses from a header string like "Name <email>, Other <email2>".
  */
-export function parseEmailAddresses(
-  headerValue: string
-): Array<{ email: string; name?: string }> {
+export function parseEmailAddresses(headerValue: string): Array<{ email: string; name?: string }> {
   if (!headerValue) return [];
 
   const addresses: Array<{ email: string; name?: string }> = [];
@@ -33,9 +30,7 @@ export function parseEmailAddresses(
 /**
  * Format an array of email addresses into a header-compatible string.
  */
-export function formatEmailAddresses(
-  addresses: Array<{ email: string; name?: string }>
-): string {
+export function formatEmailAddresses(addresses: Array<{ email: string; name?: string }>): string {
   return addresses
     .map(addr => (addr.name ? `"${addr.name}" <${addr.email}>` : addr.email))
     .join(', ');

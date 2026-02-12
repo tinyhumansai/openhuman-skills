@@ -266,10 +266,11 @@ function getSyncState(key: string): string | null {
 }
 
 function setSyncState(key: string, value: string): void {
-  db.exec(
-    `INSERT OR REPLACE INTO sync_state (key, value, updated_at) VALUES (?, ?, ?)`,
-    [key, value, Date.now()]
-  );
+  db.exec(`INSERT OR REPLACE INTO sync_state (key, value, updated_at) VALUES (?, ?, ?)`, [
+    key,
+    value,
+    Date.now(),
+  ]);
 }
 
 // ---------------------------------------------------------------------------

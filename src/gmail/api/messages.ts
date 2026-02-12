@@ -17,10 +17,7 @@ export async function sendMessage(body: {
   raw: string;
   threadId?: string;
 }): Promise<GmailFetchResult> {
-  return gmailFetch('/users/me/messages/send', {
-    method: 'POST',
-    body: JSON.stringify(body),
-  });
+  return gmailFetch('/users/me/messages/send', { method: 'POST', body: JSON.stringify(body) });
 }
 
 export async function batchModifyMessages(body: {

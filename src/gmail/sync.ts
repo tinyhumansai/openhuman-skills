@@ -106,8 +106,4 @@ declare global {
   };
 }
 
-globalThis.gmailSync = {
-  performInitialSync,
-  isSyncCompleted,
-  getLastSyncTime,
-};
+globalThis.gmailSync = { performInitialSync, isSyncCompleted, getLastSyncTime };

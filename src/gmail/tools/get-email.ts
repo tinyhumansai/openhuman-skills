@@ -1,7 +1,12 @@
 // Tool: gmail-get-email
 // Get full details of a specific email by ID.
 import * as api from '../api';
-import { extractAttachmentInfo, extractEmailBodies, isSensitiveText, parseSenderInfo } from '../helpers';
+import {
+  extractAttachmentInfo,
+  extractEmailBodies,
+  isSensitiveText,
+  parseSenderInfo,
+} from '../helpers';
 
 export const getEmailTool: ToolDefinition = {
   name: 'gmail-get-email',

@@ -11,9 +11,7 @@ export interface GmailSkillState {
   config: SkillConfig;
 
   // In-memory cache
-  cache: {
-    profile: GmailProfile | null;
-  };
+  cache: { profile: GmailProfile | null };
 
   // Sync tracking
   sync: SyncStatus;
@@ -54,9 +52,7 @@ const defaultConfig: SkillConfig = {
 
 const skillState: GmailSkillState = {
   config: { ...defaultConfig },
-  cache: {
-    profile: null,
-  },
+  cache: { profile: null },
   sync: {
     inProgress: false,
     completed: false,
@@ -66,12 +62,7 @@ const skillState: GmailSkillState = {
     lastHistoryId: '',
     error: null,
   },
-  storage: {
-    emailCount: 0,
-    threadCount: 0,
-    labelCount: 0,
-    unreadCount: 0,
-  },
+  storage: { emailCount: 0, threadCount: 0, labelCount: 0, unreadCount: 0 },
   rateLimitRemaining: 250,
   rateLimitReset: Date.now() + 3600000,
   lastApiError: null,

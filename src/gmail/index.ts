@@ -1,22 +1,21 @@
 // Gmail skill main entry point.
 // Orchestrator: imports all modules, implements lifecycle hooks, assembles tools.
-
 // 1. State first (registers globalThis.getGmailSkillState)
-import { defaultConfig } from './state';
-// 2. DB schema registration (registers globalThis.initializeGmailSchema)
-import './db/schema';
-// 3. DB helpers registration (registers globalThis.gmailDb)
-import './db/helpers';
-// 4. Sync registration (registers globalThis.gmailSync)
-import './sync';
 // 5. API layer
 import * as api from './api';
+// 3. DB helpers registration (registers globalThis.gmailDb)
+import './db/helpers';
+// 2. DB schema registration (registers globalThis.initializeGmailSchema)
+import './db/schema';
 // 6. Setup wizard
 import { onSetupCancel, onSetupStart, onSetupSubmit } from './setup';
+import { defaultConfig } from './state';
+// 4. Sync registration (registers globalThis.gmailSync)
+import './sync';
 // 7. Tools
 import {
-  getEmailTool,
   getEmailsTool,
+  getEmailTool,
   getLabelsTool,
   getProfileTool,
   markEmailTool,
@@ -24,7 +23,6 @@ import {
   sendEmailTool,
   statusTool,
 } from './tools';
-
 import type { SkillConfig } from './types';
 
 // ---------------------------------------------------------------------------
@@ -303,12 +301,7 @@ async function onSetOption(args: { name: string; value: unknown }): Promise<void
 async function onPing(): Promise<PingResult> {
   const credential = oauth.getCredential();
 
-  return {
-    ok: !!credential,
-    errorMessage: credential
-      ? undefined
-      : 'Gmail not connected',
-  };
+  return { ok: !!credential, errorMessage: credential ? undefined : 'Gmail not connected' };
 }
 
 async function onError(args: SkillErrorArgs): Promise<void> {
@@ -352,12 +345,8 @@ function publishState(): void {
     userEmail: s.config.userEmail,
     syncEnabled: s.config.syncEnabled,
     syncInProgress: s.sync.inProgress,
-    lastSyncTime: s.sync.lastSyncTime
-      ? new Date(s.sync.lastSyncTime).toISOString()
-      : null,
-    nextSyncTime: s.sync.nextSyncTime
-      ? new Date(s.sync.nextSyncTime).toISOString()
-      : null,
+    lastSyncTime: s.sync.lastSyncTime ? new Date(s.sync.lastSyncTime).toISOString() : null,
+    nextSyncTime: s.sync.nextSyncTime ? new Date(s.sync.nextSyncTime).toISOString() : null,
     activeSessions: s.activeSessions.length,
     rateLimitRemaining: s.rateLimitRemaining,
     lastError: s.lastApiError,
@@ -399,7 +388,7 @@ const skill: Skill = {
   onSessionStart,
   onSessionEnd,
   onSetupStart: async () => onSetupStart(),
-  onSetupSubmit: async (args) => onSetupSubmit(args),
+  onSetupSubmit: async args => onSetupSubmit(args),
   onSetupCancel: async () => onSetupCancel(),
   onOAuthComplete,
   onOAuthRevoked,
