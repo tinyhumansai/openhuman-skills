@@ -3,7 +3,6 @@
 import { isSensitiveText } from '../../helpers';
 import { gmailFetch } from '../api';
 import { upsertEmail } from '../db/helpers';
-import '../state';
 import { getGmailSkillState } from '../state';
 
 export const searchEmailsTool: ToolDefinition = {

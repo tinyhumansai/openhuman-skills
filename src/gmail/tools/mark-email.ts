@@ -2,7 +2,6 @@
 // Mark emails as read/unread, important, starred, etc.
 import { gmailFetch } from '../api';
 import { updateEmailReadStatus } from '../db/helpers';
-import '../state';
 
 export const markEmailTool: ToolDefinition = {
   name: 'gmail-mark-email',
