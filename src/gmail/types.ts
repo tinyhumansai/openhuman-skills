@@ -1,18 +1,28 @@
 // Gmail skill type definitions
+// All TypeScript interfaces and type definitions — no runtime code.
+
+// ---------------------------------------------------------------------------
+// Config
+// ---------------------------------------------------------------------------
 
 export interface SkillConfig {
   credentialId: string;
   userEmail: string;
+
+  // Sync settings
   syncEnabled: boolean;
   syncIntervalMinutes: number;
   maxEmailsPerSync: number;
   notifyOnNewEmails: boolean;
-  /** Set by tests / OAuth flow */
-  isAuthenticated?: boolean;
-  /** Set by tests / OAuth flow */
-  clientId?: string;
-  showSensitiveMessages?: boolean;
+
+  // Permission flags (default restrictive)
+  allowWriteActions: boolean;
+  showSensitiveContent: boolean;
 }
+
+// ---------------------------------------------------------------------------
+// API response types
+// ---------------------------------------------------------------------------
 
 export interface GmailProfile {
   emailAddress: string;
@@ -26,23 +36,30 @@ export interface GmailMessage {
   threadId: string;
   labelIds: string[];
   snippet: string;
-  payload: {
-    partId: string;
-    mimeType: string;
-    filename: string;
-    headers: Array<{ name: string; value: string }>;
-    body: { attachmentId?: string; size: number; data?: string };
-    parts?: Array<{
-      partId: string;
-      mimeType: string;
-      filename: string;
-      headers: Array<{ name: string; value: string }>;
-      body: { attachmentId?: string; size: number; data?: string };
-    }>;
-  };
+  payload: GmailPayload;
   sizeEstimate: number;
   historyId: string;
   internalDate: string;
+}
+
+export interface GmailPayload {
+  partId: string;
+  mimeType: string;
+  filename: string;
+  headers: GmailHeader[];
+  body: GmailBody;
+  parts?: GmailPayload[];
+}
+
+export interface GmailHeader {
+  name: string;
+  value: string;
+}
+
+export interface GmailBody {
+  attachmentId?: string;
+  size: number;
+  data?: string;
 }
 
 export interface GmailThread {
@@ -71,6 +88,10 @@ export interface GmailAttachment {
   data: string;
 }
 
+// ---------------------------------------------------------------------------
+// Request types
+// ---------------------------------------------------------------------------
+
 export interface EmailAddress {
   email: string;
   name?: string;
@@ -96,15 +117,11 @@ export interface EmailSearchOptions {
   includeSpamTrash?: boolean;
 }
 
-export interface ThreadSearchOptions {
-  query?: string;
-  labelIds?: string[];
-  maxResults?: number;
-  pageToken?: string;
-  includeSpamTrash?: boolean;
-}
+// ---------------------------------------------------------------------------
+// Database row types
+// ---------------------------------------------------------------------------
 
-export interface DatabaseEmail {
+export interface EmailRow {
   id: string;
   thread_id: string;
   subject: string;
@@ -129,7 +146,7 @@ export interface DatabaseEmail {
   updated_at: number;
 }
 
-export interface DatabaseThread {
+export interface ThreadRow {
   id: string;
   subject: string;
   snippet: string;
@@ -144,7 +161,7 @@ export interface DatabaseThread {
   updated_at: number;
 }
 
-export interface DatabaseLabel {
+export interface LabelRow {
   id: string;
   name: string;
   type: string;
@@ -160,7 +177,7 @@ export interface DatabaseLabel {
   updated_at: number;
 }
 
-export interface DatabaseAttachment {
+export interface AttachmentRow {
   id: string;
   message_id: string;
   attachment_id: string;
@@ -171,17 +188,43 @@ export interface DatabaseAttachment {
   created_at: number;
 }
 
+// ---------------------------------------------------------------------------
+// Sync & state types
+// ---------------------------------------------------------------------------
+
 export interface SyncStatus {
+  inProgress: boolean;
+  completed: boolean;
   lastSyncTime: number;
-  lastHistoryId: string;
-  totalEmails: number;
-  newEmailsCount: number;
-  syncInProgress: boolean;
   nextSyncTime: number;
+  lastSyncDurationMs: number;
+  lastHistoryId: string;
+  error: string | null;
 }
+
+export interface StorageStats {
+  emailCount: number;
+  threadCount: number;
+  labelCount: number;
+  unreadCount: number;
+}
+
+// ---------------------------------------------------------------------------
+// API error type
+// ---------------------------------------------------------------------------
 
 export interface ApiError {
   code: number;
   message: string;
   errors?: Array<{ domain: string; reason: string; message: string }>;
+}
+
+// ---------------------------------------------------------------------------
+// API fetch result type
+// ---------------------------------------------------------------------------
+
+export interface GmailFetchResult {
+  success: boolean;
+  data?: any;
+  error?: { code: number; message: string };
 }

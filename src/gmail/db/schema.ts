@@ -1,13 +1,8 @@
-// Database schema initialization for Gmail skill
-// Creates SQLite tables for emails, threads, labels, and attachments
-import '../state';
+// Database schema initialization for Gmail skill.
+// Creates SQLite tables for emails, threads, labels, attachments, and sync state.
+// Uses CREATE TABLE IF NOT EXISTS for idempotency.
 
-/**
- * Initialize Gmail database schema
- */
-export function initializeGmailSchema(): void {
-  console.log('[gmail] Initializing database schema...');
-
+function initializeSchema(): void {
   // Emails table
   db.exec(
     `CREATE TABLE IF NOT EXISTS emails (
@@ -92,7 +87,7 @@ export function initializeGmailSchema(): void {
     []
   );
 
-  // Sync state table
+  // Sync state key-value table
   db.exec(
     `CREATE TABLE IF NOT EXISTS sync_state (
       key TEXT PRIMARY KEY,
@@ -102,18 +97,24 @@ export function initializeGmailSchema(): void {
     []
   );
 
-  // Create indexes for performance
+  // Indexes for performance
   db.exec('CREATE INDEX IF NOT EXISTS idx_emails_thread_id ON emails (thread_id)', []);
   db.exec('CREATE INDEX IF NOT EXISTS idx_emails_date ON emails (date DESC)', []);
   db.exec('CREATE INDEX IF NOT EXISTS idx_emails_sender ON emails (sender_email)', []);
   db.exec('CREATE INDEX IF NOT EXISTS idx_emails_labels ON emails (labels)', []);
   db.exec('CREATE INDEX IF NOT EXISTS idx_emails_is_read ON emails (is_read)', []);
+  db.exec('CREATE INDEX IF NOT EXISTS idx_emails_updated_at ON emails (updated_at)', []);
   db.exec('CREATE INDEX IF NOT EXISTS idx_threads_date ON threads (last_message_date DESC)', []);
   db.exec('CREATE INDEX IF NOT EXISTS idx_threads_labels ON threads (labels)', []);
   db.exec('CREATE INDEX IF NOT EXISTS idx_attachments_message ON attachments (message_id)', []);
-
-  console.log('[gmail] Database schema initialized successfully');
 }
 
-// Expose function on globalThis for use by main module
-(globalThis as Record<string, unknown>).initializeGmailSchema = initializeGmailSchema;
+// ---------------------------------------------------------------------------
+// globalThis registration
+// ---------------------------------------------------------------------------
+
+declare global {
+  var initializeGmailSchema: () => void;
+}
+
+globalThis.initializeGmailSchema = initializeSchema;
