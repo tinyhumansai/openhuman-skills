@@ -4,7 +4,7 @@ import { loadGmailProfile } from './api/helpers';
 import { getSyncState, setSyncState } from './db/helpers';
 import { initializeGmailSchema } from './db/schema';
 import { getGmailSkillState, publishSkillState } from './state';
-import { onSync } from './sync';
+import { isSyncCompleted, onSync, performInitialSync } from './sync';
 import { tools } from './tools';
 import type { SkillConfig } from './types';
 
@@ -55,6 +55,14 @@ async function start(): Promise<void> {
     // Load Gmail profile
     loadGmailProfile();
 
+    // Run initial sync if not yet completed
+    if (!isSyncCompleted()) {
+      console.log('[gmail] Initial sync not completed, starting...');
+      performInitialSync((msg, pct) => {
+        console.log(`[gmail] Sync progress: ${msg} (${pct}%)`);
+      });
+    }
+
     // Publish initial state
     publishSkillState();
   } else {
@@ -80,6 +88,9 @@ async function stop(): Promise<void> {
 
 async function onCronTrigger(scheduleId: string): Promise<void> {
   console.log(`[gmail] Cron triggered: ${scheduleId}`);
+  if (scheduleId === 'gmail-sync') {
+    await onSync();
+  }
 }
 
 async function onSessionStart(args: { sessionId: string }): Promise<void> {
