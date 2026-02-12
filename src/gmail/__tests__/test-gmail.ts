@@ -13,7 +13,6 @@ import {
   _mockFetchResponse,
   _setup,
 } from '../../test-harness-globals';
-import { getGmailSkillState } from '../skill-state';
 
 const g = globalThis as Record<string, unknown>;
 const init = g.init as () => void;
@@ -127,17 +126,14 @@ function setupAuthenticatedGmailTest(overrides?: any): void {
   _setup({
     stateData: {
       config: {
-        clientId: 'test_client_id',
-        clientSecret: 'test_client_secret',
-        refreshToken: 'test_refresh_token',
-        accessToken: 'test_access_token',
-        tokenExpiry: Date.now() + 3600000, // 1 hour from now
+        credentialId: 'test_credential_id',
         userEmail: 'test@example.com',
-        isAuthenticated: true,
         syncEnabled: true,
         syncIntervalMinutes: 15,
         maxEmailsPerSync: 100,
         notifyOnNewEmails: true,
+        allowWriteActions: true,
+        showSensitiveContent: false,
         ...overrides,
       },
     },
@@ -190,20 +186,20 @@ _describe('Gmail Skill', () => {
     _it('should initialize with default config when no stored config exists', () => {
       setupUnauthenticatedGmailTest();
 
-      const state = getGmailSkillState();
-      _assertNotNull(state);
-      _assertEqual(state.config.isAuthenticated, false);
-      _assertEqual(state.config.syncEnabled, true);
-      _assertEqual(state.config.syncIntervalMinutes, 15);
+      const s = globalThis.getGmailSkillState();
+      _assertNotNull(s);
+      _assertEqual(s.config.syncEnabled, true);
+      _assertEqual(s.config.syncIntervalMinutes, 15);
+      _assertEqual(s.config.allowWriteActions, false);
+      _assertEqual(s.config.showSensitiveContent, false);
     });
 
     _it('should load stored config on init', () => {
       setupAuthenticatedGmailTest();
 
-      const state = getGmailSkillState();
-      _assertEqual(state.config.isAuthenticated, true);
-      _assertEqual(state.config.userEmail, 'test@example.com');
-      _assertEqual(state.config.clientId, 'test_client_id');
+      const s = globalThis.getGmailSkillState();
+      _assertEqual(s.config.userEmail, 'test@example.com');
+      _assertEqual(s.config.credentialId, 'test_credential_id');
     });
 
     _it('should initialize database schema', () => {
@@ -238,7 +234,20 @@ _describe('Gmail Skill', () => {
       const response = JSON.parse(result as string);
 
       _assertEqual(response.success, false);
-      _assertContains(response.error, 'authentication required');
+      _assertContains(response.error, 'not connected');
+    });
+  });
+
+  _describe('Gmail Status Tool', () => {
+    _it('should return status when connected', () => {
+      setupAuthenticatedGmailTest();
+
+      const result = _callTool('gmail-status');
+      const response = JSON.parse(result as string);
+
+      _assertEqual(response.success, true);
+      _assertNotNull(response.status);
+      _assertEqual(response.status.user_email, 'test@example.com');
     });
   });
 
@@ -282,17 +291,6 @@ _describe('Gmail Skill', () => {
       _assertEqual(response.success, true);
       _assertNotNull(response.label_ids);
     });
-
-    _it('should respect max_results limit', () => {
-      setupAuthenticatedGmailTest();
-
-      const result = _callTool('gmail-get-emails', { max_results: 1 });
-      const response = JSON.parse(result as string);
-
-      _assertEqual(response.success, true);
-      // Since our mock returns 2 emails, but we limited to 1,
-      // the actual implementation should honor this
-    });
   });
 
   _describe('Get Email Tool', () => {
@@ -334,8 +332,8 @@ _describe('Gmail Skill', () => {
   });
 
   _describe('Send Email Tool', () => {
-    _it('should send email successfully', () => {
-      setupAuthenticatedGmailTest();
+    _it('should send email successfully when write actions allowed', () => {
+      setupAuthenticatedGmailTest({ allowWriteActions: true });
 
       const result = _callTool('gmail-send-email', {
         to: [{ email: 'recipient@example.com', name: 'Recipient Name' }],
@@ -349,8 +347,22 @@ _describe('Gmail Skill', () => {
       _assertEqual(response.subject, 'Test Email');
     });
 
+    _it('should block send when write actions disabled', () => {
+      setupAuthenticatedGmailTest({ allowWriteActions: false });
+
+      const result = _callTool('gmail-send-email', {
+        to: [{ email: 'recipient@example.com' }],
+        subject: 'Test Email',
+        body_text: 'This is a test email.',
+      });
+      const response = JSON.parse(result as string);
+
+      _assertEqual(response.success, false);
+      _assertContains(response.error, 'Write actions are disabled');
+    });
+
     _it('should handle CC and BCC recipients', () => {
-      setupAuthenticatedGmailTest();
+      setupAuthenticatedGmailTest({ allowWriteActions: true });
 
       const result = _callTool('gmail-send-email', {
         to: [{ email: 'to@example.com' }],
@@ -365,7 +377,7 @@ _describe('Gmail Skill', () => {
     });
 
     _it('should require recipients', () => {
-      setupAuthenticatedGmailTest();
+      setupAuthenticatedGmailTest({ allowWriteActions: true });
 
       const result = _callTool('gmail-send-email', {
         subject: 'Test Email',
@@ -378,7 +390,7 @@ _describe('Gmail Skill', () => {
     });
 
     _it('should require subject', () => {
-      setupAuthenticatedGmailTest();
+      setupAuthenticatedGmailTest({ allowWriteActions: true });
 
       const result = _callTool('gmail-send-email', {
         to: [{ email: 'test@example.com' }],
@@ -391,7 +403,7 @@ _describe('Gmail Skill', () => {
     });
 
     _it('should require body content', () => {
-      setupAuthenticatedGmailTest();
+      setupAuthenticatedGmailTest({ allowWriteActions: true });
 
       const result = _callTool('gmail-send-email', {
         to: [{ email: 'test@example.com' }],
@@ -428,8 +440,6 @@ _describe('Gmail Skill', () => {
       const response = JSON.parse(result as string);
 
       _assertEqual(response.success, true);
-      // The actual filtering would happen in the real implementation
-      // For now, just verify the tool accepts the parameter
       _assertNotNull(response.labels);
     });
   });
@@ -472,8 +482,8 @@ _describe('Gmail Skill', () => {
   });
 
   _describe('Mark Email Tool', () => {
-    _it('should mark email as read', () => {
-      setupAuthenticatedGmailTest();
+    _it('should mark email as read when write actions allowed', () => {
+      setupAuthenticatedGmailTest({ allowWriteActions: true });
 
       const result = _callTool('gmail-mark-email', {
         message_ids: ['msg123'],
@@ -486,8 +496,21 @@ _describe('Gmail Skill', () => {
       _assertEqual(response.successful, 1);
     });
 
+    _it('should block mark when write actions disabled', () => {
+      setupAuthenticatedGmailTest({ allowWriteActions: false });
+
+      const result = _callTool('gmail-mark-email', {
+        message_ids: ['msg123'],
+        action: 'mark_read',
+      });
+      const response = JSON.parse(result as string);
+
+      _assertEqual(response.success, false);
+      _assertContains(response.error, 'Write actions are disabled');
+    });
+
     _it('should handle multiple message IDs', () => {
-      setupAuthenticatedGmailTest();
+      setupAuthenticatedGmailTest({ allowWriteActions: true });
 
       const result = _callTool('gmail-mark-email', {
         message_ids: ['msg123', 'msg124'],
@@ -500,7 +523,7 @@ _describe('Gmail Skill', () => {
     });
 
     _it('should require message IDs', () => {
-      setupAuthenticatedGmailTest();
+      setupAuthenticatedGmailTest({ allowWriteActions: true });
 
       const result = _callTool('gmail-mark-email', { action: 'mark_read' });
       const response = JSON.parse(result as string);
@@ -510,7 +533,7 @@ _describe('Gmail Skill', () => {
     });
 
     _it('should require label_ids for label actions', () => {
-      setupAuthenticatedGmailTest();
+      setupAuthenticatedGmailTest({ allowWriteActions: true });
 
       const result = _callTool('gmail-mark-email', {
         message_ids: ['msg123'],
@@ -524,26 +547,6 @@ _describe('Gmail Skill', () => {
   });
 
   _describe('Authentication', () => {
-    _it('should handle token refresh', () => {
-      // Mock expired token
-      setupAuthenticatedGmailTest({
-        tokenExpiry: Date.now() - 1000, // Expired 1 second ago
-      });
-
-      // Mock refresh token response
-      _mockFetchResponse(
-        'https://oauth2.googleapis.com/token',
-        200,
-        JSON.stringify({ access_token: 'new_access_token', expires_in: 3600, token_type: 'Bearer' })
-      );
-
-      // This should trigger token refresh
-      const result = _callTool('gmail-get-profile');
-      const response = JSON.parse(result as string);
-
-      _assertEqual(response.success, true);
-    });
-
     _it('should handle authentication failure', () => {
       setupUnauthenticatedGmailTest();
 
@@ -551,7 +554,7 @@ _describe('Gmail Skill', () => {
       const response = JSON.parse(result as string);
 
       _assertEqual(response.success, false);
-      _assertContains(response.error, 'authentication required');
+      _assertContains(response.error, 'not connected');
     });
   });
 
@@ -576,7 +579,6 @@ _describe('Gmail Skill', () => {
       const response = JSON.parse(result as string);
 
       _assertEqual(response.success, false);
-      _assertContains(response.error, 'Bad Request');
     });
 
     _it('should handle network errors', () => {

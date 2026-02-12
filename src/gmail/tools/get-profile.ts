@@ -1,20 +1,14 @@
 // Tool: gmail-get-profile
-// Get Gmail user profile information
-import '../state';
+// Get Gmail user profile information.
+import * as api from '../api';
 
 export const getProfileTool: ToolDefinition = {
   name: 'gmail-get-profile',
   description:
     'Get Gmail user profile information including email address, total message counts, and account details.',
   input_schema: { type: 'object', properties: {}, required: [] },
-  async execute(_args: Record<string, unknown>): Promise<string> {
+  async execute(): Promise<string> {
     try {
-      const gmailFetch = (globalThis as { gmailFetch?: (endpoint: string, options?: any) => any })
-        .gmailFetch;
-      if (!gmailFetch) {
-        return JSON.stringify({ success: false, error: 'Gmail API helper not available' });
-      }
-
       if (!oauth.getCredential()) {
         return JSON.stringify({
           success: false,
@@ -22,28 +16,14 @@ export const getProfileTool: ToolDefinition = {
         });
       }
 
-      // Get profile from Gmail API
-      const response = gmailFetch('/users/me/profile');
-
-      if (!response.success) {
-        return JSON.stringify({
-          success: false,
-          error: response.error?.message || 'Failed to fetch profile',
-        });
+      const profile = await api.getProfile();
+      if (!profile) {
+        return JSON.stringify({ success: false, error: 'Failed to fetch profile' });
       }
 
-      const profile = response.data;
-
-      // Update skill state with profile info
+      // Update skill state
       const s = globalThis.getGmailSkillState();
-      s.profile = {
-        emailAddress: profile.emailAddress,
-        messagesTotal: profile.messagesTotal || 0,
-        threadsTotal: profile.threadsTotal || 0,
-        historyId: profile.historyId,
-      };
-
-      // Update config with user email if not already set
+      s.cache.profile = profile;
       if (!s.config.userEmail) {
         s.config.userEmail = profile.emailAddress;
         state.set('config', s.config);
@@ -53,8 +33,8 @@ export const getProfileTool: ToolDefinition = {
         success: true,
         profile: {
           email_address: profile.emailAddress,
-          messages_total: profile.messagesTotal || 0,
-          threads_total: profile.threadsTotal || 0,
+          messages_total: profile.messagesTotal,
+          threads_total: profile.threadsTotal,
           history_id: profile.historyId,
         },
       });

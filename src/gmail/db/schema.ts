@@ -118,3 +118,5 @@ declare global {
 }
 
 globalThis.initializeGmailSchema = initializeSchema;
+
+export {};

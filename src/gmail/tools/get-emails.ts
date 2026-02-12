@@ -1,7 +1,7 @@
 // Tool: gmail-get-emails
-// Get emails with filtering and search capabilities
-import { isSensitiveText } from '../../helpers';
-import '../state';
+// Get emails with filtering and search capabilities.
+import * as api from '../api';
+import { hasPayloadAttachments, isSensitiveText, parseSenderInfo } from '../helpers';
 
 export const getEmailsTool: ToolDefinition = {
   name: 'gmail-get-emails',
@@ -39,12 +39,6 @@ export const getEmailsTool: ToolDefinition = {
   },
   async execute(args: Record<string, unknown>): Promise<string> {
     try {
-      const gmailFetch = (globalThis as { gmailFetch?: (endpoint: string, options?: any) => any })
-        .gmailFetch;
-      if (!gmailFetch) {
-        return JSON.stringify({ success: false, error: 'Gmail API helper not available' });
-      }
-
       if (!oauth.getCredential()) {
         return JSON.stringify({
           success: false,
@@ -77,7 +71,7 @@ export const getEmailsTool: ToolDefinition = {
       }
 
       // Get email list
-      const listResponse = gmailFetch(`/users/me/messages?${params.join('&')}`);
+      const listResponse = await api.listMessages(params.join('&'));
 
       if (!listResponse.success) {
         return JSON.stringify({
@@ -99,57 +93,52 @@ export const getEmailsTool: ToolDefinition = {
       // Get detailed email data
       const emails = [];
       for (const msgRef of messageList.messages) {
-        const msgResponse = gmailFetch(`/users/me/messages/${msgRef.id}`);
-        if (msgResponse.success) {
-          const message = msgResponse.data;
-          const headers = message.payload?.headers || [];
+        try {
+          const msgResponse = await api.getMessage(msgRef.id);
+          if (msgResponse.success) {
+            const message = msgResponse.data;
+            const headers = message.payload?.headers || [];
 
-          // Extract common headers
-          const subject = headers.find((h: any) => h.name.toLowerCase() === 'subject')?.value || '';
-          const from = headers.find((h: any) => h.name.toLowerCase() === 'from')?.value || '';
-          const to = headers.find((h: any) => h.name.toLowerCase() === 'to')?.value || '';
-          const date = headers.find((h: any) => h.name.toLowerCase() === 'date')?.value || '';
+            // Extract common headers
+            const subject =
+              headers.find((h: any) => h.name.toLowerCase() === 'subject')?.value || '';
+            const from = headers.find((h: any) => h.name.toLowerCase() === 'from')?.value || '';
+            const to = headers.find((h: any) => h.name.toLowerCase() === 'to')?.value || '';
+            const date = headers.find((h: any) => h.name.toLowerCase() === 'date')?.value || '';
 
-          // Parse sender info
-          const fromMatch = from.match(/(.+?)\s*<([^>]+)>/) || [null, from, from];
-          const senderName = fromMatch[1]?.trim().replace(/^["']|["']$/g, '') || null;
-          const senderEmail = fromMatch[2]?.trim() || from;
+            const sender = parseSenderInfo(from);
 
-          emails.push({
-            id: message.id,
-            thread_id: message.threadId,
-            subject,
-            sender: { email: senderEmail, name: senderName },
-            recipients: to,
-            date: date
-              ? new Date(date).toISOString()
-              : new Date(parseInt(message.internalDate)).toISOString(),
-            snippet: message.snippet,
-            label_ids: message.labelIds || [],
-            is_read: !message.labelIds?.includes('UNREAD'),
-            is_important: message.labelIds?.includes('IMPORTANT'),
-            is_starred: message.labelIds?.includes('STARRED'),
-            has_attachments: hasAttachments(message),
-            size_estimate: message.sizeEstimate || 0,
-          });
+            emails.push({
+              id: message.id,
+              thread_id: message.threadId,
+              subject,
+              sender,
+              recipients: to,
+              date: date
+                ? new Date(date).toISOString()
+                : new Date(parseInt(message.internalDate)).toISOString(),
+              snippet: message.snippet,
+              label_ids: message.labelIds || [],
+              is_read: !message.labelIds?.includes('UNREAD'),
+              is_important: message.labelIds?.includes('IMPORTANT'),
+              is_starred: message.labelIds?.includes('STARRED'),
+              has_attachments: hasPayloadAttachments(message),
+              size_estimate: message.sizeEstimate || 0,
+            });
 
-          // Store in local database for caching
-          const upsertEmail = (globalThis as { upsertEmail?: (msg: any) => void }).upsertEmail;
-          if (upsertEmail) {
-            upsertEmail(message);
+            // Cache in local database
+            globalThis.gmailDb.upsertEmail(message);
           }
+        } catch {
+          // Individual message failures don't abort the batch
         }
       }
 
-      // Filter out sensitive emails unless user opted in to show them
+      // Filter out sensitive emails unless user opted in
       const s = globalThis.getGmailSkillState();
-      const showSensitive = s.config.showSensitiveMessages ?? false;
-      const filteredEmails = showSensitive
+      const filteredEmails = s.config.showSensitiveContent
         ? emails
-        : emails.filter(
-            (e: { subject?: string; snippet?: string }) =>
-              !isSensitiveText((e.subject || '') + ' ' + (e.snippet || ''))
-          );
+        : emails.filter(e => !isSensitiveText((e.subject || '') + ' ' + (e.snippet || '')));
 
       return JSON.stringify({
         success: true,
@@ -167,16 +156,3 @@ export const getEmailsTool: ToolDefinition = {
     }
   },
 };
-
-/**
- * Helper: Check if message has attachments
- */
-function hasAttachments(message: any): boolean {
-  if (message.payload?.body?.attachmentId) return true;
-  if (message.payload?.parts) {
-    return message.payload.parts.some(
-      (part: any) => part.body?.attachmentId || (part.filename && part.filename.length > 0)
-    );
-  }
-  return false;
-}

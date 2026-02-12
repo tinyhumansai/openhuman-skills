@@ -1,6 +1,7 @@
 // Tool: gmail-send-email
-// Send emails via Gmail API with support for attachments, HTML/text, and threading
-import '../state';
+// Send emails via Gmail API with support for attachments, HTML/text, and threading.
+import * as api from '../api';
+import { formatEmailAddresses } from '../helpers';
 
 export const sendEmailTool: ToolDefinition = {
   name: 'gmail-send-email',
@@ -68,16 +69,20 @@ export const sendEmailTool: ToolDefinition = {
   },
   async execute(args: Record<string, unknown>): Promise<string> {
     try {
-      const gmailFetch = (globalThis as { gmailFetch?: (endpoint: string, options?: any) => any })
-        .gmailFetch;
-      if (!gmailFetch) {
-        return JSON.stringify({ success: false, error: 'Gmail API helper not available' });
-      }
-
       if (!oauth.getCredential()) {
         return JSON.stringify({
           success: false,
           error: 'Gmail not connected. Complete OAuth setup first.',
+        });
+      }
+
+      // Write permission check
+      const s = globalThis.getGmailSkillState();
+      if (!s.config.allowWriteActions) {
+        return JSON.stringify({
+          success: false,
+          error:
+            'Write actions are disabled. Enable "Allow write actions" in skill settings to send emails.',
         });
       }
 
@@ -104,8 +109,7 @@ export const sendEmailTool: ToolDefinition = {
       }
 
       // Get user's email from state
-      const s = globalThis.getGmailSkillState();
-      const fromEmail = s.config.userEmail || s.profile?.emailAddress;
+      const fromEmail = s.config.userEmail || s.cache.profile?.emailAddress;
 
       if (!fromEmail) {
         return JSON.stringify({
@@ -114,7 +118,7 @@ export const sendEmailTool: ToolDefinition = {
         });
       }
 
-      // Build email message
+      // Build RFC 2822 email message
       const boundary = `----gmail_boundary_${Date.now()}_${Math.random().toString(36)}`;
       let rawMessage = '';
 
@@ -145,14 +149,12 @@ export const sendEmailTool: ToolDefinition = {
 
       if (attachments.length > 0) {
         rawMessage += `Content-Type: multipart/mixed; boundary="${boundary}"\r\n\r\n`;
+      } else if (bodyHtml && bodyText) {
+        rawMessage += `Content-Type: multipart/alternative; boundary="${boundary}"\r\n\r\n`;
+      } else if (bodyHtml) {
+        rawMessage += `Content-Type: text/html; charset=utf-8\r\n\r\n`;
       } else {
-        if (bodyHtml && bodyText) {
-          rawMessage += `Content-Type: multipart/alternative; boundary="${boundary}"\r\n\r\n`;
-        } else if (bodyHtml) {
-          rawMessage += `Content-Type: text/html; charset=utf-8\r\n\r\n`;
-        } else {
-          rawMessage += `Content-Type: text/plain; charset=utf-8\r\n\r\n`;
-        }
+        rawMessage += `Content-Type: text/plain; charset=utf-8\r\n\r\n`;
       }
 
       // Body content
@@ -169,7 +171,6 @@ export const sendEmailTool: ToolDefinition = {
           rawMessage += `${bodyHtml}\r\n\r\n`;
         }
 
-        // Add attachments
         attachments.forEach(attachment => {
           rawMessage += `--${boundary}\r\n`;
           rawMessage += `Content-Type: ${attachment.mime_type}\r\n`;
@@ -183,24 +184,19 @@ export const sendEmailTool: ToolDefinition = {
         rawMessage += `${bodyText || bodyHtml}\r\n`;
       }
 
-      // Encode message for Gmail API (using btoa for base64 encoding)
+      // Encode message for Gmail API (base64url)
       const encodedMessage = btoa(rawMessage)
         .replace(/\+/g, '-')
         .replace(/\//g, '_')
         .replace(/=+$/, '');
 
-      // Prepare API request body
-      const requestBody: any = { raw: encodedMessage };
-
+      // Send email
+      const requestBody: { raw: string; threadId?: string } = { raw: encodedMessage };
       if (args.thread_id) {
-        requestBody.threadId = args.thread_id;
+        requestBody.threadId = args.thread_id as string;
       }
 
-      // Send email
-      const response = gmailFetch('/users/me/messages/send', {
-        method: 'POST',
-        body: JSON.stringify(requestBody),
-      });
+      const response = await api.sendMessage(requestBody);
 
       if (!response.success) {
         return JSON.stringify({
@@ -211,14 +207,15 @@ export const sendEmailTool: ToolDefinition = {
 
       const sentMessage = response.data;
 
-      // Update local database if email was sent successfully
+      // Cache the sent email locally
       if (sentMessage.id) {
-        const getEmailResponse = gmailFetch(`/users/me/messages/${sentMessage.id}`);
-        if (getEmailResponse.success) {
-          const upsertEmail = (globalThis as { upsertEmail?: (msg: any) => void }).upsertEmail;
-          if (upsertEmail) {
-            upsertEmail(getEmailResponse.data);
+        try {
+          const getResponse = await api.getMessage(sentMessage.id);
+          if (getResponse.success) {
+            globalThis.gmailDb.upsertEmail(getResponse.data);
           }
+        } catch {
+          // Non-critical: caching failure doesn't affect send success
         }
       }
 
@@ -239,17 +236,3 @@ export const sendEmailTool: ToolDefinition = {
     }
   },
 };
-
-/**
- * Helper: Format email addresses for headers
- */
-function formatEmailAddresses(addresses: Array<{ email: string; name?: string }>): string {
-  return addresses
-    .map(addr => {
-      if (addr.name) {
-        return `"${addr.name}" <${addr.email}>`;
-      }
-      return addr.email;
-    })
-    .join(', ');
-}

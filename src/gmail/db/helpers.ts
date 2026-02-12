@@ -1,21 +1,23 @@
-// Database helper functions for Gmail skill
-// CRUD operations for emails, threads, labels, and attachments
-import '../state';
+// Database helper functions for Gmail skill.
+// CRUD operations for emails, threads, labels, and attachments.
+// Registered on globalThis.gmailDb for cross-module access.
 import type {
-  DatabaseAttachment,
-  DatabaseEmail,
-  DatabaseLabel,
-  DatabaseThread,
+  AttachmentRow,
+  EmailRow,
   EmailSearchOptions,
   GmailLabel,
   GmailMessage,
   GmailThread,
+  LabelRow,
+  StorageStats,
+  ThreadRow,
 } from '../types';
 
-/**
- * Insert or update an email in the database
- */
-export function upsertEmail(message: GmailMessage): void {
+// ---------------------------------------------------------------------------
+// Upsert functions
+// ---------------------------------------------------------------------------
+
+function upsertEmail(message: GmailMessage): void {
   const now = Date.now();
   const headers = message.payload.headers;
 
@@ -26,7 +28,6 @@ export function upsertEmail(message: GmailMessage): void {
   const bcc = headers.find(h => h.name.toLowerCase() === 'bcc')?.value || null;
   const dateHeader = headers.find(h => h.name.toLowerCase() === 'date')?.value;
 
-  // Parse sender email and name from "Name <email>" format
   const fromMatch = from.match(/(.+?)\s*<([^>]+)>/) || [null, from, from];
   const senderName = fromMatch[1]?.trim().replace(/^["']|["']$/g, '') || null;
   const senderEmail = fromMatch[2]?.trim() || from;
@@ -35,7 +36,7 @@ export function upsertEmail(message: GmailMessage): void {
   const isRead = !message.labelIds.includes('UNREAD');
   const isImportant = message.labelIds.includes('IMPORTANT');
   const isStarred = message.labelIds.includes('STARRED');
-  const hasAttachments = hasEmailAttachments(message);
+  const hasAttachments = checkHasAttachments(message);
 
   db.exec(
     `INSERT OR REPLACE INTO emails (
@@ -69,36 +70,29 @@ export function upsertEmail(message: GmailMessage): void {
     ]
   );
 
-  // Insert attachments if any
   if (hasAttachments) {
     insertEmailAttachments(message);
   }
 }
 
-/**
- * Insert or update a thread in the database
- */
-export function upsertThread(thread: GmailThread): void {
+function upsertThread(thread: GmailThread): void {
   const now = Date.now();
   const firstMessage = thread.messages[0];
   const lastMessage = thread.messages[thread.messages.length - 1];
-
   if (!firstMessage || !lastMessage) return;
 
   const subject =
     firstMessage.payload.headers.find(h => h.name.toLowerCase() === 'subject')?.value || '';
   const participants = new Set<string>();
 
-  // Collect all participants from all messages
   thread.messages.forEach(msg => {
     const headers = msg.payload.headers;
     const from = headers.find(h => h.name.toLowerCase() === 'from')?.value;
     const to = headers.find(h => h.name.toLowerCase() === 'to')?.value;
-    const cc = headers.find(h => h.name.toLowerCase() === 'cc')?.value;
-
-    if (from) participants.add(extractEmail(from));
-    if (to) to.split(',').forEach(email => participants.add(extractEmail(email.trim())));
-    if (cc) cc.split(',').forEach(email => participants.add(extractEmail(email.trim())));
+    const ccH = headers.find(h => h.name.toLowerCase() === 'cc')?.value;
+    if (from) participants.add(extractEmailAddr(from));
+    if (to) to.split(',').forEach(email => participants.add(extractEmailAddr(email.trim())));
+    if (ccH) ccH.split(',').forEach(email => participants.add(extractEmailAddr(email.trim())));
   });
 
   const lastMessageDate = parseInt(lastMessage.internalDate, 10);
@@ -108,7 +102,7 @@ export function upsertThread(thread: GmailThread): void {
 
   thread.messages.forEach(msg => {
     msg.labelIds.forEach(label => allLabels.add(label));
-    if (hasEmailAttachments(msg)) hasAttachments = true;
+    if (checkHasAttachments(msg)) hasAttachments = true;
     if (msg.labelIds.includes('UNREAD')) allRead = false;
   });
 
@@ -133,12 +127,8 @@ export function upsertThread(thread: GmailThread): void {
   );
 }
 
-/**
- * Insert or update a label in the database
- */
-export function upsertLabel(label: GmailLabel): void {
+function upsertLabel(label: GmailLabel): void {
   const now = Date.now();
-
   db.exec(
     `INSERT OR REPLACE INTO labels (
       id, name, type, message_list_visibility, label_list_visibility,
@@ -162,25 +152,44 @@ export function upsertLabel(label: GmailLabel): void {
   );
 }
 
-/**
- * Get emails with optional filtering
- */
-export function getEmails(options: EmailSearchOptions = {}): DatabaseEmail[] {
+// ---------------------------------------------------------------------------
+// Update functions
+// ---------------------------------------------------------------------------
+
+function updateEmailReadStatus(emailId: string, isRead: boolean): void {
+  db.exec('UPDATE emails SET is_read = ?, updated_at = ? WHERE id = ?', [
+    isRead ? 1 : 0,
+    Date.now(),
+    emailId,
+  ]);
+}
+
+// ---------------------------------------------------------------------------
+// Query functions
+// ---------------------------------------------------------------------------
+
+function getEmailById(id: string): EmailRow | null {
+  return db.get('SELECT * FROM emails WHERE id = ?', [id]) as EmailRow | null;
+}
+
+function getThreadById(id: string): ThreadRow | null {
+  return db.get('SELECT * FROM threads WHERE id = ?', [id]) as ThreadRow | null;
+}
+
+function getEmails(options: EmailSearchOptions = {}): EmailRow[] {
   let sql = 'SELECT * FROM emails WHERE 1=1';
   const params: unknown[] = [];
 
   if (options.query) {
     sql += ' AND (subject LIKE ? OR sender_email LIKE ? OR snippet LIKE ?)';
-    const searchTerm = `%${options.query}%`;
-    params.push(searchTerm, searchTerm, searchTerm);
+    const term = `%${options.query}%`;
+    params.push(term, term, term);
   }
 
   if (options.labelIds && options.labelIds.length > 0) {
-    const labelConditions = options.labelIds.map(() => 'labels LIKE ?').join(' OR ');
-    sql += ` AND (${labelConditions})`;
-    options.labelIds.forEach(labelId => {
-      params.push(`%"${labelId}"%`);
-    });
+    const conds = options.labelIds.map(() => 'labels LIKE ?').join(' OR ');
+    sql += ` AND (${conds})`;
+    options.labelIds.forEach(id => params.push(`%"${id}"%`));
   }
 
   sql += ' ORDER BY date DESC';
@@ -190,28 +199,23 @@ export function getEmails(options: EmailSearchOptions = {}): DatabaseEmail[] {
     params.push(options.maxResults);
   }
 
-  return db.all(sql, params) as unknown as DatabaseEmail[];
+  return db.all(sql, params) as unknown as EmailRow[];
 }
 
-/**
- * Get threads with optional filtering
- */
-export function getThreads(options: EmailSearchOptions = {}): DatabaseThread[] {
+function getThreads(options: EmailSearchOptions = {}): ThreadRow[] {
   let sql = 'SELECT * FROM threads WHERE 1=1';
   const params: unknown[] = [];
 
   if (options.query) {
     sql += ' AND (subject LIKE ? OR participants LIKE ? OR snippet LIKE ?)';
-    const searchTerm = `%${options.query}%`;
-    params.push(searchTerm, searchTerm, searchTerm);
+    const term = `%${options.query}%`;
+    params.push(term, term, term);
   }
 
   if (options.labelIds && options.labelIds.length > 0) {
-    const labelConditions = options.labelIds.map(() => 'labels LIKE ?').join(' OR ');
-    sql += ` AND (${labelConditions})`;
-    options.labelIds.forEach(labelId => {
-      params.push(`%"${labelId}"%`);
-    });
+    const conds = options.labelIds.map(() => 'labels LIKE ?').join(' OR ');
+    sql += ` AND (${conds})`;
+    options.labelIds.forEach(id => params.push(`%"${id}"%`));
   }
 
   sql += ' ORDER BY last_message_date DESC';
@@ -221,83 +225,63 @@ export function getThreads(options: EmailSearchOptions = {}): DatabaseThread[] {
     params.push(options.maxResults);
   }
 
-  return db.all(sql, params) as unknown as DatabaseThread[];
+  return db.all(sql, params) as unknown as ThreadRow[];
 }
 
-/**
- * Get all labels
- */
-export function getLabels(): DatabaseLabel[] {
-  return db.all('SELECT * FROM labels ORDER BY type, name', []) as unknown as DatabaseLabel[];
+function getLabels(): LabelRow[] {
+  return db.all('SELECT * FROM labels ORDER BY type, name', []) as unknown as LabelRow[];
 }
 
-/**
- * Get email by ID
- */
-export function getEmailById(id: string): DatabaseEmail | null {
-  return db.get('SELECT * FROM emails WHERE id = ?', [id]) as DatabaseEmail | null;
-}
-
-/**
- * Get thread by ID
- */
-export function getThreadById(id: string): DatabaseThread | null {
-  return db.get('SELECT * FROM threads WHERE id = ?', [id]) as DatabaseThread | null;
-}
-
-/**
- * Get attachments for an email
- */
-export function getEmailAttachments(messageId: string): DatabaseAttachment[] {
+function getEmailAttachments(messageId: string): AttachmentRow[] {
   return db.all('SELECT * FROM attachments WHERE message_id = ?', [
     messageId,
-  ]) as unknown as DatabaseAttachment[];
+  ]) as unknown as AttachmentRow[];
 }
 
-/**
- * Update email read status
- */
-export function updateEmailReadStatus(emailId: string, isRead: boolean): void {
-  db.exec('UPDATE emails SET is_read = ?, updated_at = ? WHERE id = ?', [
-    isRead ? 1 : 0,
-    Date.now(),
-    emailId,
-  ]);
+function getEntityCounts(): StorageStats {
+  const emailCount =
+    (db.get('SELECT COUNT(*) as count FROM emails', []) as { count: number } | null)?.count ?? 0;
+  const threadCount =
+    (db.get('SELECT COUNT(*) as count FROM threads', []) as { count: number } | null)?.count ?? 0;
+  const labelCount =
+    (db.get('SELECT COUNT(*) as count FROM labels', []) as { count: number } | null)?.count ?? 0;
+  const unreadCount =
+    (
+      db.get('SELECT COUNT(*) as count FROM emails WHERE is_read = 0', []) as {
+        count: number;
+      } | null
+    )?.count ?? 0;
+  return { emailCount, threadCount, labelCount, unreadCount };
 }
 
-/**
- * Get sync state value
- */
-export function getSyncState(key: string): string | null {
+// ---------------------------------------------------------------------------
+// Sync state helpers
+// ---------------------------------------------------------------------------
+
+function getSyncState(key: string): string | null {
   const row = db.get('SELECT value FROM sync_state WHERE key = ?', [key]) as {
     value: string;
   } | null;
   return row?.value || null;
 }
 
-/**
- * Set sync state value
- */
-export function setSyncState(key: string, value: string): void {
+function setSyncState(key: string, value: string): void {
   db.exec(
-    `INSERT OR REPLACE INTO sync_state (key, value, updated_at)
-     VALUES (?, ?, ?)`,
+    `INSERT OR REPLACE INTO sync_state (key, value, updated_at) VALUES (?, ?, ?)`,
     [key, value, Date.now()]
   );
 }
 
-/**
- * Helper: Extract email address from "Name <email>" format
- */
-function extractEmail(emailStr: string): string {
+// ---------------------------------------------------------------------------
+// Internal helpers
+// ---------------------------------------------------------------------------
+
+function extractEmailAddr(emailStr: string): string {
   const match = emailStr.match(/<([^>]+)>/);
   return match ? match[1] : emailStr.trim();
 }
 
-/**
- * Helper: Check if email has attachments
- */
-function hasEmailAttachments(message: GmailMessage): boolean {
+function checkHasAttachments(message: GmailMessage): boolean {
   if (message.payload.body.attachmentId) return true;
   if (message.payload.parts) {
     return message.payload.parts.some(
@@ -307,14 +291,10 @@ function hasEmailAttachments(message: GmailMessage): boolean {
   return false;
 }
 
-/**
- * Helper: Extract text body from message
- */
 function extractTextBody(message: GmailMessage): string | null {
   if (message.payload.mimeType === 'text/plain' && message.payload.body.data) {
     return atob(message.payload.body.data);
   }
-
   if (message.payload.parts) {
     for (const part of message.payload.parts) {
       if (part.mimeType === 'text/plain' && part.body.data) {
@@ -322,18 +302,13 @@ function extractTextBody(message: GmailMessage): string | null {
       }
     }
   }
-
   return null;
 }
 
-/**
- * Helper: Extract HTML body from message
- */
 function extractHtmlBody(message: GmailMessage): string | null {
   if (message.payload.mimeType === 'text/html' && message.payload.body.data) {
     return atob(message.payload.body.data);
   }
-
   if (message.payload.parts) {
     for (const part of message.payload.parts) {
       if (part.mimeType === 'text/html' && part.body.data) {
@@ -341,13 +316,9 @@ function extractHtmlBody(message: GmailMessage): string | null {
       }
     }
   }
-
   return null;
 }
 
-/**
- * Helper: Insert email attachments
- */
 function insertEmailAttachments(message: GmailMessage): void {
   const attachments: Array<{
     attachmentId: string;
@@ -357,7 +328,6 @@ function insertEmailAttachments(message: GmailMessage): void {
     partId: string;
   }> = [];
 
-  // Check main body
   if (message.payload.body.attachmentId && message.payload.filename) {
     attachments.push({
       attachmentId: message.payload.body.attachmentId,
@@ -368,7 +338,6 @@ function insertEmailAttachments(message: GmailMessage): void {
     });
   }
 
-  // Check parts
   if (message.payload.parts) {
     message.payload.parts.forEach(part => {
       if (part.body.attachmentId && part.filename) {
@@ -383,7 +352,6 @@ function insertEmailAttachments(message: GmailMessage): void {
     });
   }
 
-  // Insert attachments
   attachments.forEach(att => {
     db.exec(
       `INSERT OR REPLACE INTO attachments
@@ -394,17 +362,40 @@ function insertEmailAttachments(message: GmailMessage): void {
   });
 }
 
-// Expose helper functions on globalThis for tools to use
-const _g = globalThis as Record<string, unknown>;
-_g.upsertEmail = upsertEmail;
-_g.upsertThread = upsertThread;
-_g.upsertLabel = upsertLabel;
-_g.getEmails = getEmails;
-_g.getThreads = getThreads;
-_g.getLabels = getLabels;
-_g.getEmailById = getEmailById;
-_g.getThreadById = getThreadById;
-_g.getEmailAttachments = getEmailAttachments;
-_g.updateEmailReadStatus = updateEmailReadStatus;
-_g.getSyncState = getSyncState;
-_g.setSyncState = setSyncState;
+// ---------------------------------------------------------------------------
+// globalThis registration
+// ---------------------------------------------------------------------------
+
+declare global {
+  var gmailDb: {
+    upsertEmail: typeof upsertEmail;
+    upsertThread: typeof upsertThread;
+    upsertLabel: typeof upsertLabel;
+    updateEmailReadStatus: typeof updateEmailReadStatus;
+    getEmailById: typeof getEmailById;
+    getThreadById: typeof getThreadById;
+    getEmails: typeof getEmails;
+    getThreads: typeof getThreads;
+    getLabels: typeof getLabels;
+    getEmailAttachments: typeof getEmailAttachments;
+    getEntityCounts: typeof getEntityCounts;
+    getSyncState: typeof getSyncState;
+    setSyncState: typeof setSyncState;
+  };
+}
+
+globalThis.gmailDb = {
+  upsertEmail,
+  upsertThread,
+  upsertLabel,
+  updateEmailReadStatus,
+  getEmailById,
+  getThreadById,
+  getEmails,
+  getThreads,
+  getLabels,
+  getEmailAttachments,
+  getEntityCounts,
+  getSyncState,
+  setSyncState,
+};

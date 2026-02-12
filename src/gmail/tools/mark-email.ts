@@ -1,6 +1,7 @@
 // Tool: gmail-mark-email
 // Mark emails as read/unread, important, starred, etc.
-import '../state';
+import * as api from '../api';
+import { getLabelOperations } from '../helpers';
 
 export const markEmailTool: ToolDefinition = {
   name: 'gmail-mark-email',
@@ -38,16 +39,20 @@ export const markEmailTool: ToolDefinition = {
   },
   async execute(args: Record<string, unknown>): Promise<string> {
     try {
-      const gmailFetch = (globalThis as { gmailFetch?: (endpoint: string, options?: any) => any })
-        .gmailFetch;
-      if (!gmailFetch) {
-        return JSON.stringify({ success: false, error: 'Gmail API helper not available' });
-      }
-
       if (!oauth.getCredential()) {
         return JSON.stringify({
           success: false,
           error: 'Gmail not connected. Complete OAuth setup first.',
+        });
+      }
+
+      // Write permission check
+      const s = globalThis.getGmailSkillState();
+      if (!s.config.allowWriteActions) {
+        return JSON.stringify({
+          success: false,
+          error:
+            'Write actions are disabled. Enable "Allow write actions" in skill settings to modify emails.',
         });
       }
 
@@ -66,36 +71,26 @@ export const markEmailTool: ToolDefinition = {
         });
       }
 
-      // Map actions to label operations
       const labelOperations = getLabelOperations(action, labelIds);
 
       const results = [];
-      const errors = [];
+      const errors: string[] = [];
 
-      // Process each message
       for (const messageId of messageIds) {
         try {
-          const requestBody = { ids: [messageId], ...labelOperations };
-
-          const response = gmailFetch('/users/me/messages/batchModify', {
-            method: 'POST',
-            body: JSON.stringify(requestBody),
+          const response = await api.batchModifyMessages({
+            ids: [messageId],
+            ...labelOperations,
           });
 
           if (response.success) {
             results.push({ message_id: messageId, success: true, action });
 
             // Update local database
-            const updateEmailReadStatus = (
-              globalThis as { updateEmailReadStatus?: (id: string, isRead: boolean) => void }
-            ).updateEmailReadStatus;
-
-            if (updateEmailReadStatus) {
-              if (action === 'mark_read') {
-                updateEmailReadStatus(messageId, true);
-              } else if (action === 'mark_unread') {
-                updateEmailReadStatus(messageId, false);
-              }
+            if (action === 'mark_read') {
+              globalThis.gmailDb.updateEmailReadStatus(messageId, true);
+            } else if (action === 'mark_unread') {
+              globalThis.gmailDb.updateEmailReadStatus(messageId, false);
             }
           } else {
             results.push({
@@ -132,49 +127,3 @@ export const markEmailTool: ToolDefinition = {
     }
   },
 };
-
-/**
- * Helper: Convert action to Gmail API label operations
- */
-function getLabelOperations(action: string, labelIds: string[] = []) {
-  const operations: { addLabelIds?: string[]; removeLabelIds?: string[] } = {};
-
-  switch (action) {
-    case 'mark_read':
-      operations.removeLabelIds = ['UNREAD'];
-      break;
-
-    case 'mark_unread':
-      operations.addLabelIds = ['UNREAD'];
-      break;
-
-    case 'add_star':
-      operations.addLabelIds = ['STARRED'];
-      break;
-
-    case 'remove_star':
-      operations.removeLabelIds = ['STARRED'];
-      break;
-
-    case 'mark_important':
-      operations.addLabelIds = ['IMPORTANT'];
-      break;
-
-    case 'mark_not_important':
-      operations.removeLabelIds = ['IMPORTANT'];
-      break;
-
-    case 'add_labels':
-      operations.addLabelIds = labelIds;
-      break;
-
-    case 'remove_labels':
-      operations.removeLabelIds = labelIds;
-      break;
-
-    default:
-      throw new Error(`Unknown action: ${action}`);
-  }
-
-  return operations;
-}

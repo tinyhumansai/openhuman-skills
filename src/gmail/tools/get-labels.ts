@@ -1,6 +1,6 @@
 // Tool: gmail-get-labels
-// Get all Gmail labels with counts and details
-import '../state';
+// Get all Gmail labels with counts and details.
+import * as api from '../api';
 
 export const getLabelsTool: ToolDefinition = {
   name: 'gmail-get-labels',
@@ -20,12 +20,6 @@ export const getLabelsTool: ToolDefinition = {
   },
   async execute(args: Record<string, unknown>): Promise<string> {
     try {
-      const gmailFetch = (globalThis as { gmailFetch?: (endpoint: string, options?: any) => any })
-        .gmailFetch;
-      if (!gmailFetch) {
-        return JSON.stringify({ success: false, error: 'Gmail API helper not available' });
-      }
-
       if (!oauth.getCredential()) {
         return JSON.stringify({
           success: false,
@@ -36,8 +30,7 @@ export const getLabelsTool: ToolDefinition = {
       const typeFilter = (args.type as string) || 'all';
       const includeHidden = args.include_hidden === true;
 
-      // Get labels from Gmail API
-      const response = gmailFetch('/users/me/labels');
+      const response = await api.listLabels();
 
       if (!response.success) {
         return JSON.stringify({
@@ -49,12 +42,12 @@ export const getLabelsTool: ToolDefinition = {
       const labelsData = response.data as { labels: any[] };
       let labels = labelsData.labels || [];
 
-      // Filter by type if specified
+      // Filter by type
       if (typeFilter !== 'all') {
         labels = labels.filter(label => label.type === typeFilter);
       }
 
-      // Filter hidden labels if not requested
+      // Filter hidden labels
       if (!includeHidden) {
         labels = labels.filter(
           label =>
@@ -63,8 +56,8 @@ export const getLabelsTool: ToolDefinition = {
         );
       }
 
-      // Format labels for response
-      const formattedLabels = labels.map(label => ({
+      // Format labels
+      const formattedLabels = labels.map((label: any) => ({
         id: label.id,
         name: label.name,
         type: label.type,
@@ -84,15 +77,12 @@ export const getLabelsTool: ToolDefinition = {
       }));
 
       // Update local database
-      const upsertLabel = (globalThis as { upsertLabel?: (label: any) => void }).upsertLabel;
-      if (upsertLabel) {
-        labels.forEach(label => upsertLabel(label));
-      }
+      labels.forEach((label: any) => globalThis.gmailDb.upsertLabel(label));
 
-      // Categorize labels for easier use
+      // Categorize
       const categorized = {
-        system: formattedLabels.filter(l => l.type === 'system'),
-        user: formattedLabels.filter(l => l.type === 'user'),
+        system: formattedLabels.filter((l: any) => l.type === 'system'),
+        user: formattedLabels.filter((l: any) => l.type === 'user'),
       };
 
       return JSON.stringify({
