@@ -5,15 +5,15 @@
 // registers globalThis.initializeTelegramSchema
 // Import TDLib client wrapper - this also assigns TdLibClient to globalThis
 // registers globalThis.telegramDispatchUpdate
+import { getMe } from './api';
 import './db/helpers';
 import './db/schema';
-import './sync';
-import './update-handlers';
 import { createSetupHandlers } from './setup';
-import { getMe } from './api';
-import tools from './tools/index';
 import type { AuthorizationState } from './state';
+import './sync';
 import type { TdLibClient as TdLibClientType, TdUpdate, TdUser } from './tdlib-client';
+import tools from './tools/index';
+import './update-handlers';
 
 // Access TdLibClient from globalThis (workaround for esbuild bundling issues)
 const getTdLibClientClass = (): typeof TdLibClientType => {
@@ -62,9 +62,23 @@ function handleUpdate(update: TdUpdate): void {
   const s = globalThis.getTelegramSkillState();
   const updateType = update['@type'];
 
-  // Log non-frequent updates
-  if (!updateType.startsWith('updateFile') && !updateType.startsWith('updateOption')) {
-    console.log('[telegram] TDLib update:', updateType);
+  // Enhanced logging for auth state debugging
+  const isAuthUpdate = updateType === 'updateAuthorizationState';
+  const isImportantUpdate =
+    !updateType.startsWith('updateFile') &&
+    !updateType.startsWith('updateOption') &&
+    !updateType.startsWith('updateConnectionState');
+
+  if (isAuthUpdate || isImportantUpdate) {
+    const timestamp = new Date().toISOString().slice(11, -1); // HH:mm:ss.sss format
+    console.log(`[telegram] ${timestamp} TDLib update:`, updateType);
+
+    if (isAuthUpdate && (update as any).authorization_state) {
+      console.log(
+        `[telegram] ${timestamp} Full auth state object:`,
+        JSON.stringify((update as any).authorization_state, null, 2)
+      );
+    }
   }
 
   // Dispatch to storage handlers for persistence
@@ -72,8 +86,51 @@ function handleUpdate(update: TdUpdate): void {
 
   if (updateType === 'updateAuthorizationState') {
     const prevState = s.authState;
-    s.authState = parseAuthState(update);
-    console.log(`[telegram] Auth state changed: ${prevState} -> ${s.authState}`);
+    const newState = parseAuthState(update);
+    const timestamp = new Date().toISOString().slice(11, -1);
+
+    // Detect unusual auth state transitions that might indicate problems
+    const transitions = { from: prevState, to: newState, timestamp: Date.now() };
+
+    // Log concerning patterns
+    if (prevState === 'waitPhoneNumber' && newState === 'unknown') {
+      console.warn(
+        `[telegram] ${timestamp} CONCERNING: Auth regressed from waitPhoneNumber to unknown - possible database issue`
+      );
+    }
+
+    if (prevState === 'waitCode' && newState === 'unknown') {
+      console.warn(
+        `[telegram] ${timestamp} CONCERNING: Auth regressed from waitCode to unknown - possible session corruption`
+      );
+    }
+
+    // Count rapid state changes (potential indicator of instability)
+    if (!(s as any)._authTransitionHistory) (s as any)._authTransitionHistory = [];
+    (s as any)._authTransitionHistory.push(transitions);
+
+    // Keep only last 10 transitions
+    if ((s as any)._authTransitionHistory.length > 10) {
+      (s as any)._authTransitionHistory.shift();
+    }
+
+    // Check for rapid transitions (5+ transitions in 5 seconds)
+    const fiveSecondsAgo = Date.now() - 5000;
+    const recentTransitions = (s as any)._authTransitionHistory.filter(
+      (t: any) => t.timestamp > fiveSecondsAgo
+    );
+    if (recentTransitions.length >= 5) {
+      console.warn(
+        `[telegram] ${timestamp} WARNING: Rapid auth state changes detected (${recentTransitions.length} in 5s) - possible instability`
+      );
+      console.warn(
+        '[telegram] Recent transitions:',
+        recentTransitions.map((t: any) => `${t.from}->${t.to}`).join(', ')
+      );
+    }
+
+    s.authState = newState;
+    console.log(`[telegram] ${timestamp} Auth state changed: ${prevState} -> ${s.authState}`);
 
     // Extract password hint if waiting for password
     if (s.authState === 'waitPassword') {
@@ -92,7 +149,7 @@ function handleUpdate(update: TdUpdate): void {
       s.config.isAuthenticated = true;
       s.config.pendingCode = false;
       state.set('config', s.config);
-      console.log('[telegram] User authenticated successfully');
+      console.log(`[telegram] ${timestamp} User authenticated successfully`);
       loadMe();
     }
 
@@ -145,8 +202,29 @@ async function initClient(): Promise<void> {
     // Store client in state
     s.client = client;
 
-    // Now start the background update loop for ongoing updates
+    console.log('[telegram] Connected to TDLib, polling for auth state...');
+
+    // Manually poll for auth state updates BEFORE starting the background
+    // update loop.  This guarantees auth state transitions to a usable value
+    // (e.g. waitPhoneNumber / ready) before initClient() returns, avoiding
+    // race conditions where the setup wizard checks authState too early.
+    const maxWaitMs = 10000;
+    const startTime = Date.now();
+    while (
+      (s.authState === 'unknown' || s.authState === 'waitTdlibParameters') &&
+      Date.now() - startTime < maxWaitMs
+    ) {
+      const update = await client.receive(500);
+      if (update) {
+        handleUpdate(update);
+      }
+    }
+    console.log('[telegram] Auth state after init polling:', s.authState);
+
+    // Start the background update loop immediately for all TDLib communication
+    // This eliminates race conditions between manual polling and background processing
     client.startUpdateLoop(handleUpdate);
+    console.log('[telegram] Background update loop started, auth state:', s.authState);
 
     // Ask TDLib for the current authorization state so the skill knows
     // where it stands immediately instead of waiting for an unsolicited update.
@@ -174,7 +252,6 @@ async function initClient(): Promise<void> {
     throw err;
   }
 }
-
 
 /**
  * Load current user info after authentication.
@@ -369,6 +446,7 @@ async function stop(): Promise<void> {
   s.config.pendingCode = false;
   s.config.phoneNumber = '';
   s.authState = 'unknown';
+  s.authOperationInProgress = false;
   s.cache.me = null;
   s.cache.lastSync = 0;
   s.passwordHint = null;
@@ -546,9 +624,10 @@ async function onError(args: SkillErrorArgs): Promise<void> {
 
   s.clientError = args.message;
 
-  // For auth errors during login, reset the pending code flag so the user can retry
+  // For auth errors during login, reset the pending code flag and clear auth operation mutex
   if (args.type === 'auth' || args.source === 'setAuthenticationPhoneNumber') {
     s.config.pendingCode = false;
+    s.authOperationInProgress = false;
     state.set('config', s.config);
   }
 
