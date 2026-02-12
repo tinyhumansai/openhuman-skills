@@ -1,5 +1,6 @@
 // Tool: gmail-get-labels
 // Get all Gmail labels with counts and details
+import { gmailFetch } from '../api';
 import '../state';
 
 export const getLabelsTool: ToolDefinition = {
@@ -20,12 +21,6 @@ export const getLabelsTool: ToolDefinition = {
   },
   async execute(args: Record<string, unknown>): Promise<string> {
     try {
-      const gmailFetch = (globalThis as { gmailFetch?: (endpoint: string, options?: any) => any })
-        .gmailFetch;
-      if (!gmailFetch) {
-        return JSON.stringify({ success: false, error: 'Gmail API helper not available' });
-      }
-
       if (!oauth.getCredential()) {
         return JSON.stringify({
           success: false,
@@ -37,7 +32,7 @@ export const getLabelsTool: ToolDefinition = {
       const includeHidden = args.include_hidden === true;
 
       // Get labels from Gmail API
-      const response = gmailFetch('/users/me/labels');
+      const response = await gmailFetch('/users/me/labels');
 
       if (!response.success) {
         return JSON.stringify({

@@ -1,5 +1,6 @@
 // Tool: gmail-mark-email
 // Mark emails as read/unread, important, starred, etc.
+import { gmailFetch } from '../api';
 import '../state';
 
 export const markEmailTool: ToolDefinition = {
@@ -38,12 +39,6 @@ export const markEmailTool: ToolDefinition = {
   },
   async execute(args: Record<string, unknown>): Promise<string> {
     try {
-      const gmailFetch = (globalThis as { gmailFetch?: (endpoint: string, options?: any) => any })
-        .gmailFetch;
-      if (!gmailFetch) {
-        return JSON.stringify({ success: false, error: 'Gmail API helper not available' });
-      }
-
       if (!oauth.getCredential()) {
         return JSON.stringify({
           success: false,
@@ -77,7 +72,7 @@ export const markEmailTool: ToolDefinition = {
         try {
           const requestBody = { ids: [messageId], ...labelOperations };
 
-          const response = gmailFetch('/users/me/messages/batchModify', {
+          const response = await gmailFetch('/users/me/messages/batchModify', {
             method: 'POST',
             body: JSON.stringify(requestBody),
           });

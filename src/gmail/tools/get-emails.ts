@@ -1,6 +1,7 @@
 // Tool: gmail-get-emails
 // Get emails with filtering and search capabilities
 import { isSensitiveText } from '../../helpers';
+import { gmailFetch } from '../api';
 import '../state';
 
 export const getEmailsTool: ToolDefinition = {
@@ -39,12 +40,6 @@ export const getEmailsTool: ToolDefinition = {
   },
   async execute(args: Record<string, unknown>): Promise<string> {
     try {
-      const gmailFetch = (globalThis as { gmailFetch?: (endpoint: string, options?: any) => any })
-        .gmailFetch;
-      if (!gmailFetch) {
-        return JSON.stringify({ success: false, error: 'Gmail API helper not available' });
-      }
-
       if (!oauth.getCredential()) {
         return JSON.stringify({
           success: false,
@@ -77,7 +72,7 @@ export const getEmailsTool: ToolDefinition = {
       }
 
       // Get email list
-      const listResponse = gmailFetch(`/users/me/messages?${params.join('&')}`);
+      const listResponse = await gmailFetch(`/users/me/messages?${params.join('&')}`);
 
       if (!listResponse.success) {
         return JSON.stringify({
@@ -99,7 +94,7 @@ export const getEmailsTool: ToolDefinition = {
       // Get detailed email data
       const emails = [];
       for (const msgRef of messageList.messages) {
-        const msgResponse = gmailFetch(`/users/me/messages/${msgRef.id}`);
+        const msgResponse = await gmailFetch(`/users/me/messages/${msgRef.id}`);
         if (msgResponse.success) {
           const message = msgResponse.data;
           const headers = message.payload?.headers || [];

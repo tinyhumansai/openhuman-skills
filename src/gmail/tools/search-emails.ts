@@ -1,6 +1,7 @@
 // Tool: gmail-search-emails
 // Advanced email search using Gmail query syntax
 import { isSensitiveText } from '../../helpers';
+import { gmailFetch } from '../api';
 import '../state';
 
 export const searchEmailsTool: ToolDefinition = {
@@ -31,12 +32,6 @@ export const searchEmailsTool: ToolDefinition = {
   },
   async execute(args: Record<string, unknown>): Promise<string> {
     try {
-      const gmailFetch = (globalThis as { gmailFetch?: (endpoint: string, options?: any) => any })
-        .gmailFetch;
-      if (!gmailFetch) {
-        return JSON.stringify({ success: false, error: 'Gmail API helper not available' });
-      }
-
       if (!oauth.getCredential()) {
         return JSON.stringify({
           success: false,
@@ -65,7 +60,7 @@ export const searchEmailsTool: ToolDefinition = {
       }
 
       // Search messages
-      const searchResponse = gmailFetch(`/users/me/messages?${params.join('&')}`);
+      const searchResponse = await gmailFetch(`/users/me/messages?${params.join('&')}`);
 
       if (!searchResponse.success) {
         return JSON.stringify({
@@ -98,7 +93,7 @@ export const searchEmailsTool: ToolDefinition = {
         const batch = searchResults.messages.slice(i, i + batchSize);
 
         for (const msgRef of batch) {
-          const msgResponse = gmailFetch(`/users/me/messages/${msgRef.id}?format=metadata`);
+          const msgResponse = await gmailFetch(`/users/me/messages/${msgRef.id}?format=metadata`);
 
           if (msgResponse.success) {
             const message = msgResponse.data;

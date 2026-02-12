@@ -1,5 +1,6 @@
 // Tool: gmail-get-profile
 // Get Gmail user profile information
+import { gmailFetch } from '../api';
 import '../state';
 
 export const getProfileTool: ToolDefinition = {
@@ -9,12 +10,6 @@ export const getProfileTool: ToolDefinition = {
   input_schema: { type: 'object', properties: {}, required: [] },
   async execute(_args: Record<string, unknown>): Promise<string> {
     try {
-      const gmailFetch = (globalThis as { gmailFetch?: (endpoint: string, options?: any) => any })
-        .gmailFetch;
-      if (!gmailFetch) {
-        return JSON.stringify({ success: false, error: 'Gmail API helper not available' });
-      }
-
       if (!oauth.getCredential()) {
         return JSON.stringify({
           success: false,
@@ -23,7 +18,7 @@ export const getProfileTool: ToolDefinition = {
       }
 
       // Get profile from Gmail API
-      const response = gmailFetch('/users/me/profile');
+      const response = await gmailFetch('/users/me/profile');
 
       if (!response.success) {
         return JSON.stringify({

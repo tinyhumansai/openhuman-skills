@@ -1,100 +1,13 @@
 // Gmail skill main entry point
 // Gmail integration with OAuth bridge, email management, and real-time sync
 // Import all tools
+import { loadGmailProfile } from './api/helpers';
 import './db/helpers';
 import './db/schema';
-// Import modules to initialize state and expose functions on globalThis
 import './state';
-import { getEmailTool } from './tools/get-email';
-import { getEmailsTool } from './tools/get-emails';
-import { getLabelsTool } from './tools/get-labels';
-import { getProfileTool } from './tools/get-profile';
-import { markEmailTool } from './tools/mark-email';
-import { searchEmailsTool } from './tools/search-emails';
-import { sendEmailTool } from './tools/send-email';
+import { onSync } from './sync';
+import { tools } from './tools';
 import type { SkillConfig } from './types';
-
-// ---------------------------------------------------------------------------
-// Gmail API helper (uses oauth.fetch proxy)
-// ---------------------------------------------------------------------------
-const GMAIL_API_PREFIX = '/gmail/v1';
-
-async function gmailFetch(
-  endpoint: string,
-  options: {
-    method?: string;
-    body?: string;
-    headers?: Record<string, string>;
-    timeout?: number;
-  } = {}
-): Promise<{ success: boolean; data?: any; error?: { code: number; message: string } }> {
-  const credential = oauth.getCredential();
-
-  if (!credential) {
-    console.log('[gmail] gmailFetch: no credential (OAuth not connected)');
-    return {
-      success: false,
-      error: { code: 401, message: 'Gmail not connected. Complete OAuth setup first.' },
-    };
-  }
-
-  const method = options.method || 'GET';
-  const path = endpoint.startsWith('/')
-    ? GMAIL_API_PREFIX + endpoint
-    : GMAIL_API_PREFIX + '/' + endpoint;
-
-  console.log(
-    `[gmail] gmailFetch: path=${path} method=${method} credentialId=${credential.credentialId || '(none)'} isValid=${credential.isValid}`
-  );
-
-  try {
-    const response = await oauth.fetch(endpoint, {
-      method: options.method || 'GET',
-      headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
-      body: options.body,
-      timeout: options.timeout || 30,
-    });
-
-    const s = globalThis.getGmailSkillState();
-
-    if (response.status === 401) {
-      const bodyPreview = response.body ? response.body.slice(0, 200) : '(empty)';
-      console.log(
-        `[gmail] gmailFetch: 401 Unauthorized path=${path} credentialId=${credential.credentialId} body=${bodyPreview}`
-      );
-    } else if (response.status >= 400) {
-      const bodyPreview = response.body ? response.body.slice(0, 200) : '(empty)';
-      console.log(
-        `[gmail] gmailFetch: error path=${path} status=${response.status} body=${bodyPreview}`
-      );
-    }
-
-    // Update rate limit info from headers
-    if (response.headers['x-ratelimit-remaining']) {
-      s.rateLimitRemaining = parseInt(response.headers['x-ratelimit-remaining'], 10);
-    }
-    if (response.headers['x-ratelimit-reset']) {
-      s.rateLimitReset = parseInt(response.headers['x-ratelimit-reset'], 10) * 1000;
-    }
-
-    if (response.status >= 200 && response.status < 300) {
-      const data = response.body ? JSON.parse(response.body) : null;
-      s.lastApiError = null;
-      return { success: true, data };
-    } else {
-      const error = response.body
-        ? JSON.parse(response.body)
-        : { code: response.status, message: 'API request failed' };
-      s.lastApiError = error.message || `HTTP ${response.status}`;
-      return { success: false, error };
-    }
-  } catch (err) {
-    const errorMsg = err instanceof Error ? err.message : String(err);
-    const s = globalThis.getGmailSkillState();
-    s.lastApiError = errorMsg;
-    return { success: false, error: { code: 500, message: errorMsg } };
-  }
-}
 
 // ---------------------------------------------------------------------------
 // Lifecycle hooks
@@ -150,9 +63,6 @@ async function start(): Promise<void> {
     // Load Gmail profile
     loadGmailProfile();
 
-    // Perform initial sync
-    performSync();
-
     // Publish initial state
     publishSkillState();
   } else {
@@ -182,10 +92,6 @@ async function stop(): Promise<void> {
 
 async function onCronTrigger(scheduleId: string): Promise<void> {
   console.log(`[gmail] Cron triggered: ${scheduleId}`);
-
-  if (scheduleId === 'gmail-sync') {
-    performSync();
-  }
 }
 
 async function onSessionStart(args: { sessionId: string }): Promise<void> {
@@ -220,13 +126,6 @@ async function onOAuthComplete(args: OAuthCompleteArgs): Promise<OAuthCompleteRe
 
   // Load profile to get user email
   loadGmailProfile();
-
-  // Start sync
-  if (s.config.syncEnabled) {
-    const cronExpr = `0 */${s.config.syncIntervalMinutes} * * * *`;
-    cron.register('gmail-sync', cronExpr);
-    performSync();
-  }
 
   publishSkillState();
   console.log(`[gmail] Connected as ${s.config.userEmail || args.accountLabel || 'unknown'}`);
@@ -375,79 +274,6 @@ async function onSetOption(args: { name: string; value: unknown }): Promise<void
 // Helper functions
 // ---------------------------------------------------------------------------
 
-async function loadGmailProfile(): Promise<void> {
-  const response = await gmailFetch('/users/me/profile');
-  if (response.success) {
-    const s = globalThis.getGmailSkillState();
-    s.profile = {
-      emailAddress: response.data.emailAddress,
-      messagesTotal: response.data.messagesTotal || 0,
-      threadsTotal: response.data.threadsTotal || 0,
-      historyId: response.data.historyId,
-    };
-
-    if (!s.config.userEmail) {
-      s.config.userEmail = response.data.emailAddress;
-      state.set('config', s.config);
-    }
-
-    console.log(`[gmail] Profile loaded for ${s.profile.emailAddress}`);
-  }
-}
-
-async function performSync(): Promise<void> {
-  const s = globalThis.getGmailSkillState();
-
-  if (!oauth.getCredential() || s.syncStatus.syncInProgress) {
-    return;
-  }
-
-  console.log('[gmail] Starting email sync...');
-  s.syncStatus.syncInProgress = true;
-  s.syncStatus.newEmailsCount = 0;
-
-  const upsertEmail = (globalThis as { upsertEmail?: (msg: any) => void }).upsertEmail;
-  if (!upsertEmail) return;
-
-  try {
-    // Get recent messages
-    const params: string[] = [];
-    params.push(`maxResults=${s.config.maxEmailsPerSync}`);
-    params.push('q=in%3Ainbox');
-
-    const response = await gmailFetch(`/users/me/messages?${params.join('&')}`);
-
-    if (response.success && response.data.messages) {
-      let newEmails = 0;
-
-      for (const msgRef of response.data.messages) {
-        const msgResponse = await gmailFetch(`/users/me/messages/${msgRef.id}`);
-        if (msgResponse.success) {
-          upsertEmail(msgResponse.data);
-          newEmails++;
-        }
-      }
-
-      s.syncStatus.newEmailsCount = newEmails;
-
-      if (newEmails > 0 && s.config.notifyOnNewEmails) {
-        platform.notify('Gmail Sync Complete', `Synchronized ${newEmails} emails`);
-      }
-    }
-
-    s.syncStatus.lastSyncTime = Date.now();
-    s.syncStatus.nextSyncTime = Date.now() + s.config.syncIntervalMinutes * 60 * 1000;
-
-    console.log(`[gmail] Sync completed. New emails: ${s.syncStatus.newEmailsCount}`);
-  } catch (error) {
-    console.error(`[gmail] Sync failed: ${error}`);
-    s.lastApiError = error instanceof Error ? error.message : String(error);
-  } finally {
-    s.syncStatus.syncInProgress = false;
-    publishSkillState();
-  }
-}
-
 function publishSkillState(): void {
   const s = globalThis.getGmailSkillState();
   const credential = oauth.getCredential();
@@ -476,8 +302,6 @@ function publishSkillState(): void {
 
 // Expose helper functions on globalThis for tools to use
 const _g = globalThis as Record<string, unknown>;
-_g.gmailFetch = gmailFetch;
-_g.performSync = performSync;
 _g.publishSkillState = publishSkillState;
 _g.loadGmailProfile = loadGmailProfile;
 
@@ -490,15 +314,7 @@ const skill: Skill = {
     auto_start: false,
     setup: { required: true, label: 'Configure Gmail' },
   },
-  tools: [
-    getEmailsTool,
-    sendEmailTool,
-    getEmailTool,
-    getLabelsTool,
-    searchEmailsTool,
-    markEmailTool,
-    getProfileTool,
-  ],
+  tools,
   init,
   start,
   stop,
@@ -507,6 +323,7 @@ const skill: Skill = {
   onSessionEnd,
   onOAuthComplete,
   onOAuthRevoked,
+  onSync,
   onDisconnect,
   onListOptions,
   onSetOption,

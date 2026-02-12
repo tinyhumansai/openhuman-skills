@@ -1,6 +1,7 @@
 // Tool: gmail-get-email
 // Get full details of a specific email by ID
 import { isSensitiveText } from '../../helpers';
+import { gmailFetch } from '../api';
 import '../state';
 
 export const getEmailTool: ToolDefinition = {
@@ -22,12 +23,6 @@ export const getEmailTool: ToolDefinition = {
   },
   async execute(args: Record<string, unknown>): Promise<string> {
     try {
-      const gmailFetch = (globalThis as { gmailFetch?: (endpoint: string, options?: any) => any })
-        .gmailFetch;
-      if (!gmailFetch) {
-        return JSON.stringify({ success: false, error: 'Gmail API helper not available' });
-      }
-
       if (!oauth.getCredential()) {
         return JSON.stringify({
           success: false,
@@ -51,7 +46,7 @@ export const getEmailTool: ToolDefinition = {
       const params: string[] = [];
       params.push(`format=${encodeURIComponent(format)}`);
 
-      const response = gmailFetch(`/users/me/messages/${messageId}?${params.join('&')}`);
+      const response = await gmailFetch(`/users/me/messages/${messageId}?${params.join('&')}`);
 
       if (!response.success) {
         return JSON.stringify({
