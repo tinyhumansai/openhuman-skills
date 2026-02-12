@@ -113,4 +113,3 @@ export function initializeGmailSchema(): void {
 
   console.log('[gmail] Database schema initialized successfully');
 }
-

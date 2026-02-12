@@ -1,4 +1,4 @@
-// Tool: gmail-get-emails
+// Tool: get-emails
 // Get emails with filtering and search capabilities
 import { isSensitiveText } from '../../helpers';
 import { gmailFetch } from '../api';
@@ -6,7 +6,7 @@ import { upsertEmail } from '../db/helpers';
 import { getGmailSkillState } from '../state';
 
 export const getEmailsTool: ToolDefinition = {
-  name: 'gmail-get-emails',
+  name: 'get-emails',
   description:
     'Get emails from Gmail with optional filtering by query, labels, read status, and pagination. Supports Gmail search syntax.',
   input_schema: {

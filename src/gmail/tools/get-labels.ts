@@ -1,10 +1,10 @@
-// Tool: gmail-get-labels
+// Tool: get-labels
 // Get all Gmail labels with counts and details
 import { gmailFetch } from '../api';
 import { upsertLabel } from '../db/helpers';
 
 export const getLabelsTool: ToolDefinition = {
-  name: 'gmail-get-labels',
+  name: 'get-labels',
   description:
     'Get all Gmail labels including system and user-created labels with message counts and details.',
   input_schema: {

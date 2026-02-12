@@ -1,4 +1,4 @@
-// Tool: gmail-get-email
+// Tool: get-email
 // Get full details of a specific email by ID
 import { isSensitiveText } from '../../helpers';
 import { gmailFetch } from '../api';
@@ -6,7 +6,7 @@ import { getEmailById, upsertEmail } from '../db/helpers';
 import { getGmailSkillState } from '../state';
 
 export const getEmailTool: ToolDefinition = {
-  name: 'gmail-get-email',
+  name: 'get-email',
   description:
     'Get full details of a specific email by its ID, including headers, body content, and attachments.',
   input_schema: {

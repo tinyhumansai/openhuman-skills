@@ -1,13 +1,9 @@
 // Gmail skill main entry point
 // Gmail integration with OAuth bridge, email management, and real-time sync
-// Import all tools
 import { loadGmailProfile } from './api/helpers';
-import './db/helpers';
 import { getSyncState, setSyncState } from './db/helpers';
-import './db/schema';
 import { initializeGmailSchema } from './db/schema';
-import './state';
-import { getGmailSkillState } from './state';
+import { getGmailSkillState, publishSkillState } from './state';
 import { onSync } from './sync';
 import { tools } from './tools';
 import type { SkillConfig } from './types';
@@ -263,40 +259,14 @@ async function onSetOption(args: { name: string; value: unknown }): Promise<void
 }
 
 // ---------------------------------------------------------------------------
-// Helper functions
+// Skill export
 // ---------------------------------------------------------------------------
-
-function publishSkillState(): void {
-  const s = getGmailSkillState();
-  const credential = oauth.getCredential();
-  const isConnected = !!credential;
-
-  state.setPartial({
-    // Standard SkillHostConnectionState fields
-    connection_status: isConnected ? 'connected' : 'disconnected',
-    auth_status: isConnected ? 'authenticated' : 'not_authenticated',
-    connection_error: s.lastApiError || null,
-    auth_error: null,
-    is_initialized: isConnected,
-    // Skill-specific fields
-    userEmail: s.config.userEmail,
-    syncEnabled: s.config.syncEnabled,
-    syncInProgress: s.syncStatus.syncInProgress,
-    lastSyncTime: new Date(s.syncStatus.lastSyncTime).toISOString(),
-    nextSyncTime: new Date(s.syncStatus.nextSyncTime).toISOString(),
-    totalEmails: s.syncStatus.totalEmails,
-    newEmailsCount: s.syncStatus.newEmailsCount,
-    activeSessions: s.activeSessions.length,
-    rateLimitRemaining: s.rateLimitRemaining,
-    lastError: s.lastApiError,
-  });
-}
 
 const skill: Skill = {
   info: {
     id: 'gmail',
     name: 'Gmail',
-    version: '2.1.0', // Bumped for persistent storage
+    version: '2.1.0',
     description: 'Gmail integration with persistent storage',
     auto_start: false,
     setup: { required: true, label: 'Configure Gmail' },

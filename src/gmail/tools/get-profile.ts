@@ -1,10 +1,10 @@
-// Tool: gmail-get-profile
+// Tool: get-profile
 // Get Gmail user profile information
 import { gmailFetch } from '../api';
 import { getGmailSkillState } from '../state';
 
 export const getProfileTool: ToolDefinition = {
-  name: 'gmail-get-profile',
+  name: 'get-profile',
   description:
     'Get Gmail user profile information including email address, total message counts, and account details.',
   input_schema: { type: 'object', properties: {}, required: [] },

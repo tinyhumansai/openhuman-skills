@@ -392,4 +392,3 @@ function insertEmailAttachments(message: GmailMessage): void {
     );
   });
 }
-

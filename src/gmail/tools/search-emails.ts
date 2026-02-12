@@ -1,4 +1,4 @@
-// Tool: gmail-search-emails
+// Tool: search-emails
 // Advanced email search using Gmail query syntax
 import { isSensitiveText } from '../../helpers';
 import { gmailFetch } from '../api';
@@ -6,7 +6,7 @@ import { upsertEmail } from '../db/helpers';
 import { getGmailSkillState } from '../state';
 
 export const searchEmailsTool: ToolDefinition = {
-  name: 'gmail-search-emails',
+  name: 'search-emails',
   description:
     'Search emails using advanced Gmail query syntax. Supports complex queries with operators like from:, to:, subject:, has:attachment, is:unread, etc.',
   input_schema: {

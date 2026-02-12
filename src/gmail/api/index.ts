@@ -24,14 +24,9 @@ export async function gmailFetch(
     };
   }
 
-  const method = options.method || 'GET';
   const path = endpoint.startsWith('/')
     ? GMAIL_API_PREFIX + endpoint
     : GMAIL_API_PREFIX + '/' + endpoint;
-
-  console.log(
-    `[gmail] gmailFetch: path=${path} method=${method} credentialId=${credential.credentialId || '(none)'} isValid=${credential.isValid}`
-  );
 
   try {
     const response = await oauth.fetch(endpoint, {
