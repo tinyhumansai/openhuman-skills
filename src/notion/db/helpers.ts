@@ -1109,7 +1109,6 @@ export function getEntityCounts(): {
   pages: number;
   databases: number;
   databaseRows: number;
-  users: number;
   pagesWithContent: number;
   pagesWithSummary: number;
   summariesTotal: number;
@@ -1125,9 +1124,6 @@ export function getEntityCounts(): {
   const databaseRows = db.get('SELECT COUNT(*) as cnt FROM database_rows WHERE credential_id = ?', [
     cid,
   ]) as { cnt: number } | null;
-  const users = db.get('SELECT COUNT(*) as cnt FROM users WHERE credential_id = ?', [cid]) as {
-    cnt: number;
-  } | null;
   const pagesWithContent = db.get(
     'SELECT COUNT(*) as cnt FROM pages WHERE credential_id = ? AND content_text IS NOT NULL',
     [cid]
@@ -1148,7 +1144,6 @@ export function getEntityCounts(): {
     pages: pages?.cnt || 0,
     databases: databases?.cnt || 0,
     databaseRows: databaseRows?.cnt || 0,
-    users: users?.cnt || 0,
     pagesWithContent: pagesWithContent?.cnt || 0,
     pagesWithSummary: pagesWithSummary?.cnt || 0,
     summariesTotal: summariesTotal?.cnt || 0,

@@ -93,7 +93,6 @@ export function performSync(): void {
       // Update counts
       s.syncStatus.totalPages = counts.pages;
       s.syncStatus.totalDatabases = counts.databases;
-      s.syncStatus.totalUsers = counts.users;
       s.syncStatus.pagesWithContent = counts.pagesWithContent;
       s.syncStatus.pagesWithSummary = counts.pagesWithSummary;
       s.syncStatus.summariesTotal = counts.summariesTotal;
@@ -102,7 +101,7 @@ export function performSync(): void {
       s.syncStatus.totalDatabaseRows = counts.databaseRows;
 
       console.log(
-        `[notion] Sync complete in ${durationMs}ms — ${counts.pages} pages, ${counts.databases} databases, ${counts.databaseRows} db rows, ${counts.users} users`
+        `[notion] Sync complete in ${durationMs}ms — ${counts.pages} pages, ${counts.databases} databases, ${counts.databaseRows} db rows`
       );
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
@@ -760,7 +759,6 @@ function publishSyncState(): void {
     totalPages: s.syncStatus.totalPages,
     totalDatabases: s.syncStatus.totalDatabases,
     totalDatabaseRows: s.syncStatus.totalDatabaseRows,
-    totalUsers: s.syncStatus.totalUsers,
     pagesWithContent: s.syncStatus.pagesWithContent,
     pagesWithSummary: s.syncStatus.pagesWithSummary,
     summariesTotal: s.syncStatus.summariesTotal,
