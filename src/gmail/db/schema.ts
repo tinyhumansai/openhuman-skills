@@ -106,11 +106,14 @@ export function initializeGmailSchema(): void {
   // so we check pragma table_info first.
   const columns = db.all('PRAGMA table_info(emails)', []);
   const hasBackendSubmitted = columns.some(
-    (col) => (col as { name: string }).name === 'backend_submitted'
+    col => (col as { name: string }).name === 'backend_submitted'
   );
   if (!hasBackendSubmitted) {
     db.exec('ALTER TABLE emails ADD COLUMN backend_submitted INTEGER NOT NULL DEFAULT 0', []);
-    db.exec('CREATE INDEX IF NOT EXISTS idx_emails_backend_submitted ON emails (backend_submitted)', []);
+    db.exec(
+      'CREATE INDEX IF NOT EXISTS idx_emails_backend_submitted ON emails (backend_submitted)',
+      []
+    );
     console.log('[gmail] Added backend_submitted column to emails table');
   }
 

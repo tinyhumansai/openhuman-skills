@@ -269,7 +269,11 @@ const SUBMIT_BATCH_SIZE = 200;
  * Build a DataSubmissionChunk from a database email row.
  * Prefers body_text, falls back to snippet. Includes key metadata.
  */
-function emailToChunk(email: DatabaseEmail): { title?: string; content: string; metadata?: Record<string, unknown> } {
+function emailToChunk(email: DatabaseEmail): {
+  title?: string;
+  content: string;
+  metadata?: Record<string, unknown>;
+} {
   const content = email.body_text || email.snippet || '';
   return {
     title: email.subject || undefined,
@@ -295,19 +299,17 @@ function submitNewEmails(): void {
   const emails = getUnsubmittedEmails(SUBMIT_BATCH_SIZE);
   if (emails.length === 0) return;
 
-  const chunks = emails
-    .map(emailToChunk)
-    .filter((c) => c.content.length > 0);
+  const chunks = emails.map(emailToChunk).filter(c => c.content.length > 0);
 
   if (chunks.length === 0) {
     // All emails had empty content — mark them submitted anyway to avoid re-processing
-    markEmailsSubmitted(emails.map((e) => e.id));
+    markEmailsSubmitted(emails.map(e => e.id));
     return;
   }
 
   try {
     backend.submitData(chunks, { dataSource: 'gmail' });
-    markEmailsSubmitted(emails.map((e) => e.id));
+    markEmailsSubmitted(emails.map(e => e.id));
     console.log(`[gmail-sync] Submitted ${chunks.length} email(s) to backend`);
   } catch (error) {
     // Non-fatal: emails stay un-submitted and will be retried on next sync

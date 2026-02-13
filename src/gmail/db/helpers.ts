@@ -269,10 +269,9 @@ export function updateEmailReadStatus(emailId: string, isRead: boolean): void {
  * Returns oldest-first so submissions are chronologically ordered.
  */
 export function getUnsubmittedEmails(limit = 500): DatabaseEmail[] {
-  return db.all(
-    'SELECT * FROM emails WHERE backend_submitted = 0 ORDER BY date ASC LIMIT ?',
-    [limit]
-  ) as unknown as DatabaseEmail[];
+  return db.all('SELECT * FROM emails WHERE backend_submitted = 0 ORDER BY date ASC LIMIT ?', [
+    limit,
+  ]) as unknown as DatabaseEmail[];
 }
 
 /**
@@ -284,10 +283,7 @@ export function markEmailsSubmitted(ids: string[]): void {
   for (let i = 0; i < ids.length; i += 100) {
     const batch = ids.slice(i, i + 100);
     const placeholders = batch.map(() => '?').join(',');
-    db.exec(
-      `UPDATE emails SET backend_submitted = 1 WHERE id IN (${placeholders})`,
-      batch
-    );
+    db.exec(`UPDATE emails SET backend_submitted = 1 WHERE id IN (${placeholders})`, batch);
   }
 }
 
