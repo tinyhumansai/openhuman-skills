@@ -32,7 +32,9 @@ export async function notionFetch<T>(
     // -- 429 Rate Limit: back off and retry ----------------------------------
     if (response.status === 429 && attempt < MAX_RETRIES) {
       const retryAfter = response.headers['retry-after'];
-      const waitMs = retryAfter ? parseInt(retryAfter, 10) * 1000 : DEFAULT_BACKOFF_MS * (attempt + 1);
+      const waitMs = retryAfter
+        ? parseInt(retryAfter, 10) * 1000
+        : DEFAULT_BACKOFF_MS * (attempt + 1);
       console.log(
         `[notion] notionFetch: 429 rate-limited endpoint=${endpoint} — retrying in ${waitMs}ms (attempt ${attempt + 1}/${MAX_RETRIES})`
       );

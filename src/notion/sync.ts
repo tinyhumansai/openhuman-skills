@@ -590,11 +590,7 @@ function parsePageEntities(
       ]) as { name: string } | null;
       if (user) name = user.name;
     }
-    entities.push({
-      name: name || e.id,
-      identifier: e.id,
-      kind: e.type || 'person',
-    });
+    entities.push({ name: name || e.id, identifier: e.id, kind: e.type || 'person' });
   }
 
   return entities.length > 0 ? entities : undefined;
@@ -644,12 +640,7 @@ function rowToChunk(row: LocalDatabaseRow): DataSubmissionChunk {
 
 /** Rough byte size of a chunk (title + content + rawContent + overhead). */
 function estimateChunkSize(chunk: DataSubmissionChunk): number {
-  return (
-    (chunk.title?.length || 0) +
-    chunk.content.length +
-    (chunk.rawContent?.length || 0) +
-    256
-  );
+  return (chunk.title?.length || 0) + chunk.content.length + (chunk.rawContent?.length || 0) + 256;
 }
 
 /**

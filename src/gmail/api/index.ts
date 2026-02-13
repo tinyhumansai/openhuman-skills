@@ -53,7 +53,9 @@ export async function gmailFetch(
       // -- 429 Rate Limit: back off and retry --------------------------------
       if (response.status === 429 && attempt < MAX_RETRIES) {
         const retryAfter = response.headers['retry-after'];
-        const waitMs = retryAfter ? parseInt(retryAfter, 10) * 1000 : DEFAULT_BACKOFF_MS * (attempt + 1);
+        const waitMs = retryAfter
+          ? parseInt(retryAfter, 10) * 1000
+          : DEFAULT_BACKOFF_MS * (attempt + 1);
         console.log(
           `[gmail] gmailFetch: 429 rate-limited path=${path} — retrying in ${waitMs}ms (attempt ${attempt + 1}/${MAX_RETRIES})`
         );
