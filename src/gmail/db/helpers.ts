@@ -292,27 +292,6 @@ export function markEmailsSubmitted(ids: string[]): void {
 }
 
 /**
- * Get sync state value
- */
-export function getSyncState(key: string): string | null {
-  const row = db.get('SELECT value FROM sync_state WHERE key = ?', [key]) as {
-    value: string;
-  } | null;
-  return row?.value || null;
-}
-
-/**
- * Set sync state value
- */
-export function setSyncState(key: string, value: string): void {
-  db.exec(
-    `INSERT OR REPLACE INTO sync_state (key, value, updated_at)
-     VALUES (?, ?, ?)`,
-    [key, value, Date.now()]
-  );
-}
-
-/**
  * Helper: Extract email address from "Name <email>" format
  */
 function extractEmail(emailStr: string): string {

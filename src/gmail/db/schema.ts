@@ -91,16 +91,6 @@ export function initializeGmailSchema(): void {
     []
   );
 
-  // Sync state table
-  db.exec(
-    `CREATE TABLE IF NOT EXISTS sync_state (
-      key TEXT PRIMARY KEY,
-      value TEXT NOT NULL,
-      updated_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
-    )`,
-    []
-  );
-
   // Create indexes for performance
   db.exec('CREATE INDEX IF NOT EXISTS idx_emails_thread_id ON emails (thread_id)', []);
   db.exec('CREATE INDEX IF NOT EXISTS idx_emails_date ON emails (date DESC)', []);

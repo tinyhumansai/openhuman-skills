@@ -2,7 +2,7 @@
 // Fetches messages via Gmail API and upserts into local SQLite database.
 // Skips emails already in the local DB to avoid redundant API calls.
 import { gmailFetch } from './api';
-import { getEmailById, getSyncState, getUnsubmittedEmails, markEmailsSubmitted, setSyncState, upsertEmail } from './db/helpers';
+import { getEmailById, getUnsubmittedEmails, markEmailsSubmitted, upsertEmail } from './db/helpers';
 import { getGmailSkillState, publishSkillState } from './state';
 import type { DatabaseEmail, GmailMessage } from './types';
 
@@ -153,8 +153,8 @@ export async function performInitialSync(onProgress?: SyncProgressCallback): Pro
     } while (pageToken && page < MAX_INITIAL_PAGES);
 
     // Mark initial sync as complete
-    setSyncState('initial_sync_completed', 'true');
-    setSyncState('last_sync_time', String(Date.now()));
+    state.set('initial_sync_completed', true);
+    state.set('last_sync_time', Date.now());
 
     s.syncStatus.lastSyncTime = Date.now();
     s.syncStatus.newEmailsCount = newEmails;
@@ -236,7 +236,7 @@ export async function onSync(): Promise<void> {
     } while (pageToken && page < MAX_INCREMENTAL_PAGES);
 
     // Update sync state
-    setSyncState('last_sync_time', String(Date.now()));
+    state.set('last_sync_time', Date.now());
     s.syncStatus.lastSyncTime = Date.now();
     s.syncStatus.newEmailsCount = newEmails;
     s.syncStatus.nextSyncTime = Date.now() + s.config.syncIntervalMinutes * 60 * 1000;
@@ -321,11 +321,11 @@ function submitNewEmails(): void {
 
 /** Check if initial sync has been completed. */
 export function isSyncCompleted(): boolean {
-  return getSyncState('initial_sync_completed') === 'true';
+  return state.get('initial_sync_completed') === true;
 }
 
 /** Get last sync timestamp (ms since epoch), or null if never synced. */
 export function getLastSyncTime(): number | null {
-  const value = getSyncState('last_sync_time');
-  return value ? parseInt(value, 10) : null;
+  const value = state.get('last_sync_time');
+  return typeof value === 'number' ? value : null;
 }
