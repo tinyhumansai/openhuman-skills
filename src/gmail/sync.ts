@@ -22,11 +22,8 @@ const SYNC_WINDOW_DAYS = 30;
 /** Max emails to fetch per API page. */
 const PAGE_SIZE = 100;
 
-/** Max pages to fetch during initial sync. */
-const MAX_INITIAL_PAGES = 10;
-
-/** Max pages to fetch during incremental sync. */
-const MAX_INCREMENTAL_PAGES = 3;
+/** Max pages to fetch per sync (100 emails/page × 10 pages = 1000 emails). */
+const MAX_PAGES = 10;
 
 // ---------------------------------------------------------------------------
 // Types
@@ -178,7 +175,7 @@ export async function performInitialSync(onProgress?: SyncProgressCallback): Pro
       }
 
       log(`Page ${page}: ${newEmails} new, ${skipped} skipped`, Math.min(10 + page * 10, 90));
-    } while (pageToken && page < MAX_INITIAL_PAGES);
+    } while (pageToken && page < MAX_PAGES);
 
     // Mark initial sync as complete
     const now = Date.now();
@@ -272,7 +269,7 @@ export async function onSync(): Promise<void> {
         `Page ${page}: ${newEmails} new, ${skipped} skipped`,
         Math.min(20 + page * 25, 90)
       );
-    } while (pageToken && page < MAX_INCREMENTAL_PAGES);
+    } while (pageToken && page < MAX_PAGES);
 
     // Update sync state
     const now = Date.now();

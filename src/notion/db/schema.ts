@@ -1,5 +1,6 @@
 // Database schema initialization for Notion skill
 // Creates SQLite tables for pages, databases, users, and sync state
+// All tables are scoped by credential_id to isolate data per integration.
 import '../state';
 
 /**
@@ -12,6 +13,7 @@ export function initializeNotionSchema(): void {
   db.exec(
     `CREATE TABLE IF NOT EXISTS pages (
       id TEXT PRIMARY KEY,
+      credential_id TEXT NOT NULL DEFAULT '',
       title TEXT NOT NULL,
       url TEXT,
       icon TEXT,
@@ -25,6 +27,7 @@ export function initializeNotionSchema(): void {
       content_text TEXT,
       content_synced_at INTEGER,
       page_entities TEXT,
+      backend_submitted INTEGER NOT NULL DEFAULT 0,
       synced_at INTEGER NOT NULL
     )`,
     []
@@ -34,6 +37,7 @@ export function initializeNotionSchema(): void {
   db.exec(
     `CREATE TABLE IF NOT EXISTS databases (
       id TEXT PRIMARY KEY,
+      credential_id TEXT NOT NULL DEFAULT '',
       title TEXT NOT NULL,
       description TEXT,
       url TEXT,
@@ -42,6 +46,7 @@ export function initializeNotionSchema(): void {
       created_time TEXT NOT NULL,
       last_edited_time TEXT NOT NULL,
       archived INTEGER NOT NULL DEFAULT 0,
+      backend_submitted INTEGER NOT NULL DEFAULT 0,
       synced_at INTEGER NOT NULL
     )`,
     []
@@ -51,6 +56,7 @@ export function initializeNotionSchema(): void {
   db.exec(
     `CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
+      credential_id TEXT NOT NULL DEFAULT '',
       name TEXT NOT NULL,
       user_type TEXT NOT NULL,
       email TEXT,
@@ -64,6 +70,7 @@ export function initializeNotionSchema(): void {
   db.exec(
     `CREATE TABLE IF NOT EXISTS database_rows (
       id TEXT PRIMARY KEY,
+      credential_id TEXT NOT NULL DEFAULT '',
       database_id TEXT NOT NULL,
       title TEXT NOT NULL,
       url TEXT,
@@ -75,6 +82,7 @@ export function initializeNotionSchema(): void {
       created_time TEXT NOT NULL,
       last_edited_time TEXT NOT NULL,
       archived INTEGER NOT NULL DEFAULT 0,
+      backend_submitted INTEGER NOT NULL DEFAULT 0,
       synced_at INTEGER NOT NULL,
       FOREIGN KEY (database_id) REFERENCES databases(id)
     )`,
@@ -86,6 +94,7 @@ export function initializeNotionSchema(): void {
   db.exec(
     `CREATE TABLE IF NOT EXISTS summaries (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+      credential_id TEXT NOT NULL DEFAULT '',
       page_id TEXT NOT NULL,
       url TEXT,
       summary TEXT NOT NULL,
@@ -103,38 +112,91 @@ export function initializeNotionSchema(): void {
     []
   );
 
+  // ---------------------------------------------------------------------------
+  // Migrations for existing installs
+  // ---------------------------------------------------------------------------
+
+  // Migrate: add credential_id to all tables
+  migrateAddColumn('pages', 'credential_id', "TEXT NOT NULL DEFAULT ''");
+  migrateAddColumn('databases', 'credential_id', "TEXT NOT NULL DEFAULT ''");
+  migrateAddColumn('users', 'credential_id', "TEXT NOT NULL DEFAULT ''");
+  migrateAddColumn('database_rows', 'credential_id', "TEXT NOT NULL DEFAULT ''");
+  migrateAddColumn('summaries', 'credential_id', "TEXT NOT NULL DEFAULT ''");
+
+  // Migrate: add backend_submitted to content tables
+  migrateAddColumn('pages', 'backend_submitted', 'INTEGER NOT NULL DEFAULT 0');
+  migrateAddColumn('databases', 'backend_submitted', 'INTEGER NOT NULL DEFAULT 0');
+  migrateAddColumn('database_rows', 'backend_submitted', 'INTEGER NOT NULL DEFAULT 0');
+
   // Migrate: add page_entities column if it doesn't exist (for existing installs)
-  try {
-    db.exec('ALTER TABLE pages ADD COLUMN page_entities TEXT', []);
-  } catch {
-    // Column already exists
-  }
+  migrateAddColumn('pages', 'page_entities', 'TEXT');
 
   // Migrate: add url column to summaries if it doesn't exist (for existing installs)
-  try {
-    db.exec('ALTER TABLE summaries ADD COLUMN url TEXT', []);
-  } catch {
-    // Column already exists
-  }
+  migrateAddColumn('summaries', 'url', 'TEXT');
 
-  // Migrate: drop old FK constraint on summaries (page_id now holds page OR row IDs)
-  // SQLite doesn't enforce FKs by default, so this is just documentation cleanup.
+  // ---------------------------------------------------------------------------
+  // Indexes
+  // ---------------------------------------------------------------------------
 
-  // Create indexes for performance
-  db.exec('CREATE INDEX IF NOT EXISTS idx_pages_last_edited ON pages(last_edited_time DESC)', []);
-  db.exec('CREATE INDEX IF NOT EXISTS idx_pages_parent ON pages(parent_type, parent_id)', []);
-  db.exec('CREATE INDEX IF NOT EXISTS idx_pages_archived ON pages(archived)', []);
+  // credential_id indexes for scoped queries
+  db.exec('CREATE INDEX IF NOT EXISTS idx_pages_cred ON pages(credential_id)', []);
+  db.exec('CREATE INDEX IF NOT EXISTS idx_databases_cred ON databases(credential_id)', []);
+  db.exec('CREATE INDEX IF NOT EXISTS idx_users_cred ON users(credential_id)', []);
+  db.exec('CREATE INDEX IF NOT EXISTS idx_db_rows_cred ON database_rows(credential_id)', []);
+  db.exec('CREATE INDEX IF NOT EXISTS idx_summaries_cred ON summaries(credential_id)', []);
+
+  // backend_submitted indexes for submission queries
   db.exec(
-    'CREATE INDEX IF NOT EXISTS idx_databases_last_edited ON databases(last_edited_time DESC)',
+    'CREATE INDEX IF NOT EXISTS idx_pages_backend_submitted ON pages(credential_id, backend_submitted)',
     []
   );
-  db.exec('CREATE INDEX IF NOT EXISTS idx_db_rows_database_id ON database_rows(database_id)', []);
   db.exec(
-    'CREATE INDEX IF NOT EXISTS idx_db_rows_last_edited ON database_rows(last_edited_time DESC)',
+    'CREATE INDEX IF NOT EXISTS idx_databases_backend_submitted ON databases(credential_id, backend_submitted)',
     []
   );
-  db.exec('CREATE INDEX IF NOT EXISTS idx_summaries_synced ON summaries(synced)', []);
-  db.exec('CREATE INDEX IF NOT EXISTS idx_summaries_page_id ON summaries(page_id)', []);
+  db.exec(
+    'CREATE INDEX IF NOT EXISTS idx_db_rows_backend_submitted ON database_rows(credential_id, backend_submitted)',
+    []
+  );
+
+  // Query performance indexes
+  db.exec(
+    'CREATE INDEX IF NOT EXISTS idx_pages_last_edited ON pages(credential_id, last_edited_time DESC)',
+    []
+  );
+  db.exec('CREATE INDEX IF NOT EXISTS idx_pages_parent ON pages(credential_id, parent_type, parent_id)', []);
+  db.exec('CREATE INDEX IF NOT EXISTS idx_pages_archived ON pages(credential_id, archived)', []);
+  db.exec(
+    'CREATE INDEX IF NOT EXISTS idx_databases_last_edited ON databases(credential_id, last_edited_time DESC)',
+    []
+  );
+  db.exec(
+    'CREATE INDEX IF NOT EXISTS idx_db_rows_database_id ON database_rows(credential_id, database_id)',
+    []
+  );
+  db.exec(
+    'CREATE INDEX IF NOT EXISTS idx_db_rows_last_edited ON database_rows(credential_id, last_edited_time DESC)',
+    []
+  );
+  db.exec('CREATE INDEX IF NOT EXISTS idx_summaries_synced ON summaries(credential_id, synced)', []);
+  db.exec(
+    'CREATE INDEX IF NOT EXISTS idx_summaries_page_id ON summaries(credential_id, page_id)',
+    []
+  );
 
   console.log('[notion] Database schema initialized successfully');
+}
+
+// ---------------------------------------------------------------------------
+// Migration helper
+// ---------------------------------------------------------------------------
+
+/** Safely add a column to an existing table. No-op if the column already exists. */
+function migrateAddColumn(table: string, column: string, type: string): void {
+  try {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`, []);
+    console.log(`[notion] Added ${column} column to ${table} table`);
+  } catch {
+    // Column already exists — expected for new installs
+  }
 }

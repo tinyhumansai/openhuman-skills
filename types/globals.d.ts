@@ -154,9 +154,18 @@ interface ModelSummarizeOptions {
   maxTokens?: number;
 }
 
+interface DataSubmissionEntity {
+  name: string;
+  identifier: string;
+  kind: string;
+}
+
 interface DataSubmissionChunk {
   title?: string;
   content: string;
+  rawContent?: string;
+  labels?: string[];
+  entities?: DataSubmissionEntity[];
   metadata?: Record<string, unknown>;
 }
 

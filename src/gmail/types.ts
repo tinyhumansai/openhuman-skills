@@ -21,25 +21,22 @@ export interface GmailProfile {
   historyId: string;
 }
 
+/** A single MIME part. Parts can nest recursively for multipart/* messages. */
+export interface GmailMessagePart {
+  partId: string;
+  mimeType: string;
+  filename: string;
+  headers: Array<{ name: string; value: string }>;
+  body: { attachmentId?: string; size: number; data?: string };
+  parts?: GmailMessagePart[];
+}
+
 export interface GmailMessage {
   id: string;
   threadId: string;
   labelIds: string[];
   snippet: string;
-  payload: {
-    partId: string;
-    mimeType: string;
-    filename: string;
-    headers: Array<{ name: string; value: string }>;
-    body: { attachmentId?: string; size: number; data?: string };
-    parts?: Array<{
-      partId: string;
-      mimeType: string;
-      filename: string;
-      headers: Array<{ name: string; value: string }>;
-      body: { attachmentId?: string; size: number; data?: string };
-    }>;
-  };
+  payload: GmailMessagePart;
   sizeEstimate: number;
   historyId: string;
   internalDate: string;

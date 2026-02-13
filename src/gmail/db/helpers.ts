@@ -1,6 +1,7 @@
 // Database helper functions for Gmail skill
 // CRUD operations for emails, threads, labels, and attachments
 // All queries are scoped by credential_id from the active integration.
+import { convert } from 'html-to-text';
 import { getGmailSkillState } from '../state';
 import type {
   DatabaseAttachment,
@@ -51,9 +52,26 @@ export function upsertEmail(message: GmailMessage, redactSensitive = false): voi
   const isStarred = message.labelIds.includes('STARRED');
   const hasAttachments = hasEmailAttachments(message);
 
-  // Extract body content and check for sensitive information
+  // Extract body content — prefer plain text, fall back to converting HTML
   let bodyText = extractTextBody(message);
   let bodyHtml = extractHtmlBody(message);
+
+  if (!bodyText && bodyHtml) {
+    try {
+      bodyText = convert(bodyHtml, {
+        wordwrap: false,
+        selectors: [
+          { selector: 'img', format: 'skip' },
+          { selector: 'a', options: { hideLinkHrefIfSameAsText: true } },
+        ],
+      });
+    } catch {
+      // Fall back to snippet if HTML conversion fails
+      bodyText = message.snippet || null;
+    }
+  }
+
+  // Check for sensitive information
   const sensitive =
     isSensitiveText(subject) || isSensitiveText(bodyText || '') || isSensitiveText(message.snippet);
 
@@ -421,58 +439,60 @@ function extractEmail(emailStr: string): string {
 }
 
 /**
- * Helper: Check if email has attachments
+ * Helper: Check if email has attachments (recursively searches nested parts)
  */
 function hasEmailAttachments(message: GmailMessage): boolean {
-  if (message.payload.body.attachmentId) return true;
-  if (message.payload.parts) {
-    return message.payload.parts.some(
-      part => part.body.attachmentId || (part.filename && part.filename.length > 0)
-    );
+  function checkPart(part: GmailMessage['payload']): boolean {
+    if (part.body.attachmentId || (part.filename && part.filename.length > 0)) return true;
+    if (part.parts) {
+      for (const child of part.parts) {
+        if (checkPart(child)) return true;
+      }
+    }
+    return false;
   }
-  return false;
+  return checkPart(message.payload);
 }
 
 /**
- * Helper: Extract text body from message
+ * Recursively search MIME parts for a part matching the given mimeType.
+ * Gmail messages can have arbitrarily nested multipart/* structures, e.g.:
+ *   multipart/mixed → multipart/alternative → text/plain | text/html
+ */
+function findPartByMimeType(
+  part: GmailMessage['payload'],
+  mimeType: string
+): GmailMessage['payload'] | null {
+  if (part.mimeType === mimeType && part.body.data) {
+    return part;
+  }
+  if (part.parts) {
+    for (const child of part.parts) {
+      const found = findPartByMimeType(child, mimeType);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
+/**
+ * Helper: Extract text body from message (recursively searches nested parts)
  */
 function extractTextBody(message: GmailMessage): string | null {
-  if (message.payload.mimeType === 'text/plain' && message.payload.body.data) {
-    return atob(message.payload.body.data);
-  }
-
-  if (message.payload.parts) {
-    for (const part of message.payload.parts) {
-      if (part.mimeType === 'text/plain' && part.body.data) {
-        return atob(part.body.data);
-      }
-    }
-  }
-
-  return null;
+  const part = findPartByMimeType(message.payload, 'text/plain');
+  return part?.body.data ? atob(part.body.data) : null;
 }
 
 /**
- * Helper: Extract HTML body from message
+ * Helper: Extract HTML body from message (recursively searches nested parts)
  */
 function extractHtmlBody(message: GmailMessage): string | null {
-  if (message.payload.mimeType === 'text/html' && message.payload.body.data) {
-    return atob(message.payload.body.data);
-  }
-
-  if (message.payload.parts) {
-    for (const part of message.payload.parts) {
-      if (part.mimeType === 'text/html' && part.body.data) {
-        return atob(part.body.data);
-      }
-    }
-  }
-
-  return null;
+  const part = findPartByMimeType(message.payload, 'text/html');
+  return part?.body.data ? atob(part.body.data) : null;
 }
 
 /**
- * Helper: Insert email attachments
+ * Helper: Insert email attachments (recursively collects from nested parts)
  */
 function insertEmailAttachments(message: GmailMessage): void {
   const cid = credId();
@@ -484,31 +504,24 @@ function insertEmailAttachments(message: GmailMessage): void {
     partId: string;
   }> = [];
 
-  // Check main body
-  if (message.payload.body.attachmentId && message.payload.filename) {
-    attachments.push({
-      attachmentId: message.payload.body.attachmentId,
-      filename: message.payload.filename,
-      mimeType: message.payload.mimeType,
-      size: message.payload.body.size,
-      partId: message.payload.partId,
-    });
+  function collectAttachments(part: GmailMessage['payload']): void {
+    if (part.body.attachmentId && part.filename) {
+      attachments.push({
+        attachmentId: part.body.attachmentId,
+        filename: part.filename,
+        mimeType: part.mimeType,
+        size: part.body.size,
+        partId: part.partId,
+      });
+    }
+    if (part.parts) {
+      for (const child of part.parts) {
+        collectAttachments(child);
+      }
+    }
   }
 
-  // Check parts
-  if (message.payload.parts) {
-    message.payload.parts.forEach(part => {
-      if (part.body.attachmentId && part.filename) {
-        attachments.push({
-          attachmentId: part.body.attachmentId,
-          filename: part.filename,
-          mimeType: part.mimeType,
-          size: part.body.size,
-          partId: part.partId,
-        });
-      }
-    });
-  }
+  collectAttachments(message.payload);
 
   // Insert attachments
   attachments.forEach(att => {

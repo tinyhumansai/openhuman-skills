@@ -2,6 +2,7 @@
 // Periodically downloads pages, databases, users, and page content from Notion
 // into local SQLite for fast local querying.
 import { notionApi } from './api/index';
+import type { LocalDatabaseRow, LocalPage } from './db/helpers';
 import {
   getDatabaseById,
   getDatabaseRowById,
@@ -9,7 +10,11 @@ import {
   getLocalDatabases,
   getPageById,
   getPagesNeedingContent,
+  getUnsubmittedPages,
+  getUnsubmittedRows,
   getUnsyncedSummaries,
+  markPagesSubmitted,
+  markRowsSubmitted,
   markSummariesSynced,
   updatePageContent,
   upsertDatabase,
@@ -66,6 +71,10 @@ export function performSync(): void {
       // Phase 4: Sync unsynced summaries to the server
       console.log('[notion] Sync phase 4: sync summaries to server');
       syncSummariesToServer();
+
+      // Phase 5: Submit new data to backend for processing
+      console.log('[notion] Sync phase 5: submit new data to backend');
+      submitNewData();
 
       // Update sync state
       const durationMs = Date.now() - startTime;
@@ -536,6 +545,162 @@ async function syncSummariesToServer(): Promise<void> {
   console.log(
     `[notion] Server sync: ${sent} summaries sent${failed > 0 ? `, ${failed} failed` : ''}`
   );
+}
+
+// ---------------------------------------------------------------------------
+// Phase 5: Submit new data to backend for processing
+// ---------------------------------------------------------------------------
+
+/** Approximate max payload size per socket message (~100 KB). */
+const MAX_BATCH_BYTES = 100 * 1024;
+
+/** Max items to pull from DB per submission round. */
+const SUBMIT_QUERY_LIMIT = 500;
+
+/**
+ * Build a DataSubmissionChunk from a page row.
+ * Uses content_text for the body content (extracted from page blocks).
+ */
+function pageToChunk(page: LocalPage): {
+  title?: string;
+  content: string;
+  metadata?: Record<string, unknown>;
+} {
+  const content = page.content_text || '';
+  return {
+    title: page.title || undefined,
+    content,
+    metadata: {
+      pageId: page.id,
+      url: page.url,
+      parentType: page.parent_type,
+      parentId: page.parent_id,
+      createdTime: page.created_time,
+      lastEditedTime: page.last_edited_time,
+    },
+  };
+}
+
+/**
+ * Build a DataSubmissionChunk from a database row.
+ * Uses properties_text for the body content (flattened property values).
+ */
+function rowToChunk(row: LocalDatabaseRow): {
+  title?: string;
+  content: string;
+  metadata?: Record<string, unknown>;
+} {
+  const content = row.properties_text || '';
+  return {
+    title: row.title || undefined,
+    content,
+    metadata: {
+      rowId: row.id,
+      databaseId: row.database_id,
+      url: row.url,
+      createdTime: row.created_time,
+      lastEditedTime: row.last_edited_time,
+    },
+  };
+}
+
+/** Rough byte size of a chunk (title + content + metadata overhead). */
+function estimateChunkSize(chunk: {
+  title?: string;
+  content: string;
+  metadata?: Record<string, unknown>;
+}): number {
+  return (chunk.title?.length || 0) + chunk.content.length + 256;
+}
+
+/**
+ * Submit un-submitted pages and database rows to the backend for processing.
+ * Batches chunks so each socket message stays under ~100 KB.
+ */
+function submitNewData(): void {
+  const pages = getUnsubmittedPages(SUBMIT_QUERY_LIMIT);
+  const rows = getUnsubmittedRows(SUBMIT_QUERY_LIMIT);
+
+  if (pages.length === 0 && rows.length === 0) return;
+
+  // Build chunks from both pages and rows
+  const prepared: Array<{
+    id: string;
+    type: 'page' | 'row';
+    chunk: ReturnType<typeof pageToChunk>;
+  }> = [];
+  const emptyPageIds: string[] = [];
+  const emptyRowIds: string[] = [];
+
+  for (const page of pages) {
+    const chunk = pageToChunk(page);
+    if (chunk.content.length > 0) {
+      prepared.push({ id: page.id, type: 'page', chunk });
+    } else {
+      emptyPageIds.push(page.id);
+    }
+  }
+
+  for (const row of rows) {
+    const chunk = rowToChunk(row);
+    if (chunk.content.length > 0) {
+      prepared.push({ id: row.id, type: 'row', chunk });
+    } else {
+      emptyRowIds.push(row.id);
+    }
+  }
+
+  // Mark empty-content items as submitted so they aren't re-processed
+  if (emptyPageIds.length > 0) markPagesSubmitted(emptyPageIds);
+  if (emptyRowIds.length > 0) markRowsSubmitted(emptyRowIds);
+  if (prepared.length === 0) return;
+
+  // Split into size-limited batches
+  let batch: Array<ReturnType<typeof pageToChunk>> = [];
+  let batchPageIds: string[] = [];
+  let batchRowIds: string[] = [];
+  let batchBytes = 0;
+  let totalSubmitted = 0;
+
+  const flushBatch = (): boolean => {
+    if (batch.length === 0) return true;
+    try {
+      backend.submitData(batch, { dataSource: 'notion' });
+      if (batchPageIds.length > 0) markPagesSubmitted(batchPageIds);
+      if (batchRowIds.length > 0) markRowsSubmitted(batchRowIds);
+      totalSubmitted += batch.length;
+      return true;
+    } catch (error) {
+      console.error(`[notion] Failed to submit batch to backend: ${error}`);
+      return false;
+    } finally {
+      batch = [];
+      batchPageIds = [];
+      batchRowIds = [];
+      batchBytes = 0;
+    }
+  };
+
+  for (const { id, type, chunk } of prepared) {
+    const size = estimateChunkSize(chunk);
+
+    // If adding this chunk would exceed the limit, flush the current batch first
+    if (batch.length > 0 && batchBytes + size > MAX_BATCH_BYTES) {
+      if (!flushBatch()) return; // Stop on failure; remaining items retried next sync
+    }
+
+    batch.push(chunk);
+    if (type === 'page') batchPageIds.push(id);
+    else batchRowIds.push(id);
+    batchBytes += size;
+  }
+
+  // Flush remaining batch
+  flushBatch();
+
+  if (totalSubmitted > 0) {
+    console.log(`[notion] Submitted ${totalSubmitted} item(s) to backend`);
+  }
 }
 
 // ---------------------------------------------------------------------------
