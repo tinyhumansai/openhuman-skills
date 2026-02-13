@@ -298,7 +298,14 @@ export async function createBridgeAPIs(
       return realFetch(fullUrl, { ...fetchOpts, headers: mergedHeaders });
     },
     submitData: (
-      chunks: Array<{ title?: string; content: string; metadata?: Record<string, unknown> }>,
+      chunks: Array<{
+        title?: string;
+        content: string;
+        rawContent?: string;
+        labels?: string[];
+        entities?: Array<{ name: string; identifier: string; kind: string }>;
+        metadata?: Record<string, unknown>;
+      }>,
       options?: { dataSource?: string; metadata?: Record<string, unknown> },
     ): void => {
       if (!Array.isArray(chunks) || chunks.length === 0) {

@@ -48,7 +48,7 @@ function emitSyncProgress(message: string, progress: number): void {
 function parseLabels(labels: string): string[] {
   try {
     const parsed = JSON.parse(labels);
-    return Array.isArray(parsed) ? parsed : [];
+    return Array.isArray(parsed) ? parsed.map((l: string) => l.toLowerCase()) : [];
   } catch {
     return [];
   }
@@ -324,7 +324,7 @@ function emailToChunk(email: DatabaseEmail): DataSubmissionChunk {
     entities.push({
       name: email.sender_name || email.sender_email,
       identifier: email.sender_email,
-      kind: 'person',
+      kind: 'sender',
     });
   }
 
@@ -338,7 +338,7 @@ function emailToChunk(email: DatabaseEmail): DataSubmissionChunk {
       const name = match ? match[1].trim().replace(/^["']|["']$/g, '') : trimmed;
       // Avoid duplicating the sender
       if (addr !== email.sender_email) {
-        entities.push({ name, identifier: addr, kind: 'person' });
+        entities.push({ name, identifier: addr, kind: 'recipient' });
       }
     }
   }
@@ -351,7 +351,7 @@ function emailToChunk(email: DatabaseEmail): DataSubmissionChunk {
       const addr = match ? match[2].trim() : trimmed;
       const name = match ? match[1].trim().replace(/^["']|["']$/g, '') : trimmed;
       if (!entities.some(e => e.identifier === addr)) {
-        entities.push({ name, identifier: addr, kind: 'person' });
+        entities.push({ name, identifier: addr, kind: 'recipient_cc' });
       }
     }
   }
@@ -384,16 +384,13 @@ function submitNewEmails(): void {
   if (emails.length === 0) return;
 
   // Build chunks, keeping track of which email ID produced each one
-  const prepared: Array<{ id: string; chunk: ReturnType<typeof emailToChunk> }> = [];
+  const prepared: Array<{ id: string; chunk: DataSubmissionChunk }> = [];
   const emptyIds: string[] = [];
 
   for (const email of emails) {
     const chunk = emailToChunk(email);
-    if (chunk.content.length > 0) {
-      prepared.push({ id: email.id, chunk });
-    } else {
-      emptyIds.push(email.id);
-    }
+    if (chunk.content.length > 0) prepared.push({ id: email.id, chunk });
+    else emptyIds.push(email.id);
   }
 
   // Mark empty-content emails as submitted so they aren't re-processed
@@ -401,7 +398,7 @@ function submitNewEmails(): void {
   if (prepared.length === 0) return;
 
   // Split into size-limited batches
-  let batch: Array<ReturnType<typeof emailToChunk>> = [];
+  let batch: DataSubmissionChunk[] = [];
   let batchIds: string[] = [];
   let batchBytes = 0;
   let totalSubmitted = 0;
