@@ -1,5 +1,7 @@
 // Database helper functions for Gmail skill
 // CRUD operations for emails, threads, labels, and attachments
+// All queries are scoped by credential_id from the active integration.
+import { getGmailSkillState } from '../state';
 import type {
   DatabaseAttachment,
   DatabaseEmail,
@@ -11,6 +13,15 @@ import type {
   GmailThread,
 } from '../types';
 
+/** Return the active credential ID used to scope all DB rows. */
+function credId(): string {
+  return getGmailSkillState().config.credentialId;
+}
+
+// ---------------------------------------------------------------------------
+// Upserts
+// ---------------------------------------------------------------------------
+
 /**
  * Insert or update an email in the database.
  * Detects sensitive content (passwords, API keys, etc.) and flags it.
@@ -18,6 +29,7 @@ import type {
  * placeholder so credentials are never persisted locally.
  */
 export function upsertEmail(message: GmailMessage, redactSensitive = false): void {
+  const cid = credId();
   const now = Date.now();
   const headers = message.payload.headers;
 
@@ -55,12 +67,13 @@ export function upsertEmail(message: GmailMessage, redactSensitive = false): voi
 
   db.exec(
     `INSERT OR REPLACE INTO emails (
-      id, thread_id, subject, sender_email, sender_name, recipient_emails,
+      credential_id, id, thread_id, subject, sender_email, sender_name, recipient_emails,
       cc_emails, bcc_emails, date, snippet, body_text, body_html,
       is_read, is_important, is_starred, has_attachments, is_sensitive, labels,
       size_estimate, history_id, internal_date, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
+      cid,
       message.id,
       message.threadId,
       subject,
@@ -96,6 +109,7 @@ export function upsertEmail(message: GmailMessage, redactSensitive = false): voi
  * Insert or update a thread in the database
  */
 export function upsertThread(thread: GmailThread): void {
+  const cid = credId();
   const now = Date.now();
   const firstMessage = thread.messages[0];
   const lastMessage = thread.messages[thread.messages.length - 1];
@@ -131,10 +145,11 @@ export function upsertThread(thread: GmailThread): void {
 
   db.exec(
     `INSERT OR REPLACE INTO threads (
-      id, subject, snippet, message_count, participants, last_message_date,
+      credential_id, id, subject, snippet, message_count, participants, last_message_date,
       is_read, has_attachments, labels, history_id, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
+      cid,
       thread.id,
       subject,
       thread.snippet,
@@ -154,15 +169,17 @@ export function upsertThread(thread: GmailThread): void {
  * Insert or update a label in the database
  */
 export function upsertLabel(label: GmailLabel): void {
+  const cid = credId();
   const now = Date.now();
 
   db.exec(
     `INSERT OR REPLACE INTO labels (
-      id, name, type, message_list_visibility, label_list_visibility,
+      credential_id, id, name, type, message_list_visibility, label_list_visibility,
       messages_total, messages_unread, threads_total, threads_unread,
       color_text, color_background, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
+      cid,
       label.id,
       label.name,
       label.type,
@@ -179,12 +196,17 @@ export function upsertLabel(label: GmailLabel): void {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Queries
+// ---------------------------------------------------------------------------
+
 /**
  * Get emails with optional filtering
  */
 export function getEmails(options: EmailSearchOptions = {}): DatabaseEmail[] {
-  let sql = 'SELECT * FROM emails WHERE 1=1';
-  const params: unknown[] = [];
+  const cid = credId();
+  let sql = 'SELECT * FROM emails WHERE credential_id = ?';
+  const params: unknown[] = [cid];
 
   if (options.query) {
     sql += ' AND (subject LIKE ? OR sender_email LIKE ? OR snippet LIKE ?)';
@@ -214,8 +236,9 @@ export function getEmails(options: EmailSearchOptions = {}): DatabaseEmail[] {
  * Get threads with optional filtering
  */
 export function getThreads(options: EmailSearchOptions = {}): DatabaseThread[] {
-  let sql = 'SELECT * FROM threads WHERE 1=1';
-  const params: unknown[] = [];
+  const cid = credId();
+  let sql = 'SELECT * FROM threads WHERE credential_id = ?';
+  const params: unknown[] = [cid];
 
   if (options.query) {
     sql += ' AND (subject LIKE ? OR participants LIKE ? OR snippet LIKE ?)';
@@ -245,28 +268,41 @@ export function getThreads(options: EmailSearchOptions = {}): DatabaseThread[] {
  * Get all labels
  */
 export function getLabels(): DatabaseLabel[] {
-  return db.all('SELECT * FROM labels ORDER BY type, name', []) as unknown as DatabaseLabel[];
+  const cid = credId();
+  return db.all('SELECT * FROM labels WHERE credential_id = ? ORDER BY type, name', [
+    cid,
+  ]) as unknown as DatabaseLabel[];
 }
 
 /**
  * Get email by ID
  */
 export function getEmailById(id: string): DatabaseEmail | null {
-  return db.get('SELECT * FROM emails WHERE id = ?', [id]) as DatabaseEmail | null;
+  const cid = credId();
+  return db.get('SELECT * FROM emails WHERE credential_id = ? AND id = ?', [
+    cid,
+    id,
+  ]) as DatabaseEmail | null;
 }
 
 /**
  * Get thread by ID
  */
 export function getThreadById(id: string): DatabaseThread | null {
-  return db.get('SELECT * FROM threads WHERE id = ?', [id]) as DatabaseThread | null;
+  const cid = credId();
+  return db.get('SELECT * FROM threads WHERE credential_id = ? AND id = ?', [
+    cid,
+    id,
+  ]) as DatabaseThread | null;
 }
 
 /**
  * Get attachments for an email
  */
 export function getEmailAttachments(messageId: string): DatabaseAttachment[] {
-  return db.all('SELECT * FROM attachments WHERE message_id = ?', [
+  const cid = credId();
+  return db.all('SELECT * FROM attachments WHERE credential_id = ? AND message_id = ?', [
+    cid,
     messageId,
   ]) as unknown as DatabaseAttachment[];
 }
@@ -275,9 +311,11 @@ export function getEmailAttachments(messageId: string): DatabaseAttachment[] {
  * Update email read status
  */
 export function updateEmailReadStatus(emailId: string, isRead: boolean): void {
-  db.exec('UPDATE emails SET is_read = ?, updated_at = ? WHERE id = ?', [
+  const cid = credId();
+  db.exec('UPDATE emails SET is_read = ?, updated_at = ? WHERE credential_id = ? AND id = ?', [
     isRead ? 1 : 0,
     Date.now(),
+    cid,
     emailId,
   ]);
 }
@@ -288,9 +326,10 @@ export function updateEmailReadStatus(emailId: string, isRead: boolean): void {
  * Returns oldest-first so submissions are chronologically ordered.
  */
 export function getUnsubmittedEmails(limit = 500): DatabaseEmail[] {
+  const cid = credId();
   return db.all(
-    'SELECT * FROM emails WHERE backend_submitted = 0 AND is_sensitive = 0 ORDER BY date ASC LIMIT ?',
-    [limit]
+    'SELECT * FROM emails WHERE credential_id = ? AND backend_submitted = 0 AND is_sensitive = 0 ORDER BY date ASC LIMIT ?',
+    [cid, limit]
   ) as unknown as DatabaseEmail[];
 }
 
@@ -299,9 +338,10 @@ export function getUnsubmittedEmails(limit = 500): DatabaseEmail[] {
  * in the un-submitted queue. They are never actually sent to the backend.
  */
 export function markSensitiveAsSubmitted(): void {
+  const cid = credId();
   db.exec(
-    'UPDATE emails SET backend_submitted = 1 WHERE is_sensitive = 1 AND backend_submitted = 0',
-    []
+    'UPDATE emails SET backend_submitted = 1 WHERE credential_id = ? AND is_sensitive = 1 AND backend_submitted = 0',
+    [cid]
   );
 }
 
@@ -310,11 +350,15 @@ export function markSensitiveAsSubmitted(): void {
  */
 export function markEmailsSubmitted(ids: string[]): void {
   if (ids.length === 0) return;
-  // SQLite has a variable limit, batch in groups of 100
-  for (let i = 0; i < ids.length; i += 100) {
-    const batch = ids.slice(i, i + 100);
+  const cid = credId();
+  // SQLite has a variable limit, batch in groups of 99 (leaving 1 slot for credential_id)
+  for (let i = 0; i < ids.length; i += 99) {
+    const batch = ids.slice(i, i + 99);
     const placeholders = batch.map(() => '?').join(',');
-    db.exec(`UPDATE emails SET backend_submitted = 1 WHERE id IN (${placeholders})`, batch);
+    db.exec(
+      `UPDATE emails SET backend_submitted = 1 WHERE credential_id = ? AND id IN (${placeholders})`,
+      [cid, ...batch]
+    );
   }
 }
 
@@ -365,6 +409,10 @@ export function isSensitiveText(text: string): boolean {
   }
   return false;
 }
+
+// ---------------------------------------------------------------------------
+// Private helpers
+// ---------------------------------------------------------------------------
 
 /**
  * Helper: Extract email address from "Name <email>" format
@@ -429,6 +477,7 @@ function extractHtmlBody(message: GmailMessage): string | null {
  * Helper: Insert email attachments
  */
 function insertEmailAttachments(message: GmailMessage): void {
+  const cid = credId();
   const attachments: Array<{
     attachmentId: string;
     filename: string;
@@ -467,9 +516,9 @@ function insertEmailAttachments(message: GmailMessage): void {
   attachments.forEach(att => {
     db.exec(
       `INSERT OR REPLACE INTO attachments
-       (message_id, attachment_id, filename, mime_type, size, part_id)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [message.id, att.attachmentId, att.filename, att.mimeType, att.size, att.partId]
+       (credential_id, message_id, attachment_id, filename, mime_type, size, part_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [cid, message.id, att.attachmentId, att.filename, att.mimeType, att.size, att.partId]
     );
   });
 }
