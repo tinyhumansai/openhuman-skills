@@ -12,9 +12,12 @@ import type {
 } from '../types';
 
 /**
- * Insert or update an email in the database
+ * Insert or update an email in the database.
+ * Detects sensitive content (passwords, API keys, etc.) and flags it.
+ * When `redactSensitive` is true, body text/html are replaced with a
+ * placeholder so credentials are never persisted locally.
  */
-export function upsertEmail(message: GmailMessage): void {
+export function upsertEmail(message: GmailMessage, redactSensitive = false): void {
   const now = Date.now();
   const headers = message.payload.headers;
 
@@ -36,13 +39,27 @@ export function upsertEmail(message: GmailMessage): void {
   const isStarred = message.labelIds.includes('STARRED');
   const hasAttachments = hasEmailAttachments(message);
 
+  // Extract body content and check for sensitive information
+  let bodyText = extractTextBody(message);
+  let bodyHtml = extractHtmlBody(message);
+  const sensitive =
+    isSensitiveText(subject) ||
+    isSensitiveText(bodyText || '') ||
+    isSensitiveText(message.snippet);
+
+  // Redact body if the email is sensitive and the user hasn't opted in
+  if (sensitive && redactSensitive) {
+    bodyText = '[Content redacted — contains sensitive information]';
+    bodyHtml = null;
+  }
+
   db.exec(
     `INSERT OR REPLACE INTO emails (
       id, thread_id, subject, sender_email, sender_name, recipient_emails,
       cc_emails, bcc_emails, date, snippet, body_text, body_html,
-      is_read, is_important, is_starred, has_attachments, labels,
+      is_read, is_important, is_starred, has_attachments, is_sensitive, labels,
       size_estimate, history_id, internal_date, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       message.id,
       message.threadId,
@@ -54,12 +71,13 @@ export function upsertEmail(message: GmailMessage): void {
       bcc,
       date,
       message.snippet,
-      extractTextBody(message),
-      extractHtmlBody(message),
+      bodyText,
+      bodyHtml,
       isRead ? 1 : 0,
       isImportant ? 1 : 0,
       isStarred ? 1 : 0,
       hasAttachments ? 1 : 0,
+      sensitive ? 1 : 0,
       JSON.stringify(message.labelIds),
       message.sizeEstimate,
       message.historyId,
@@ -266,12 +284,25 @@ export function updateEmailReadStatus(emailId: string, isRead: boolean): void {
 
 /**
  * Get emails that have not yet been submitted to the backend.
+ * Excludes sensitive emails — those are never sent to the backend.
  * Returns oldest-first so submissions are chronologically ordered.
  */
 export function getUnsubmittedEmails(limit = 500): DatabaseEmail[] {
-  return db.all('SELECT * FROM emails WHERE backend_submitted = 0 ORDER BY date ASC LIMIT ?', [
-    limit,
-  ]) as unknown as DatabaseEmail[];
+  return db.all(
+    'SELECT * FROM emails WHERE backend_submitted = 0 AND is_sensitive = 0 ORDER BY date ASC LIMIT ?',
+    [limit]
+  ) as unknown as DatabaseEmail[];
+}
+
+/**
+ * Mark all sensitive emails as submitted so they don't accumulate
+ * in the un-submitted queue. They are never actually sent to the backend.
+ */
+export function markSensitiveAsSubmitted(): void {
+  db.exec(
+    'UPDATE emails SET backend_submitted = 1 WHERE is_sensitive = 1 AND backend_submitted = 0',
+    []
+  );
 }
 
 /**
@@ -285,6 +316,54 @@ export function markEmailsSubmitted(ids: string[]): void {
     const placeholders = batch.map(() => '?').join(',');
     db.exec(`UPDATE emails SET backend_submitted = 1 WHERE id IN (${placeholders})`, batch);
   }
+}
+
+// ---------------------------------------------------------------------------
+// Sensitive text detection
+// ---------------------------------------------------------------------------
+
+/** Patterns that indicate an email contains sensitive credentials or secrets. */
+const SENSITIVE_PATTERNS: RegExp[] = [
+  // Explicit password disclosures
+  /(?:password|passwd|pwd)\s*[:=]\s*\S+/i,
+  /your (?:new )?password (?:is|was|has been)\b/i,
+  /temporary password/i,
+  /one[- ]?time (?:password|passcode|code)\s*[:=]\s*\S+/i,
+
+  // API keys, tokens, secrets (key=value patterns with long values)
+  /(?:api[_-]?key|api[_-]?secret|access[_-]?token|secret[_-]?key|auth[_-]?token|bearer)\s*[:=]\s*\S{16,}/i,
+
+  // Private keys / certificates
+  /-----BEGIN (?:RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----/,
+  /-----BEGIN CERTIFICATE-----/,
+
+  // AWS / cloud credentials
+  /(?:AKIA|ABIA|ACCA|ASIA)[0-9A-Z]{16}/,
+  /aws[_-]?secret[_-]?access[_-]?key\s*[:=]\s*\S+/i,
+
+  // Credit card numbers (4 groups of 4 digits)
+  /\b(?:\d{4}[- ]?){3}\d{4}\b/,
+
+  // Social security numbers (US)
+  /\b\d{3}-\d{2}-\d{4}\b/,
+
+  // Seed phrases / recovery phrases (12+ common BIP-39 words in sequence)
+  /(?:abandon|ability|able|about|above|absent|absorb|abstract|absurd|abuse|access|accident)\b(?:\s+\w+){11,}/i,
+
+  // Generic "here are your credentials" patterns
+  /(?:credentials|login details)\s*(?:are|below|attached)/i,
+];
+
+/**
+ * Check if text contains sensitive information (passwords, API keys, etc.).
+ * Uses pattern matching — not a guarantee, but catches common cases.
+ */
+export function isSensitiveText(text: string): boolean {
+  if (!text) return false;
+  for (const pattern of SENSITIVE_PATTERNS) {
+    if (pattern.test(text)) return true;
+  }
+  return false;
 }
 
 /**

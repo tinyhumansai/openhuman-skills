@@ -123,6 +123,7 @@ export interface DatabaseEmail {
   has_attachments: number;
   labels: string;
   size_estimate: number;
+  is_sensitive: number;
   history_id: string;
   internal_date: string;
   created_at: number;
@@ -178,10 +179,22 @@ export interface SyncStatus {
   newEmailsCount: number;
   syncInProgress: boolean;
   nextSyncTime: number;
+  syncProgress: number;
+  syncProgressMessage: string;
 }
 
 export interface ApiError {
   code: number;
   message: string;
   errors?: Array<{ domain: string; reason: string; message: string }>;
+}
+
+export interface GmailSkillState {
+  config: SkillConfig;
+  profile: GmailProfile | null;
+  syncStatus: SyncStatus;
+  activeSessions: string[];
+  rateLimitRemaining: number;
+  rateLimitReset: number;
+  lastApiError: string | null;
 }

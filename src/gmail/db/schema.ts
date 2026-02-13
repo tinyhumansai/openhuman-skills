@@ -101,20 +101,24 @@ export function initializeGmailSchema(): void {
   db.exec('CREATE INDEX IF NOT EXISTS idx_threads_labels ON threads (labels)', []);
   db.exec('CREATE INDEX IF NOT EXISTS idx_attachments_message ON attachments (message_id)', []);
 
-  // Migration: add backend_submitted flag to emails table
-  // SQLite doesn't error on duplicate ALTER TABLE ADD COLUMN if we catch it,
-  // so we check pragma table_info first.
+  // Migrations — safely add columns that may not exist on older schemas.
+  // We check PRAGMA table_info once, then conditionally ALTER TABLE.
   const columns = db.all('PRAGMA table_info(emails)', []);
-  const hasBackendSubmitted = columns.some(
-    col => (col as { name: string }).name === 'backend_submitted'
-  );
-  if (!hasBackendSubmitted) {
+  const columnNames = new Set(columns.map(col => (col as { name: string }).name));
+
+  if (!columnNames.has('backend_submitted')) {
     db.exec('ALTER TABLE emails ADD COLUMN backend_submitted INTEGER NOT NULL DEFAULT 0', []);
     db.exec(
       'CREATE INDEX IF NOT EXISTS idx_emails_backend_submitted ON emails (backend_submitted)',
       []
     );
     console.log('[gmail] Added backend_submitted column to emails table');
+  }
+
+  if (!columnNames.has('is_sensitive')) {
+    db.exec('ALTER TABLE emails ADD COLUMN is_sensitive INTEGER NOT NULL DEFAULT 0', []);
+    db.exec('CREATE INDEX IF NOT EXISTS idx_emails_is_sensitive ON emails (is_sensitive)', []);
+    console.log('[gmail] Added is_sensitive column to emails table');
   }
 
   console.log('[gmail] Database schema initialized successfully');

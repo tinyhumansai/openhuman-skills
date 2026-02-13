@@ -31,8 +31,8 @@ async function init(): Promise<void> {
   }
 
   // Load sync status from persistent state
-  const lastSync = state.get('last_sync_time');
-  const lastHistoryId = state.get('last_history_id');
+  const lastSync = state.get('lastSyncTime');
+  const lastHistoryId = state.get('lastHistoryId');
   if (typeof lastSync === 'number') s.syncStatus.lastSyncTime = lastSync;
   if (typeof lastHistoryId === 'string') s.syncStatus.lastHistoryId = lastHistoryId;
 

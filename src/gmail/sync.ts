@@ -2,7 +2,13 @@
 // Fetches messages via Gmail API and upserts into local SQLite database.
 // Skips emails already in the local DB to avoid redundant API calls.
 import { gmailFetch } from './api';
-import { getEmailById, getUnsubmittedEmails, markEmailsSubmitted, upsertEmail } from './db/helpers';
+import {
+  getEmailById,
+  getUnsubmittedEmails,
+  markEmailsSubmitted,
+  markSensitiveAsSubmitted,
+  upsertEmail,
+} from './db/helpers';
 import { getGmailSkillState, publishSkillState } from './state';
 import type { DatabaseEmail, GmailMessage } from './types';
 
@@ -32,6 +38,24 @@ type SyncProgressCallback = (message: string, progress: number) => void;
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/** Emit sync progress to the frontend via state. */
+function emitSyncProgress(message: string, progress: number): void {
+  const s = getGmailSkillState();
+  s.syncStatus.syncProgress = progress;
+  s.syncStatus.syncProgressMessage = message;
+  state.setPartial({ syncProgress: progress, syncProgressMessage: message });
+}
+
+/** Parse labels from DB JSON string into an array. */
+function parseLabels(labels: string): string[] {
+  try {
+    const parsed = JSON.parse(labels);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
 
 /** Build a Gmail `after:` date string (YYYY/MM/DD) for N days ago. */
 function getDateNDaysAgo(days: number): string {
@@ -79,6 +103,7 @@ async function fetchMessagePage(
 
 /**
  * Fetch full message details and upsert into DB.
+ * Sensitive emails have their body redacted when `showSensitiveMessages` is off.
  * Returns true if a new email was synced, false if skipped (already exists).
  */
 async function syncMessage(msgId: string): Promise<boolean> {
@@ -87,7 +112,9 @@ async function syncMessage(msgId: string): Promise<boolean> {
 
   const msgResponse = await gmailFetch(`/users/me/messages/${msgId}`);
   if (msgResponse.success && msgResponse.data) {
-    upsertEmail(msgResponse.data as GmailMessage);
+    const s = getGmailSkillState();
+    const redact = !s.config.showSensitiveMessages;
+    upsertEmail(msgResponse.data as GmailMessage, redact);
     return true;
   }
   return false;
@@ -117,6 +144,7 @@ export async function performInitialSync(onProgress?: SyncProgressCallback): Pro
 
   const log = (msg: string, pct: number) => {
     console.log(`[gmail-sync] [${pct}%] ${msg}`);
+    emitSyncProgress(msg, pct);
     onProgress?.(msg, pct);
   };
 
@@ -153,12 +181,13 @@ export async function performInitialSync(onProgress?: SyncProgressCallback): Pro
     } while (pageToken && page < MAX_INITIAL_PAGES);
 
     // Mark initial sync as complete
-    state.set('initial_sync_completed', true);
-    state.set('last_sync_time', Date.now());
+    const now = Date.now();
+    state.set('initialSyncCompleted', true);
+    state.set('lastSyncTime', now);
 
-    s.syncStatus.lastSyncTime = Date.now();
+    s.syncStatus.lastSyncTime = now;
     s.syncStatus.newEmailsCount = newEmails;
-    s.syncStatus.nextSyncTime = Date.now() + s.config.syncIntervalMinutes * 60 * 1000;
+    s.syncStatus.nextSyncTime = now + s.config.syncIntervalMinutes * 60 * 1000;
 
     log(`Initial sync complete: ${newEmails} new emails, ${skipped} skipped`, 100);
 
@@ -171,8 +200,11 @@ export async function performInitialSync(onProgress?: SyncProgressCallback): Pro
   } catch (error) {
     console.error(`[gmail-sync] Initial sync failed: ${error}`);
     s.lastApiError = error instanceof Error ? error.message : String(error);
+    emitSyncProgress(`Sync failed: ${s.lastApiError}`, 0);
   } finally {
     s.syncStatus.syncInProgress = false;
+    s.syncStatus.syncProgress = 0;
+    s.syncStatus.syncProgressMessage = '';
     publishSkillState();
   }
 }
@@ -196,9 +228,9 @@ export async function onSync(): Promise<void> {
     return performInitialSync();
   }
 
-  console.log('[gmail-sync] Starting incremental sync...');
   s.syncStatus.syncInProgress = true;
   s.syncStatus.newEmailsCount = 0;
+  emitSyncProgress('Starting incremental sync...', 0);
   publishSkillState();
 
   try {
@@ -223,6 +255,8 @@ export async function onSync(): Promise<void> {
 
     do {
       page++;
+      emitSyncProgress(`Fetching page ${page}...`, Math.min(10 + page * 25, 80));
+
       const result = await fetchMessagePage(query, pageToken);
       if (result.messages.length === 0) break;
 
@@ -233,14 +267,21 @@ export async function onSync(): Promise<void> {
         if (isNew) newEmails++;
         else skipped++;
       }
+
+      emitSyncProgress(
+        `Page ${page}: ${newEmails} new, ${skipped} skipped`,
+        Math.min(20 + page * 25, 90)
+      );
     } while (pageToken && page < MAX_INCREMENTAL_PAGES);
 
     // Update sync state
-    state.set('last_sync_time', Date.now());
-    s.syncStatus.lastSyncTime = Date.now();
+    const now = Date.now();
+    state.set('lastSyncTime', now);
+    s.syncStatus.lastSyncTime = now;
     s.syncStatus.newEmailsCount = newEmails;
-    s.syncStatus.nextSyncTime = Date.now() + s.config.syncIntervalMinutes * 60 * 1000;
+    s.syncStatus.nextSyncTime = now + s.config.syncIntervalMinutes * 60 * 1000;
 
+    emitSyncProgress(`Sync complete: ${newEmails} new, ${skipped} skipped`, 100);
     console.log(`[gmail-sync] Incremental sync done: ${newEmails} new, ${skipped} skipped`);
 
     // Submit newly synced emails to backend for processing
@@ -252,8 +293,11 @@ export async function onSync(): Promise<void> {
   } catch (error) {
     console.error(`[gmail-sync] Incremental sync failed: ${error}`);
     s.lastApiError = error instanceof Error ? error.message : String(error);
+    emitSyncProgress(`Sync failed: ${s.lastApiError}`, 0);
   } finally {
     s.syncStatus.syncInProgress = false;
+    s.syncStatus.syncProgress = 0;
+    s.syncStatus.syncProgressMessage = '';
     publishSkillState();
   }
 }
@@ -262,8 +306,11 @@ export async function onSync(): Promise<void> {
 // Backend data submission
 // ---------------------------------------------------------------------------
 
-/** Max chunks per backend.submitData call (backend limit is 500). */
-const SUBMIT_BATCH_SIZE = 200;
+/** Approximate max payload size per socket message (~100 KB). */
+const MAX_BATCH_BYTES = 100 * 1024;
+
+/** Max emails to pull from DB per submission round. */
+const SUBMIT_QUERY_LIMIT = 500;
 
 /**
  * Build a DataSubmissionChunk from a database email row.
@@ -285,35 +332,89 @@ function emailToChunk(email: DatabaseEmail): {
       senderName: email.sender_name,
       recipientEmails: email.recipient_emails,
       date: email.date,
-      labels: email.labels,
+      labels: parseLabels(email.labels),
     },
   };
 }
 
+/** Rough byte size of a chunk (title + content + metadata overhead). */
+function estimateChunkSize(chunk: { title?: string; content: string; metadata?: Record<string, unknown> }): number {
+  // Content dominates size; add a flat overhead for metadata/JSON framing
+  return (chunk.title?.length || 0) + chunk.content.length + 256;
+}
+
 /**
  * Submit un-submitted emails to the backend for processing.
- * Reads emails where backend_submitted = 0, batches them into
- * backend.submitData() calls, and marks them as submitted.
+ * Batches chunks so each socket message stays under ~100 KB.
+ * Sensitive emails are marked as submitted so they don't accumulate.
  */
 function submitNewEmails(): void {
-  const emails = getUnsubmittedEmails(SUBMIT_BATCH_SIZE);
+  // Mark sensitive emails as "submitted" so they don't pile up.
+  markSensitiveAsSubmitted();
+
+  const emails = getUnsubmittedEmails(SUBMIT_QUERY_LIMIT);
   if (emails.length === 0) return;
 
-  const chunks = emails.map(emailToChunk).filter(c => c.content.length > 0);
+  // Build chunks, keeping track of which email ID produced each one
+  const prepared: Array<{ id: string; chunk: ReturnType<typeof emailToChunk> }> = [];
+  const emptyIds: string[] = [];
 
-  if (chunks.length === 0) {
-    // All emails had empty content — mark them submitted anyway to avoid re-processing
-    markEmailsSubmitted(emails.map(e => e.id));
-    return;
+  for (const email of emails) {
+    const chunk = emailToChunk(email);
+    if (chunk.content.length > 0) {
+      prepared.push({ id: email.id, chunk });
+    } else {
+      emptyIds.push(email.id);
+    }
   }
 
-  try {
-    backend.submitData(chunks, { dataSource: 'gmail' });
-    markEmailsSubmitted(emails.map(e => e.id));
-    console.log(`[gmail-sync] Submitted ${chunks.length} email(s) to backend`);
-  } catch (error) {
-    // Non-fatal: emails stay un-submitted and will be retried on next sync
-    console.error(`[gmail-sync] Failed to submit emails to backend: ${error}`);
+  // Mark empty-content emails as submitted so they aren't re-processed
+  if (emptyIds.length > 0) markEmailsSubmitted(emptyIds);
+  if (prepared.length === 0) return;
+
+  // Split into size-limited batches
+  let batch: Array<ReturnType<typeof emailToChunk>> = [];
+  let batchIds: string[] = [];
+  let batchBytes = 0;
+  let totalSubmitted = 0;
+
+  for (const { id, chunk } of prepared) {
+    const size = estimateChunkSize(chunk);
+
+    // If adding this chunk would exceed the limit, flush the current batch first
+    if (batch.length > 0 && batchBytes + size > MAX_BATCH_BYTES) {
+      try {
+        backend.submitData(batch, { dataSource: 'gmail' });
+        markEmailsSubmitted(batchIds);
+        totalSubmitted += batch.length;
+      } catch (error) {
+        console.error(`[gmail-sync] Failed to submit batch to backend: ${error}`);
+        return; // Stop on failure; remaining emails will be retried next sync
+      }
+      batch = [];
+      batchIds = [];
+      batchBytes = 0;
+    }
+
+    batch.push(chunk);
+    batchIds.push(id);
+    batchBytes += size;
+  }
+
+  // Flush remaining batch
+  if (batch.length > 0) {
+    try {
+      backend.submitData(batch, { dataSource: 'gmail' });
+      markEmailsSubmitted(batchIds);
+      totalSubmitted += batch.length;
+    } catch (error) {
+      console.error(`[gmail-sync] Failed to submit final batch to backend: ${error}`);
+      return;
+    }
+  }
+
+  if (totalSubmitted > 0) {
+    console.log(`[gmail-sync] Submitted ${totalSubmitted} email(s) to backend`);
   }
 }
 
@@ -323,11 +424,11 @@ function submitNewEmails(): void {
 
 /** Check if initial sync has been completed. */
 export function isSyncCompleted(): boolean {
-  return state.get('initial_sync_completed') === true;
+  return state.get('initialSyncCompleted') === true;
 }
 
 /** Get last sync timestamp (ms since epoch), or null if never synced. */
 export function getLastSyncTime(): number | null {
-  const value = state.get('last_sync_time');
+  const value = state.get('lastSyncTime');
   return typeof value === 'number' ? value : null;
 }
