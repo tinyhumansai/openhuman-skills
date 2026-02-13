@@ -2,6 +2,7 @@
 // CRUD operations for emails, threads, labels, and attachments
 // All queries are scoped by credential_id from the active integration.
 import { convert } from 'html-to-text';
+
 import { getGmailSkillState } from '../state';
 import type {
   DatabaseAttachment,

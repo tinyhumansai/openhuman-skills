@@ -311,37 +311,64 @@ const SUBMIT_QUERY_LIMIT = 500;
 
 /**
  * Build a DataSubmissionChunk from a database email row.
- * Prefers body_text, falls back to snippet. Includes key metadata.
+ * Prefers body_text, falls back to snippet. Includes key metadata,
+ * raw HTML content, structured labels, and person entities.
  */
-function emailToChunk(email: DatabaseEmail): {
-  title?: string;
-  content: string;
-  metadata?: Record<string, unknown>;
-} {
+function emailToChunk(email: DatabaseEmail): DataSubmissionChunk {
   const content = email.body_text || email.snippet || '';
+
+  // Build entities from sender + recipients
+  const entities: Array<{ name: string; identifier: string; kind: string }> = [];
+
+  if (email.sender_email) {
+    entities.push({
+      name: email.sender_name || email.sender_email,
+      identifier: email.sender_email,
+      kind: 'person',
+    });
+  }
+
+  if (email.recipient_emails) {
+    for (const raw of email.recipient_emails.split(',')) {
+      const trimmed = raw.trim();
+      if (!trimmed) continue;
+      // Parse "Name <email>" or bare email
+      const match = trimmed.match(/(.+?)\s*<([^>]+)>/);
+      const addr = match ? match[2].trim() : trimmed;
+      const name = match ? match[1].trim().replace(/^["']|["']$/g, '') : trimmed;
+      // Avoid duplicating the sender
+      if (addr !== email.sender_email) {
+        entities.push({ name, identifier: addr, kind: 'person' });
+      }
+    }
+  }
+
+  if (email.cc_emails) {
+    for (const raw of email.cc_emails.split(',')) {
+      const trimmed = raw.trim();
+      if (!trimmed) continue;
+      const match = trimmed.match(/(.+?)\s*<([^>]+)>/);
+      const addr = match ? match[2].trim() : trimmed;
+      const name = match ? match[1].trim().replace(/^["']|["']$/g, '') : trimmed;
+      if (!entities.some(e => e.identifier === addr)) {
+        entities.push({ name, identifier: addr, kind: 'person' });
+      }
+    }
+  }
+
   return {
     title: email.subject || undefined,
     content,
-    metadata: {
-      emailId: email.id,
-      threadId: email.thread_id,
-      senderEmail: email.sender_email,
-      senderName: email.sender_name,
-      recipientEmails: email.recipient_emails,
-      date: email.date,
-      labels: parseLabels(email.labels),
-    },
+    rawContent: email.body_html || undefined,
+    labels: parseLabels(email.labels),
+    entities: entities.length > 0 ? entities : undefined,
+    metadata: { emailId: email.id, threadId: email.thread_id, date: email.date },
   };
 }
 
-/** Rough byte size of a chunk (title + content + metadata overhead). */
-function estimateChunkSize(chunk: {
-  title?: string;
-  content: string;
-  metadata?: Record<string, unknown>;
-}): number {
-  // Content dominates size; add a flat overhead for metadata/JSON framing
-  return (chunk.title?.length || 0) + chunk.content.length + 256;
+/** Rough byte size of a chunk (title + content + rawContent + overhead). */
+function estimateChunkSize(chunk: DataSubmissionChunk): number {
+  return (chunk.title?.length || 0) + chunk.content.length + (chunk.rawContent?.length || 0) + 256;
 }
 
 /**

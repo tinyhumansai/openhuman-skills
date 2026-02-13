@@ -558,18 +558,58 @@ const MAX_BATCH_BYTES = 100 * 1024;
 const SUBMIT_QUERY_LIMIT = 500;
 
 /**
+ * Parse page_entities JSON into DataSubmissionEntity array.
+ * Resolves user names from the users table.
+ */
+function parsePageEntities(
+  page: LocalPage
+): Array<{ name: string; identifier: string; kind: string }> | undefined {
+  if (!page.page_entities) return undefined;
+
+  let raw: Array<{ id: string; type: string; name?: string; role: string }>;
+  try {
+    raw = JSON.parse(page.page_entities);
+  } catch {
+    return undefined;
+  }
+  if (!Array.isArray(raw) || raw.length === 0) return undefined;
+
+  const cid = getNotionSkillState().config.credentialId;
+  const entities: Array<{ name: string; identifier: string; kind: string }> = [];
+  const seen = new Set<string>();
+
+  for (const e of raw) {
+    if (seen.has(e.id)) continue;
+    seen.add(e.id);
+
+    let name = e.name;
+    if (!name && e.type === 'person') {
+      const user = db.get('SELECT name FROM users WHERE credential_id = ? AND id = ?', [
+        cid,
+        e.id,
+      ]) as { name: string } | null;
+      if (user) name = user.name;
+    }
+    entities.push({
+      name: name || e.id,
+      identifier: e.id,
+      kind: e.type || 'person',
+    });
+  }
+
+  return entities.length > 0 ? entities : undefined;
+}
+
+/**
  * Build a DataSubmissionChunk from a page row.
  * Uses content_text for the body content (extracted from page blocks).
  */
-function pageToChunk(page: LocalPage): {
-  title?: string;
-  content: string;
-  metadata?: Record<string, unknown>;
-} {
+function pageToChunk(page: LocalPage): DataSubmissionChunk {
   const content = page.content_text || '';
   return {
     title: page.title || undefined,
     content,
+    entities: parsePageEntities(page),
     metadata: {
       pageId: page.id,
       url: page.url,
@@ -584,16 +624,14 @@ function pageToChunk(page: LocalPage): {
 /**
  * Build a DataSubmissionChunk from a database row.
  * Uses properties_text for the body content (flattened property values).
+ * Sends properties_json as rawContent for downstream raw processing.
  */
-function rowToChunk(row: LocalDatabaseRow): {
-  title?: string;
-  content: string;
-  metadata?: Record<string, unknown>;
-} {
+function rowToChunk(row: LocalDatabaseRow): DataSubmissionChunk {
   const content = row.properties_text || '';
   return {
     title: row.title || undefined,
     content,
+    rawContent: row.properties_json || undefined,
     metadata: {
       rowId: row.id,
       databaseId: row.database_id,
@@ -604,13 +642,14 @@ function rowToChunk(row: LocalDatabaseRow): {
   };
 }
 
-/** Rough byte size of a chunk (title + content + metadata overhead). */
-function estimateChunkSize(chunk: {
-  title?: string;
-  content: string;
-  metadata?: Record<string, unknown>;
-}): number {
-  return (chunk.title?.length || 0) + chunk.content.length + 256;
+/** Rough byte size of a chunk (title + content + rawContent + overhead). */
+function estimateChunkSize(chunk: DataSubmissionChunk): number {
+  return (
+    (chunk.title?.length || 0) +
+    chunk.content.length +
+    (chunk.rawContent?.length || 0) +
+    256
+  );
 }
 
 /**

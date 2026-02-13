@@ -393,9 +393,7 @@ export function getPageStructuredEntities(
       const user = db.get('SELECT name FROM users WHERE credential_id = ? AND id = ?', [
         cid,
         entity.id,
-      ]) as {
-        name: string;
-      } | null;
+      ]) as { name: string } | null;
       if (user) entity.name = user.name;
     }
   }
@@ -571,9 +569,7 @@ export function getRowStructuredEntities(
       const user = db.get('SELECT name FROM users WHERE credential_id = ? AND id = ?', [
         cid,
         entity.id,
-      ]) as {
-        name: string;
-      } | null;
+      ]) as { name: string } | null;
       if (user) entity.name = user.name;
     }
   }
@@ -671,15 +667,13 @@ export function markSummariesSynced(ids: number[]): void {
  */
 export function getSummaryCounts(): { total: number; synced: number; pending: number } {
   const cid = credId();
-  const total = db.get('SELECT COUNT(*) as cnt FROM summaries WHERE credential_id = ?', [
-    cid,
-  ]) as { cnt: number } | null;
+  const total = db.get('SELECT COUNT(*) as cnt FROM summaries WHERE credential_id = ?', [cid]) as {
+    cnt: number;
+  } | null;
   const synced = db.get(
     'SELECT COUNT(*) as cnt FROM summaries WHERE credential_id = ? AND synced = 1',
     [cid]
-  ) as {
-    cnt: number;
-  } | null;
+  ) as { cnt: number } | null;
   return {
     total: total?.cnt || 0,
     synced: synced?.cnt || 0,
@@ -1128,12 +1122,9 @@ export function getEntityCounts(): {
   const databases = db.get('SELECT COUNT(*) as cnt FROM databases WHERE credential_id = ?', [
     cid,
   ]) as { cnt: number } | null;
-  const databaseRows = db.get(
-    'SELECT COUNT(*) as cnt FROM database_rows WHERE credential_id = ?',
-    [cid]
-  ) as {
-    cnt: number;
-  } | null;
+  const databaseRows = db.get('SELECT COUNT(*) as cnt FROM database_rows WHERE credential_id = ?', [
+    cid,
+  ]) as { cnt: number } | null;
   const users = db.get('SELECT COUNT(*) as cnt FROM users WHERE credential_id = ?', [cid]) as {
     cnt: number;
   } | null;
@@ -1144,21 +1135,14 @@ export function getEntityCounts(): {
   const pagesWithSummary = db.get(
     'SELECT COUNT(DISTINCT page_id) as cnt FROM summaries WHERE credential_id = ?',
     [cid]
-  ) as {
-    cnt: number;
-  } | null;
-  const summariesTotal = db.get(
-    'SELECT COUNT(*) as cnt FROM summaries WHERE credential_id = ?',
-    [cid]
-  ) as {
-    cnt: number;
-  } | null;
+  ) as { cnt: number } | null;
+  const summariesTotal = db.get('SELECT COUNT(*) as cnt FROM summaries WHERE credential_id = ?', [
+    cid,
+  ]) as { cnt: number } | null;
   const summariesPending = db.get(
     'SELECT COUNT(*) as cnt FROM summaries WHERE credential_id = ? AND synced = 0',
     [cid]
-  ) as {
-    cnt: number;
-  } | null;
+  ) as { cnt: number } | null;
 
   return {
     pages: pages?.cnt || 0,

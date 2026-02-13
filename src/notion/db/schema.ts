@@ -164,7 +164,10 @@ export function initializeNotionSchema(): void {
     'CREATE INDEX IF NOT EXISTS idx_pages_last_edited ON pages(credential_id, last_edited_time DESC)',
     []
   );
-  db.exec('CREATE INDEX IF NOT EXISTS idx_pages_parent ON pages(credential_id, parent_type, parent_id)', []);
+  db.exec(
+    'CREATE INDEX IF NOT EXISTS idx_pages_parent ON pages(credential_id, parent_type, parent_id)',
+    []
+  );
   db.exec('CREATE INDEX IF NOT EXISTS idx_pages_archived ON pages(credential_id, archived)', []);
   db.exec(
     'CREATE INDEX IF NOT EXISTS idx_databases_last_edited ON databases(credential_id, last_edited_time DESC)',
@@ -178,7 +181,10 @@ export function initializeNotionSchema(): void {
     'CREATE INDEX IF NOT EXISTS idx_db_rows_last_edited ON database_rows(credential_id, last_edited_time DESC)',
     []
   );
-  db.exec('CREATE INDEX IF NOT EXISTS idx_summaries_synced ON summaries(credential_id, synced)', []);
+  db.exec(
+    'CREATE INDEX IF NOT EXISTS idx_summaries_synced ON summaries(credential_id, synced)',
+    []
+  );
   db.exec(
     'CREATE INDEX IF NOT EXISTS idx_summaries_page_id ON summaries(credential_id, page_id)',
     []
