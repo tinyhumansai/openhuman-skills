@@ -2,9 +2,9 @@
 // Fetches messages via Gmail API and upserts into local SQLite database.
 // Skips emails already in the local DB to avoid redundant API calls.
 import { gmailFetch } from './api';
-import { getEmailById, getSyncState, setSyncState, upsertEmail } from './db/helpers';
+import { getEmailById, getSyncState, getUnsubmittedEmails, markEmailsSubmitted, setSyncState, upsertEmail } from './db/helpers';
 import { getGmailSkillState, publishSkillState } from './state';
-import type { GmailMessage } from './types';
+import type { DatabaseEmail, GmailMessage } from './types';
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -162,6 +162,9 @@ export async function performInitialSync(onProgress?: SyncProgressCallback): Pro
 
     log(`Initial sync complete: ${newEmails} new emails, ${skipped} skipped`, 100);
 
+    // Submit newly synced emails to backend for processing
+    submitNewEmails();
+
     if (newEmails > 0 && s.config.notifyOnNewEmails) {
       platform.notify('Gmail Sync Complete', `Synchronized ${newEmails} new emails`);
     }
@@ -240,6 +243,9 @@ export async function onSync(): Promise<void> {
 
     console.log(`[gmail-sync] Incremental sync done: ${newEmails} new, ${skipped} skipped`);
 
+    // Submit newly synced emails to backend for processing
+    submitNewEmails();
+
     if (newEmails > 0 && s.config.notifyOnNewEmails) {
       platform.notify('New Gmail Emails', `${newEmails} new emails synced`);
     }
@@ -249,6 +255,63 @@ export async function onSync(): Promise<void> {
   } finally {
     s.syncStatus.syncInProgress = false;
     publishSkillState();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Backend data submission
+// ---------------------------------------------------------------------------
+
+/** Max chunks per backend.submitData call (backend limit is 500). */
+const SUBMIT_BATCH_SIZE = 200;
+
+/**
+ * Build a DataSubmissionChunk from a database email row.
+ * Prefers body_text, falls back to snippet. Includes key metadata.
+ */
+function emailToChunk(email: DatabaseEmail): { title?: string; content: string; metadata?: Record<string, unknown> } {
+  const content = email.body_text || email.snippet || '';
+  return {
+    title: email.subject || undefined,
+    content,
+    metadata: {
+      emailId: email.id,
+      threadId: email.thread_id,
+      senderEmail: email.sender_email,
+      senderName: email.sender_name,
+      recipientEmails: email.recipient_emails,
+      date: email.date,
+      labels: email.labels,
+    },
+  };
+}
+
+/**
+ * Submit un-submitted emails to the backend for processing.
+ * Reads emails where backend_submitted = 0, batches them into
+ * backend.submitData() calls, and marks them as submitted.
+ */
+function submitNewEmails(): void {
+  const emails = getUnsubmittedEmails(SUBMIT_BATCH_SIZE);
+  if (emails.length === 0) return;
+
+  const chunks = emails
+    .map(emailToChunk)
+    .filter((c) => c.content.length > 0);
+
+  if (chunks.length === 0) {
+    // All emails had empty content — mark them submitted anyway to avoid re-processing
+    markEmailsSubmitted(emails.map((e) => e.id));
+    return;
+  }
+
+  try {
+    backend.submitData(chunks, { dataSource: 'gmail' });
+    markEmailsSubmitted(emails.map((e) => e.id));
+    console.log(`[gmail-sync] Submitted ${chunks.length} email(s) to backend`);
+  } catch (error) {
+    // Non-fatal: emails stay un-submitted and will be retried on next sync
+    console.error(`[gmail-sync] Failed to submit emails to backend: ${error}`);
   }
 }
 

@@ -128,6 +128,23 @@ declare const model: {
   summarize(text: string, options?: ModelSummarizeOptions): string;
 };
 
+/** Authenticated backend API client. */
+declare const backend: {
+  /** Backend API URL. */
+  readonly url: string;
+  /** Current JWT auth token. */
+  readonly token: string;
+  /** Make an authenticated HTTP request to the backend. */
+  fetch(path: string, options?: NetFetchOptions): NetFetchResponse;
+  /**
+   * Submit data chunks to the backend for processing (summarization).
+   * Uses the real-time socket connection (fire-and-forget).
+   * @param chunks - Data chunks (max 500, each content max 1MB).
+   * @param options - Data source identifier and optional metadata.
+   */
+  submitData(chunks: DataSubmissionChunk[], options?: DataSubmissionOptions): void;
+};
+
 interface ModelGenerateOptions {
   maxTokens?: number;
   temperature?: number;
@@ -135,6 +152,17 @@ interface ModelGenerateOptions {
 
 interface ModelSummarizeOptions {
   maxTokens?: number;
+}
+
+interface DataSubmissionChunk {
+  title?: string;
+  content: string;
+  metadata?: Record<string, unknown>;
+}
+
+interface DataSubmissionOptions {
+  dataSource?: string;
+  metadata?: Record<string, unknown>;
 }
 
 // ---------------------------------------------------------------------------

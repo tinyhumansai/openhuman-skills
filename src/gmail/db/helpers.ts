@@ -265,6 +265,33 @@ export function updateEmailReadStatus(emailId: string, isRead: boolean): void {
 }
 
 /**
+ * Get emails that have not yet been submitted to the backend.
+ * Returns oldest-first so submissions are chronologically ordered.
+ */
+export function getUnsubmittedEmails(limit = 500): DatabaseEmail[] {
+  return db.all(
+    'SELECT * FROM emails WHERE backend_submitted = 0 ORDER BY date ASC LIMIT ?',
+    [limit]
+  ) as unknown as DatabaseEmail[];
+}
+
+/**
+ * Mark a batch of emails as submitted to the backend.
+ */
+export function markEmailsSubmitted(ids: string[]): void {
+  if (ids.length === 0) return;
+  // SQLite has a variable limit, batch in groups of 100
+  for (let i = 0; i < ids.length; i += 100) {
+    const batch = ids.slice(i, i + 100);
+    const placeholders = batch.map(() => '?').join(',');
+    db.exec(
+      `UPDATE emails SET backend_submitted = 1 WHERE id IN (${placeholders})`,
+      batch
+    );
+  }
+}
+
+/**
  * Get sync state value
  */
 export function getSyncState(key: string): string | null {
