@@ -55,9 +55,7 @@ export function upsertEmail(message: GmailMessage, redactSensitive = false): voi
   let bodyText = extractTextBody(message);
   let bodyHtml = extractHtmlBody(message);
   const sensitive =
-    isSensitiveText(subject) ||
-    isSensitiveText(bodyText || '') ||
-    isSensitiveText(message.snippet);
+    isSensitiveText(subject) || isSensitiveText(bodyText || '') || isSensitiveText(message.snippet);
 
   // Redact body if the email is sensitive and the user hasn't opted in
   if (sensitive && redactSensitive) {

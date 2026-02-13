@@ -100,10 +100,7 @@ export function initializeGmailSchema(): void {
   );
 
   // Create indexes for performance
-  db.exec(
-    'CREATE INDEX IF NOT EXISTS idx_emails_cred ON emails (credential_id)',
-    []
-  );
+  db.exec('CREATE INDEX IF NOT EXISTS idx_emails_cred ON emails (credential_id)', []);
   db.exec(
     'CREATE INDEX IF NOT EXISTS idx_emails_thread_id ON emails (credential_id, thread_id)',
     []
@@ -115,19 +112,13 @@ export function initializeGmailSchema(): void {
   );
   db.exec('CREATE INDEX IF NOT EXISTS idx_emails_labels ON emails (credential_id, labels)', []);
   db.exec('CREATE INDEX IF NOT EXISTS idx_emails_is_read ON emails (credential_id, is_read)', []);
-  db.exec(
-    'CREATE INDEX IF NOT EXISTS idx_threads_cred ON threads (credential_id)',
-    []
-  );
+  db.exec('CREATE INDEX IF NOT EXISTS idx_threads_cred ON threads (credential_id)', []);
   db.exec(
     'CREATE INDEX IF NOT EXISTS idx_threads_date ON threads (credential_id, last_message_date DESC)',
     []
   );
   db.exec('CREATE INDEX IF NOT EXISTS idx_threads_labels ON threads (credential_id, labels)', []);
-  db.exec(
-    'CREATE INDEX IF NOT EXISTS idx_attachments_cred ON attachments (credential_id)',
-    []
-  );
+  db.exec('CREATE INDEX IF NOT EXISTS idx_attachments_cred ON attachments (credential_id)', []);
   db.exec(
     'CREATE INDEX IF NOT EXISTS idx_attachments_message ON attachments (credential_id, message_id)',
     []
@@ -177,10 +168,7 @@ export function initializeGmailSchema(): void {
     const attColNames = new Set(attCols.map(col => (col as { name: string }).name));
     if (!attColNames.has('credential_id')) {
       db.exec("ALTER TABLE attachments ADD COLUMN credential_id TEXT NOT NULL DEFAULT ''", []);
-      db.exec(
-        'CREATE INDEX IF NOT EXISTS idx_attachments_cred ON attachments (credential_id)',
-        []
-      );
+      db.exec('CREATE INDEX IF NOT EXISTS idx_attachments_cred ON attachments (credential_id)', []);
     }
 
     console.log('[gmail] Added credential_id column to all tables');

@@ -338,7 +338,11 @@ function emailToChunk(email: DatabaseEmail): {
 }
 
 /** Rough byte size of a chunk (title + content + metadata overhead). */
-function estimateChunkSize(chunk: { title?: string; content: string; metadata?: Record<string, unknown> }): number {
+function estimateChunkSize(chunk: {
+  title?: string;
+  content: string;
+  metadata?: Record<string, unknown>;
+}): number {
   // Content dominates size; add a flat overhead for metadata/JSON framing
   return (chunk.title?.length || 0) + chunk.content.length + 256;
 }
