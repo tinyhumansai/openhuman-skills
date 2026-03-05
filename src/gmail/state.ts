@@ -9,7 +9,7 @@ const skillState: GmailSkillState = {
     userEmail: '',
     syncEnabled: true,
     syncIntervalMinutes: 15,
-    maxEmailsPerSync: 100,
+    maxEmailsPerSync: 10,
     notifyOnNewEmails: true,
     showSensitiveMessages: false,
   },

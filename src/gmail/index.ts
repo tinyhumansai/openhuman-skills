@@ -1,5 +1,7 @@
 // Gmail skill main entry point
 // Gmail integration with OAuth bridge, email management, and real-time sync
+import { loadGmailProfile } from './api/helpers';
+import { upsertEmail } from './db/helpers';
 import { initializeGmailSchema } from './db/schema';
 import { getGmailSkillState } from './state';
 import { onSync } from './sync';
@@ -142,7 +144,10 @@ async function start(): Promise<void> {
 
   if (credential && s.config.syncEnabled) {
     // Load Gmail profile
-    loadGmailProfile();
+    await loadGmailProfile();
+
+    // Load emails to get email summaries
+    await performSync();
 
     // Publish initial state
     publishSkillState();
@@ -193,7 +198,10 @@ async function onOAuthComplete(args: OAuthCompleteArgs): Promise<OAuthCompleteRe
   state.set('config', s.config);
 
   // Load profile to get user email
-  loadGmailProfile();
+  await loadGmailProfile();
+
+  // Load emails to get email summaries
+  await performSync();
 
   publishSkillState();
   console.log(`[gmail] Connected as ${s.config.userEmail || args.accountLabel || 'unknown'}`);
@@ -338,31 +346,6 @@ async function onSetOption(args: { name: string; value: unknown }): Promise<void
   publishSkillState();
 }
 
-// ---------------------------------------------------------------------------
-// Skill export
-// ---------------------------------------------------------------------------
-
-async function loadGmailProfile(): Promise<void> {
-  const response = await gmailFetch('/users/me/profile');
-  if (response.success) {
-    const s = getGmailSkillState();
-    s.profile = {
-      emailAddress: response.data.emailAddress,
-      messagesTotal: response.data.messagesTotal || 0,
-      threadsTotal: response.data.threadsTotal || 0,
-      historyId: response.data.historyId,
-    };
-
-    if (!s.config.userEmail) {
-      s.config.userEmail = response.data.emailAddress;
-      state.set('config', s.config);
-    }
-
-    console.log(`[gmail] Profile loaded for ${s.profile.emailAddress}`);
-    publishSkillState();
-  }
-}
-
 /**
  * Perform email sync using the OAuth credential (access token) via gmailFetch/oauth.fetch.
  * Called on start(), onOAuthComplete(), and by cron; frontend does not run its own sync.
@@ -377,9 +360,6 @@ async function performSync(): Promise<void> {
   console.log('[gmail] Starting email sync...');
   s.syncStatus.syncInProgress = true;
   s.syncStatus.newEmailsCount = 0;
-
-  const upsertEmail = (globalThis as { upsertEmail?: (msg: any) => void }).upsertEmail;
-  if (!upsertEmail) return;
 
   try {
     // Get recent messages
