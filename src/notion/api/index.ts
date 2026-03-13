@@ -35,7 +35,7 @@ import {
   getDataSource,
   listAllDatabases,
   queryDataSource,
-  resolveDataSourceId,
+  resolveDataSourceIdCompat,
   updateDatabase,
 } from './databases';
 import { archivePage, createPage, getPage, getPageContent, updatePage } from './pages';
@@ -51,7 +51,7 @@ export interface NotionApi {
   getPageContent(pageId: string, pageSize?: number): Promise<ListBlockChildrenResponse>;
   // databases
   getDatabase(databaseId: string): Promise<GetDatabaseResponse>;
-  resolveDataSourceId(databaseId: string): string;
+  resolveDataSourceId(databaseId: string): Promise<string>;
   getDataSource(dataSourceId: string): Promise<GetDataSourceResponse>;
   queryDataSource(
     databaseId: string,
@@ -88,7 +88,7 @@ export const notionApi: NotionApi = {
   getPageContent,
   // databases
   getDatabase,
-  resolveDataSourceId,
+  resolveDataSourceId: resolveDataSourceIdCompat,
   getDataSource,
   queryDataSource,
   createDatabase,

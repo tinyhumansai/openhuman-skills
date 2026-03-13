@@ -10,6 +10,13 @@ const MAX_RETRIES = 3;
 /** Default backoff in ms when Retry-After header is absent. */
 const DEFAULT_BACKOFF_MS = 5_000;
 
+/** Notion API version constants */
+const LEGACY_API_VERSION = '2022-06-28';
+const CURRENT_API_VERSION = '2025-09-03';
+
+/** Cached API version preference to avoid repeated detection */
+let cachedApiVersion: string | null = null;
+
 /** Async sleep for backoff waits. */
 function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -17,7 +24,7 @@ function sleep(ms: number): Promise<void> {
 
 export async function notionFetch<T>(
   endpoint: string,
-  options: { method?: string; body?: unknown } = {}
+  options: { method?: string; body?: unknown; apiVersion?: string } = {}
 ): Promise<T> {
   const credential = oauth.getCredential();
   if (!credential) throw new Error('Notion not connected. Please complete setup first.');
@@ -25,6 +32,9 @@ export async function notionFetch<T>(
   const method = options.method || 'GET';
   const path = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
   const useAccessToken = !!credential.accessToken;
+
+  // Use provided API version or detect/cache the best version
+  const apiVersion = options.apiVersion || (await detectApiVersion());
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     let response: { status: number; headers: Record<string, string>; body: string };
@@ -38,7 +48,7 @@ export async function notionFetch<T>(
         headers: {
           Authorization: `Bearer ${credential.accessToken as string}`,
           'Content-Type': 'application/json',
-          'Notion-Version': '2022-06-28',
+          'Notion-Version': apiVersion,
         },
         body: options.body ? JSON.stringify(options.body) : undefined,
         timeout: 30,
@@ -100,6 +110,12 @@ export function formatApiError(error: unknown): string {
   }
   if (message.includes('403')) {
     return 'Forbidden. The integration may not have access to this resource.';
+  }
+  if (message.includes('invalid_version')) {
+    return 'API version not supported. The skill will automatically retry with a compatible version.';
+  }
+  if (message.includes('data_source')) {
+    return 'Database access issue. This may be due to API version compatibility. The skill will attempt to resolve this automatically.';
   }
   if (
     message.toLowerCase().includes('insufficient permissions') ||
@@ -299,4 +315,138 @@ export async function fetchBlockTreeText(blockId: string, maxDepth: number = 2):
   }
 
   return lines.join('\n');
+}
+
+// ---------------------------------------------------------------------------
+// API Version Detection and Data Source Helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Detect which Notion API version to use by attempting to call the current API.
+ * Falls back to legacy version if the new API fails.
+ * Caches the result to avoid repeated detection.
+ */
+export async function detectApiVersion(): Promise<string> {
+  if (cachedApiVersion) {
+    return cachedApiVersion;
+  }
+
+  const credential = oauth.getCredential();
+  if (!credential) {
+    // Default to legacy version if not authenticated
+    cachedApiVersion = LEGACY_API_VERSION;
+    return cachedApiVersion;
+  }
+
+  try {
+    // Try to make a simple request with the current API version
+    const useAccessToken = !!credential.accessToken;
+    let response: { status: number; headers: Record<string, string>; body: string };
+
+    if (useAccessToken) {
+      response = await net.fetch('https://api.notion.com/v1/users?page_size=1', {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${credential.accessToken as string}`,
+          'Content-Type': 'application/json',
+          'Notion-Version': CURRENT_API_VERSION,
+        },
+        timeout: 10, // Quick timeout for version detection
+      });
+    } else {
+      response = await oauth.fetch('/v1/users?page_size=1', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Notion-Version': CURRENT_API_VERSION,
+        },
+        timeout: 10,
+      });
+    }
+
+    if (response.status < 400) {
+      // Current API version works
+      cachedApiVersion = CURRENT_API_VERSION;
+      console.log(`[notion][helpers] Using API version: ${CURRENT_API_VERSION}`);
+    } else {
+      // Fall back to legacy version
+      cachedApiVersion = LEGACY_API_VERSION;
+      console.log(`[notion][helpers] Falling back to API version: ${LEGACY_API_VERSION}`);
+    }
+  } catch (error) {
+    // On any error, fall back to legacy version
+    cachedApiVersion = LEGACY_API_VERSION;
+    console.log(`[notion][helpers] Error detecting API version, using legacy: ${LEGACY_API_VERSION}`, error);
+  }
+
+  return cachedApiVersion;
+}
+
+/**
+ * Reset the cached API version (useful for testing or when credentials change)
+ */
+export function resetApiVersionCache(): void {
+  cachedApiVersion = null;
+}
+
+/**
+ * Resolve a database ID to its data source ID for the new API.
+ * Returns the original ID if it's already a data source ID or if using legacy API.
+ * This handles backward compatibility during the API transition.
+ */
+export async function resolveDataSourceId(databaseId: string): Promise<string> {
+  const apiVersion = await detectApiVersion();
+
+  // If using legacy API, return the original database ID
+  if (apiVersion === LEGACY_API_VERSION) {
+    return databaseId;
+  }
+
+  try {
+    // Try to get the database and extract data source ID
+    const response = await notionFetch<{
+      data_sources?: Array<{ id: string }>;
+      id: string;
+    }>(`/databases/${databaseId}`, { apiVersion });
+
+    if (response.data_sources && response.data_sources.length > 0) {
+      // Use the first data source ID
+      const dataSourceId = response.data_sources[0].id;
+      console.log(`[notion][helpers] Resolved database ${databaseId} to data source ${dataSourceId}`);
+      return dataSourceId;
+    }
+
+    // No data sources found, use original ID
+    console.log(`[notion][helpers] No data sources found for database ${databaseId}, using original ID`);
+    return databaseId;
+  } catch (error) {
+    // If the database call fails, the ID might already be a data source ID
+    // or the database doesn't exist. Return the original ID.
+    console.log(`[notion][helpers] Error resolving data source for ${databaseId}, using original ID:`, error);
+    return databaseId;
+  }
+}
+
+/**
+ * Get the appropriate query endpoint based on API version and ID type.
+ * Returns the correct endpoint for database/data source queries.
+ */
+export async function getQueryEndpoint(databaseId: string): Promise<string> {
+  const apiVersion = await detectApiVersion();
+
+  if (apiVersion === LEGACY_API_VERSION) {
+    return `/databases/${databaseId}/query`;
+  }
+
+  // For new API, resolve to data source ID and use data sources endpoint
+  const dataSourceId = await resolveDataSourceId(databaseId);
+  return `/data_sources/${dataSourceId}/query`;
+}
+
+/**
+ * Check if the current API version supports multi-source databases
+ */
+export async function supportsMultiSourceDatabases(): Promise<boolean> {
+  const apiVersion = await detectApiVersion();
+  return apiVersion === CURRENT_API_VERSION;
 }

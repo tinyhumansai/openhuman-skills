@@ -9,6 +9,7 @@ import type {
 } from '@notionhq/client/build/src/api-endpoints';
 
 import { apiFetch } from './client';
+import { detectApiVersion, resolveDataSourceId, getQueryEndpoint, formatApiError } from '../helpers';
 
 export function getDatabase(databaseId: string): Promise<GetDatabaseResponse> {
   return apiFetch<GetDatabaseResponse>(`/databases/${databaseId}`);
@@ -17,17 +18,14 @@ export function getDatabase(databaseId: string): Promise<GetDatabaseResponse> {
 /**
  * Resolve a database container ID to its first data_source ID.
  * This is needed because the Notion API 2025-09-03 uses data_sources
- * for queries and schema access. Throws if no data sources exist.
+ * for queries and schema access. Now uses the helper function for better compatibility.
  */
-export function resolveDataSourceId(databaseId: string): string {
-  const dbContainer = getDatabase(databaseId) as unknown as {
-    data_sources?: Array<{ id: string }>;
-  };
-  const dataSources = dbContainer?.data_sources;
-  if (!dataSources || dataSources.length === 0) {
-    throw new Error('Database has no data sources. Share the database with your integration.');
+export async function resolveDataSourceIdCompat(databaseId: string): Promise<string> {
+  try {
+    return await resolveDataSourceId(databaseId);
+  } catch (error) {
+    throw new Error(`Database has no data sources or is not accessible. Share the database with your integration. ${formatApiError(error)}`);
   }
-  return dataSources[0].id;
 }
 
 export function getDataSource(dataSourceId: string): Promise<GetDataSourceResponse> {
@@ -35,42 +33,111 @@ export function getDataSource(dataSourceId: string): Promise<GetDataSourceRespon
 }
 
 /**
- * Query a database. Resolves the data_source_id internally.
- * If the given ID is already a data_source ID (e.g. from search results),
- * it queries directly instead of trying to resolve via /databases/.
+ * Query a database with automatic API version detection and endpoint resolution.
+ * Handles both legacy database queries and new data source queries seamlessly.
+ * Provides automatic fallback for maximum compatibility.
  */
-export function queryDataSource(
+export async function queryDataSource(
   databaseId: string,
   body?: Record<string, unknown>
 ): Promise<QueryDataSourceResponse> {
-  let dataSourceId: string;
+  const apiVersion = await detectApiVersion();
+  const requestBody = body || {};
+
   try {
-    dataSourceId = resolveDataSourceId(databaseId);
-  } catch {
-    // The ID may already be a data_source ID (search returns data_source objects
-    // whose IDs are stored directly). Use it as-is.
-    dataSourceId = databaseId;
+    // Get the appropriate endpoint for the current API version
+    const endpoint = await getQueryEndpoint(databaseId);
+
+    console.log(`[notion][databases] Querying ${endpoint} with API version ${apiVersion}`);
+
+    return await apiFetch<QueryDataSourceResponse>(endpoint, {
+      method: 'POST',
+      body: requestBody,
+      apiVersion,
+    });
+  } catch (error) {
+    const errorMessage = String(error);
+
+    // If new API fails with version/endpoint errors, try legacy fallback
+    if (apiVersion !== '2022-06-28' &&
+        (errorMessage.includes('invalid_version') ||
+         errorMessage.includes('data_source') ||
+         errorMessage.includes('404'))) {
+
+      console.log(`[notion][databases] New API failed, attempting legacy fallback for database ${databaseId}`);
+
+      try {
+        return await apiFetch<QueryDataSourceResponse>(`/databases/${databaseId}/query`, {
+          method: 'POST',
+          body: requestBody,
+          apiVersion: '2022-06-28',
+        });
+      } catch (fallbackError) {
+        console.error(`[notion][databases] Legacy fallback also failed:`, fallbackError);
+        throw new Error(`Failed to query database with both new and legacy APIs: ${formatApiError(fallbackError)}`);
+      }
+    }
+
+    // Re-throw the original error if it's not a version-related issue
+    throw error;
   }
-  return apiFetch<QueryDataSourceResponse>(`/data_sources/${dataSourceId}/query`, {
+}
+
+/**
+ * Create a database with API version compatibility.
+ */
+export async function createDatabase(body: Record<string, unknown>): Promise<CreateDatabaseResponse> {
+  const apiVersion = await detectApiVersion();
+  return apiFetch<CreateDatabaseResponse>('/databases', {
     method: 'POST',
-    body: body || {},
+    body,
+    apiVersion
   });
 }
 
-export function createDatabase(body: Record<string, unknown>): Promise<CreateDatabaseResponse> {
-  return apiFetch<CreateDatabaseResponse>('/databases', { method: 'POST', body });
-}
-
-export function updateDatabase(
+/**
+ * Update a database with API version compatibility.
+ */
+export async function updateDatabase(
   databaseId: string,
   body: Record<string, unknown>
 ): Promise<UpdateDatabaseResponse> {
-  return apiFetch<UpdateDatabaseResponse>(`/databases/${databaseId}`, { method: 'PATCH', body });
+  const apiVersion = await detectApiVersion();
+  return apiFetch<UpdateDatabaseResponse>(`/databases/${databaseId}`, {
+    method: 'PATCH',
+    body,
+    apiVersion
+  });
 }
 
-export function listAllDatabases(pageSize: number = 20): Promise<SearchResponse> {
-  return apiFetch<SearchResponse>('/search', {
-    method: 'POST',
-    body: { filter: { property: 'object', value: 'data_source' }, page_size: pageSize },
-  });
+/**
+ * List all databases with API version compatibility.
+ * Uses data_source filter for new API, database filter for legacy API.
+ */
+export async function listAllDatabases(pageSize: number = 20): Promise<SearchResponse> {
+  const apiVersion = await detectApiVersion();
+
+  // Use appropriate filter based on API version
+  const filter = apiVersion === '2025-09-03'
+    ? { property: 'object', value: 'data_source' }
+    : { property: 'object', value: 'database' };
+
+  try {
+    return await apiFetch<SearchResponse>('/search', {
+      method: 'POST',
+      body: { filter, page_size: pageSize },
+      apiVersion,
+    });
+  } catch (error) {
+    // If new API search fails, try legacy database search
+    if (apiVersion !== '2022-06-28') {
+      console.log(`[notion][databases] New API search failed, trying legacy database search`);
+      return await apiFetch<SearchResponse>('/search', {
+        method: 'POST',
+        body: { filter: { property: 'object', value: 'database' }, page_size: pageSize },
+        apiVersion: '2022-06-28',
+      });
+    }
+    throw error;
+  }
 }
