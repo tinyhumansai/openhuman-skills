@@ -2,6 +2,7 @@
   "id": "telegram",
   "name": "Telegram",
   "version": "2.0.0",
+  "ignoreInProduction": true,
   "description": "Telegram integration via TDLib — 50+ tools for chats, messages, contacts, admin, and search.",
   "auto_start": true,
   "platforms": ["windows", "macos", "linux", "android", "ios"],
