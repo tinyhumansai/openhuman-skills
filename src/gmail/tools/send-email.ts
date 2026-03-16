@@ -3,6 +3,7 @@
 import { gmailFetch } from '../api';
 import { upsertEmail } from '../db/helpers';
 import { getGmailSkillState } from '../state';
+import type { GmailMessage } from '../types';
 
 export const sendEmailTool: ToolDefinition = {
   name: 'send-email',
@@ -193,7 +194,7 @@ export const sendEmailTool: ToolDefinition = {
       }
 
       // Send email
-      const response = await gmailFetch('/users/me/messages/send', {
+      const response = await gmailFetch<GmailMessage>('/users/me/messages/send', {
         method: 'POST',
         body: JSON.stringify(requestBody),
       });
@@ -205,22 +206,26 @@ export const sendEmailTool: ToolDefinition = {
         });
       }
 
-      const sentMessage = response.data;
+      const sentMessage = response.data as GmailMessage | undefined;
 
       // Update local database if email was sent successfully
-      if (sentMessage.id) {
-        const getEmailResponse = await gmailFetch(`/users/me/messages/${sentMessage.id}`);
-        if (getEmailResponse.success) upsertEmail(getEmailResponse.data);
+      if (sentMessage && sentMessage.id) {
+        const getEmailResponse = await gmailFetch<GmailMessage>(
+          `/users/me/messages/${sentMessage.id}`
+        );
+        if (getEmailResponse.success && getEmailResponse.data) {
+          upsertEmail(getEmailResponse.data as GmailMessage);
+        }
       }
 
       return JSON.stringify({
         success: true,
-        message_id: sentMessage.id,
-        thread_id: sentMessage.threadId,
-        label_ids: sentMessage.labelIds,
+        message_id: sentMessage?.id ?? null,
+        thread_id: sentMessage?.threadId ?? null,
+        label_ids: sentMessage?.labelIds ?? [],
         to: formatEmailAddresses(to),
         subject,
-        size_estimate: sentMessage.sizeEstimate || 0,
+        size_estimate: sentMessage?.sizeEstimate || 0,
       });
     } catch (error) {
       return JSON.stringify({
