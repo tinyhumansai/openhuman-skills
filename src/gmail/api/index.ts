@@ -105,16 +105,13 @@ export async function gmailFetch<T = unknown>(
       }
 
       if (response.status >= 200 && response.status < 300) {
-        const data: T | undefined = response.body
-          ? (JSON.parse(response.body) as T)
-          : undefined;
+        const data: T | undefined = response.body ? (JSON.parse(response.body) as T) : undefined;
         s.lastApiError = null;
         return { success: true, data };
       } else {
-        const error: ApiError =
-          response.body
-            ? (JSON.parse(response.body) as ApiError)
-            : { code: response.status, message: 'API request failed' };
+        const error: ApiError = response.body
+          ? (JSON.parse(response.body) as ApiError)
+          : { code: response.status, message: 'API request failed' };
         s.lastApiError = error.message || `HTTP ${response.status}`;
         return { success: false, error };
       }

@@ -1,6 +1,6 @@
 import { getGmailSkillState } from '../state';
-import { gmailFetch } from './index';
 import type { GmailProfile } from '../types';
+import { gmailFetch } from './index';
 
 export async function loadGmailProfile(): Promise<void> {
   const response = await gmailFetch<GmailProfile>('/users/me/profile', { timeout: 10 });
