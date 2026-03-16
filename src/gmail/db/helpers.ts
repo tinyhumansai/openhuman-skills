@@ -311,6 +311,22 @@ export function getLabels(): DatabaseLabel[] {
 /**
  * Get email by ID
  */
+export function getEmailCount(): number {
+  const cid = credId();
+  const row = db.get('SELECT COUNT(*) as count FROM emails WHERE credential_id = ?', [cid]) as {
+    count: number;
+  } | null;
+  return row?.count ?? 0;
+}
+
+/** Returns true if an email with the given ID exists in the local DB (no row data fetched). */
+export function emailExists(id: string): boolean {
+  const cid = credId();
+  return (
+    db.get('SELECT 1 FROM emails WHERE credential_id = ? AND id = ? LIMIT 1', [cid, id]) !== null
+  );
+}
+
 export function getEmailById(id: string): DatabaseEmail | null {
   const cid = credId();
   return db.get('SELECT * FROM emails WHERE credential_id = ? AND id = ?', [

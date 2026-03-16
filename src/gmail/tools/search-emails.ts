@@ -4,6 +4,7 @@ import { isSensitiveText } from '../../helpers';
 import { gmailFetch } from '../api';
 import { upsertEmail } from '../db/helpers';
 import { getGmailSkillState } from '../state';
+import type { GmailMessage } from '../types';
 
 export const searchEmailsTool: ToolDefinition = {
   name: 'search-emails',
@@ -61,20 +62,20 @@ export const searchEmailsTool: ToolDefinition = {
       }
 
       // Search messages
-      const searchResponse = await gmailFetch(`/users/me/messages?${params.join('&')}`);
+      const searchResponse = await gmailFetch<{
+        messages?: Array<{ id: string; threadId: string }>;
+        nextPageToken?: string;
+        resultSizeEstimate: number;
+      }>(`/users/me/messages?${params.join('&')}`);
 
-      if (!searchResponse.success) {
+      if (!searchResponse.success || !searchResponse.data) {
         return JSON.stringify({
           success: false,
           error: searchResponse.error?.message || 'Search failed',
         });
       }
 
-      const searchResults = searchResponse.data as {
-        messages?: Array<{ id: string; threadId: string }>;
-        nextPageToken?: string;
-        resultSizeEstimate: number;
-      };
+      const searchResults = searchResponse.data;
 
       if (!searchResults.messages || searchResults.messages.length === 0) {
         return JSON.stringify({
@@ -94,10 +95,12 @@ export const searchEmailsTool: ToolDefinition = {
         const batch = searchResults.messages.slice(i, i + batchSize);
 
         for (const msgRef of batch) {
-          const msgResponse = await gmailFetch(`/users/me/messages/${msgRef.id}?format=metadata`);
+          const msgResponse = await gmailFetch<GmailMessage>(
+            `/users/me/messages/${msgRef.id}?format=metadata`
+          );
 
-          if (msgResponse.success) {
-            const message = msgResponse.data;
+          if (msgResponse.success && msgResponse.data) {
+            const message = msgResponse.data as GmailMessage;
             const headers = message.payload?.headers || [];
 
             // Extract key headers

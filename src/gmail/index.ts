@@ -1,6 +1,7 @@
 // Gmail skill main entry point
 // Gmail integration with OAuth bridge; sync sends list API response (id + threadId) to frontend.
 import { loadGmailProfile } from './api/helpers';
+import { getEmailCount } from './db/helpers';
 import { initializeGmailSchema } from './db/schema';
 import { getGmailSkillState } from './state';
 import { onSync } from './sync';
@@ -35,6 +36,7 @@ async function init(): Promise<void> {
   const lastHistoryId = state.get('lastHistoryId');
   if (typeof lastSync === 'number') s.syncStatus.lastSyncTime = lastSync;
   if (typeof lastHistoryId === 'string') s.syncStatus.lastHistoryId = lastHistoryId;
+  s.syncStatus.totalEmails = getEmailCount();
 
   const isConnected = !!oauth.getCredential();
   console.log(`[gmail] Initialized. Connected: ${isConnected}`);

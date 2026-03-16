@@ -4,6 +4,7 @@ import { isSensitiveText } from '../../helpers';
 import { gmailFetch } from '../api';
 import { getEmailById, upsertEmail } from '../db/helpers';
 import { getGmailSkillState } from '../state';
+import type { GmailMessage } from '../types';
 
 export const getEmailTool: ToolDefinition = {
   name: 'get-email',
@@ -46,7 +47,9 @@ export const getEmailTool: ToolDefinition = {
       const params: string[] = [];
       params.push(`format=${encodeURIComponent(format)}`);
 
-      const response = await gmailFetch(`/users/me/messages/${messageId}?${params.join('&')}`);
+      const response = await gmailFetch<GmailMessage>(
+        `/users/me/messages/${messageId}?${params.join('&')}`
+      );
 
       if (!response.success) {
         return JSON.stringify({
@@ -55,7 +58,7 @@ export const getEmailTool: ToolDefinition = {
         });
       }
 
-      const message = response.data;
+      const message = response.data as GmailMessage;
 
       // Parse email content
       const headers = message.payload?.headers || [];
