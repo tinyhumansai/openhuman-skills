@@ -56,7 +56,7 @@ export async function gmailFetch<T = unknown>(
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
-      console.log('[gmail] gmailFetch:', options.method || 'GET', url);
+      console.log('[gmail] gmailFetch:', options.method || 'GET', url, accessToken);
       const response = await net.fetch(url, {
         method: options.method || 'GET',
         headers: {

@@ -4,7 +4,7 @@ import { isSensitiveText } from '../../helpers';
 import { upsertEmail } from '../db/helpers';
 import { getGmailSkillState } from '../state';
 import type { GmailMessage } from '../types';
-import { gmailNetFetch } from './_helpers';
+import { gmailFetch } from '../api/index';
 
 export const searchEmailsTool: ToolDefinition = {
   name: 'search-emails',
@@ -55,7 +55,7 @@ export const searchEmailsTool: ToolDefinition = {
       }
 
       // Search messages
-      const searchResponse = await gmailNetFetch<{
+      const searchResponse = await gmailFetch<{
         messages?: Array<{ id: string; threadId: string }>;
         nextPageToken?: string;
         resultSizeEstimate: number;
@@ -88,7 +88,7 @@ export const searchEmailsTool: ToolDefinition = {
         const batch = searchResults.messages.slice(i, i + batchSize);
 
         for (const msgRef of batch) {
-          const msgResponse = await gmailNetFetch<GmailMessage>(
+          const msgResponse = await gmailFetch<GmailMessage>(
             `/users/me/messages/${msgRef.id}?format=metadata`
           );
 

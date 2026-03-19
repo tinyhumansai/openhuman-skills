@@ -1,7 +1,8 @@
 // Tool: gmail-get-profile
 // Get Gmail user profile information.
 import { getGmailSkillState } from '../state';
-import { gmailNetFetch } from './_helpers';
+import { gmailFetch } from '../api/index';
+import { GmailProfile } from '../types';
 
 export const getProfileTool: ToolDefinition = {
   name: 'get-profile',
@@ -17,11 +18,9 @@ export const getProfileTool: ToolDefinition = {
     },
     required: [],
   },
-  async execute(args: Record<string, unknown>): Promise<string> {
+  async execute(_args: Record<string, unknown>): Promise<string> {
     try {
-      const accessToken = args.accessToken as string | undefined;
-
-      const response = await gmailNetFetch('/users/me/profile', { accessToken });
+      const response = await gmailFetch<GmailProfile>('/users/me/profile');
 
       if (!response.success) {
         return JSON.stringify({

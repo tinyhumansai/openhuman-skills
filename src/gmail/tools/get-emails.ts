@@ -3,8 +3,8 @@
 import { isSensitiveText } from '../../helpers';
 import { upsertEmail } from '../db/helpers';
 import { getGmailSkillState } from '../state';
-import { gmailNetFetch } from './_helpers';
-import type { GmailFetchResult } from './_helpers';
+import { GmailApiResponse, gmailFetch } from '../api/index';
+import { GmailMessage } from '../types';
 
 function buildListParams(args: Record<string, unknown>): string[] {
   const params: string[] = [];
@@ -115,12 +115,14 @@ export const getEmailsTool: ToolDefinition = {
     required: [],
   },
   async execute(args: Record<string, unknown>): Promise<string> {
-    const accessToken = args.accessToken as string | undefined;
-
     const params = buildListParams(args);
     const listEndpoint = `/users/me/messages?${params.join('&')}`;
 
-    const listResponse: GmailFetchResult = await gmailNetFetch(listEndpoint, { accessToken });
+    const listResponse: GmailApiResponse<{
+      messages?: Array<{ id: string; threadId: string }>;
+      nextPageToken?: string;
+      resultSizeEstimate: number;
+    }> = await gmailFetch(listEndpoint);
 
     if (!listResponse.success) {
       return JSON.stringify({
@@ -150,7 +152,7 @@ export const getEmailsTool: ToolDefinition = {
 
     for (const msgRef of messageList.messages) {
       const msgEndpoint = `/users/me/messages/${msgRef.id}?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=Date`;
-      const msgResponse: GmailFetchResult = await gmailNetFetch(msgEndpoint, { accessToken });
+      const msgResponse: GmailApiResponse<GmailMessage> = await gmailFetch(msgEndpoint);
 
       if (msgResponse.success && msgResponse.data) {
         const message = msgResponse.data as any;
