@@ -4,10 +4,8 @@
 import { notionApi } from './api/index';
 import type { LocalDatabaseRow, LocalPage } from './db/helpers';
 import {
-  getDatabaseById,
-  getDatabaseRowById,
-  getEntityCounts,
-  getLocalDatabases,
+  getDatabaseById, // getDatabaseRowById,
+  getEntityCounts, // getLocalDatabases,
   getPageById,
   getPagesNeedingContent,
   getUnsubmittedPages,
@@ -17,8 +15,7 @@ import {
   markRowsSubmitted,
   markSummariesSynced,
   updatePageContent,
-  upsertDatabase,
-  upsertDatabaseRow,
+  upsertDatabase, // upsertDatabaseRow,
   upsertPage,
   upsertUser,
 } from './db/helpers';
@@ -59,8 +56,8 @@ export function performSync(): void {
       await syncSearchItems();
 
       // Phase 2.5: Sync database rows (time-budgeted to avoid Rust async timeout)
-      console.log('[notion] Sync phase 2.5: database rows');
-      await syncDatabaseRows(startTime, CONTENT_SYNC_TIME_BUDGET_MS);
+      // console.log('[notion] Sync phase 2.5: database rows');
+      // await syncDatabaseRows(startTime, CONTENT_SYNC_TIME_BUDGET_MS);
 
       // Phase 3: Sync page content (block text, time-budgeted to avoid Rust async timeout)
       if (s.config.contentSyncEnabled) {
@@ -100,9 +97,9 @@ export function performSync(): void {
 
       s.syncStatus.totalDatabaseRows = counts.databaseRows;
 
-      console.log(
-        `[notion] Sync complete in ${durationMs}ms — ${counts.pages} pages, ${counts.databases} databases, ${counts.databaseRows} db rows`
-      );
+      // console.log(
+      //   `[notion] Sync complete in ${durationMs}ms — ${counts.pages} pages, ${counts.databases} databases, ${counts.databaseRows} db rows`
+      // );
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       s.syncStatus.lastSyncError = errorMsg;
@@ -320,7 +317,7 @@ async function syncDataSources(
 // ---------------------------------------------------------------------------
 
 /** Max rows to sync per database per sync cycle */
-const MAX_ROWS_PER_DATABASE = 200;
+// const MAX_ROWS_PER_DATABASE = 200;
 
 /**
  * Maximum ms for phases 3+ (content sync, submit) to prevent the Rust async
@@ -329,124 +326,124 @@ const MAX_ROWS_PER_DATABASE = 200;
  */
 const CONTENT_SYNC_TIME_BUDGET_MS = 18_000;
 
-async function syncDatabaseRows(startTime: number, budgetMs: number): Promise<void> {
-  // Get all locally synced databases
-  const databases = getLocalDatabases({ limit: 100 }) as Array<{ id: string; title: string }>;
+// async function syncDatabaseRows(startTime: number, budgetMs: number): Promise<void> {
+//   // Get all locally synced databases
+//   const databases = getLocalDatabases({ limit: 100 }) as Array<{ id: string; title: string }>;
 
-  if (databases.length === 0) {
-    console.log('[notion] No databases to sync rows for');
-    return;
-  }
+//   if (databases.length === 0) {
+//     console.log('[notion] No databases to sync rows for');
+//     return;
+//   }
 
-  const s = getNotionSkillState();
-  const lastSyncTime = s.syncStatus.lastSyncTime;
-  const isFirstSync = lastSyncTime === 0;
+//   const s = getNotionSkillState();
+//   const lastSyncTime = s.syncStatus.lastSyncTime;
+//   const isFirstSync = lastSyncTime === 0;
 
-  let totalRowCount = 0;
-  let totalSkipped = 0;
-  let totalErrors = 0;
-  let dbsSynced = 0;
+//   let totalRowCount = 0;
+//   let totalSkipped = 0;
+//   let totalErrors = 0;
+//   let dbsSynced = 0;
 
-  for (const database of databases) {
-    if (Date.now() - startTime > budgetMs) {
-      console.log('[notion] DB row sync time budget reached, deferring remaining databases');
-      break;
-    }
-    try {
-      let startCursor: string | undefined;
-      let hasMore = true;
-      let rowCount = 0;
-      let skipped = 0;
-      let fetched = 0;
-      let reachedOldRows = false;
+//   for (const database of databases) {
+//     if (Date.now() - startTime > budgetMs) {
+//       console.log('[notion] DB row sync time budget reached, deferring remaining databases');
+//       break;
+//     }
+//     try {
+//       let startCursor: string | undefined;
+//       let hasMore = true;
+//       let rowCount = 0;
+//       let skipped = 0;
+//       let fetched = 0;
+//       let reachedOldRows = false;
 
-      while (hasMore && fetched < MAX_ROWS_PER_DATABASE && !reachedOldRows) {
-        const body: Record<string, unknown> = {
-          page_size: 100,
-          sorts: [{ timestamp: 'last_edited_time', direction: 'descending' }],
-        };
-        if (startCursor) body.start_cursor = startCursor;
+//       while (hasMore && fetched < MAX_ROWS_PER_DATABASE && !reachedOldRows) {
+//         const body: Record<string, unknown> = {
+//           page_size: 100,
+//           sorts: [{ timestamp: 'last_edited_time', direction: 'descending' }],
+//         };
+//         if (startCursor) body.start_cursor = startCursor;
 
-        let result: { results: Record<string, unknown>[]; has_more: boolean; next_cursor?: string };
-        try {
-          result = (await notionApi.queryDataSource(database.id, body)) as typeof result;
-        } catch (e) {
-          const msg = e instanceof Error ? e.message : String(e);
-          // Skip databases we can't query (permissions, deleted, etc.)
-          if (
-            msg.includes('404') ||
-            msg.includes('403') ||
-            msg.includes('no data sources') ||
-            msg.includes('Could not find')
-          ) {
-            console.warn(
-              `[notion] Cannot query database "${database.title}" (${database.id}): ${msg}`
-            );
-            break;
-          }
-          throw e;
-        }
+//         let result: { results: Record<string, unknown>[]; has_more: boolean; next_cursor?: string };
+//         try {
+//           result = (await notionApi.queryDataSource(database.id, body)) as typeof result;
+//         } catch (e) {
+//           const msg = e instanceof Error ? e.message : String(e);
+//           // Skip databases we can't query (permissions, deleted, etc.)
+//           if (
+//             msg.includes('404') ||
+//             msg.includes('403') ||
+//             msg.includes('no data sources') ||
+//             msg.includes('Could not find')
+//           ) {
+//             console.warn(
+//               `[notion] Cannot query database "${database.title}" (${database.id}): ${msg}`
+//             );
+//             break;
+//           }
+//           throw e;
+//         }
 
-        for (const row of result.results) {
-          const rec = row as Record<string, unknown>;
-          const lastEdited = rec.last_edited_time as string;
+//         for (const row of result.results) {
+//           const rec = row as Record<string, unknown>;
+//           const lastEdited = rec.last_edited_time as string;
 
-          // Incremental: stop when we reach rows older than last sync
-          if (!isFirstSync && lastEdited) {
-            const editedMs = new Date(lastEdited).getTime();
-            if (editedMs <= lastSyncTime) {
-              reachedOldRows = true;
-              break;
-            }
-          }
+//           // Incremental: stop when we reach rows older than last sync
+//           if (!isFirstSync && lastEdited) {
+//             const editedMs = new Date(lastEdited).getTime();
+//             if (editedMs <= lastSyncTime) {
+//               reachedOldRows = true;
+//               break;
+//             }
+//           }
 
-          // Skip if unchanged
-          const existing = getDatabaseRowById?.(rec.id as string);
-          if (existing && existing.last_edited_time === lastEdited) {
-            skipped++;
-            fetched++;
-            continue;
-          }
+//           // Skip if unchanged
+//           const existing = getDatabaseRowById?.(rec.id as string);
+//           if (existing && existing.last_edited_time === lastEdited) {
+//             skipped++;
+//             fetched++;
+//             continue;
+//           }
 
-          try {
-            upsertDatabaseRow(rec, database.id);
-            rowCount++;
-          } catch (e) {
-            console.error(
-              `[notion] Failed to upsert row ${rec.id} in database ${database.id}: ${e}`
-            );
-            totalErrors++;
-          }
-          fetched++;
-        }
+//           try {
+//             upsertDatabaseRow(rec, database.id);
+//             rowCount++;
+//           } catch (e) {
+//             console.error(
+//               `[notion] Failed to upsert row ${rec.id} in database ${database.id}: ${e}`
+//             );
+//             totalErrors++;
+//           }
+//           fetched++;
+//         }
 
-        hasMore = result.has_more;
-        startCursor = result.next_cursor as string | undefined;
-      }
+//         hasMore = result.has_more;
+//         startCursor = result.next_cursor as string | undefined;
+//       }
 
-      totalRowCount += rowCount;
-      totalSkipped += skipped;
-      if (rowCount > 0 || skipped > 0) dbsSynced++;
+//       totalRowCount += rowCount;
+//       totalSkipped += skipped;
+//       if (rowCount > 0 || skipped > 0) dbsSynced++;
 
-      if (rowCount > 0) {
-        console.log(
-          `[notion] Database "${database.title}": ${rowCount} rows synced${skipped > 0 ? `, ${skipped} unchanged` : ''}`
-        );
-      }
-    } catch (e) {
-      console.error(
-        `[notion] Failed to sync rows for database "${database.title}" (${database.id}): ${e}`
-      );
-      totalErrors++;
-    }
-  }
+//       if (rowCount > 0) {
+//         console.log(
+//           `[notion] Database "${database.title}": ${rowCount} rows synced${skipped > 0 ? `, ${skipped} unchanged` : ''}`
+//         );
+//       }
+//     } catch (e) {
+//       console.error(
+//         `[notion] Failed to sync rows for database "${database.title}" (${database.id}): ${e}`
+//       );
+//       totalErrors++;
+//     }
+//   }
 
-  const skipMsg = totalSkipped > 0 ? ` (${totalSkipped} unchanged)` : '';
-  const errorMsg = totalErrors > 0 ? `, ${totalErrors} errors` : '';
-  console.log(
-    `[notion] Database row sync: ${totalRowCount} rows across ${dbsSynced} databases${skipMsg}${errorMsg}`
-  );
-}
+//   const skipMsg = totalSkipped > 0 ? ` (${totalSkipped} unchanged)` : '';
+//   const errorMsg = totalErrors > 0 ? `, ${totalErrors} errors` : '';
+//   console.log(
+//     `[notion] Database row sync: ${totalRowCount} rows across ${dbsSynced} databases${skipMsg}${errorMsg}`
+//   );
+// }
 
 // ---------------------------------------------------------------------------
 // Phase 3: Sync page content (block text extraction)
@@ -715,7 +712,7 @@ async function submitNewData(): Promise<void> {
     const rowIds = batchRowIds.slice();
     const batchLength = batch.length;
     try {
-      await backend.submitData(batch, { dataSource: 'notion' });
+      // await backend.submitData(batch, { dataSource: 'notion' });
       if (pageIds.length > 0) markPagesSubmitted(pageIds);
       if (rowIds.length > 0) markRowsSubmitted(rowIds);
       totalSubmitted += batchLength;
