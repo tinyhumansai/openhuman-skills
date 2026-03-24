@@ -17,7 +17,7 @@ Start by looking at [`src/example-skill/`](src/example-skill/) — it demonstrat
 
 ```bash
 # Fork and clone
-git clone https://github.com/YOUR-USERNAME/alphahuman-skills.git
+git clone https://github.com/YOUR-USERNAME/openhuman-skills.git
 cd alphahuman-skills
 
 # Install dependencies
