@@ -708,6 +708,13 @@ export async function createBridgeAPIs(
     net,
     platform,
     backend,
+    memory: {
+      insert: (metadata: Record<string, unknown>): boolean => {
+        const requestId = liveCrypto.randomUUID();
+        socketApi.emit('memory:insert', { requestId, metadata });
+        return true;
+      },
+    },
     socket: socketApi,
     state: stateApi,
     data,

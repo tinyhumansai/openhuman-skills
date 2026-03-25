@@ -1,11 +1,14 @@
 // Notion sync engine
 // Periodically downloads pages, databases, users, and page content from Notion
 // into local SQLite for fast local querying.
+import { syncIntegrationMetadata } from '../shared/integration-metadata';
 import { notionApi } from './api/index';
 import type { LocalDatabaseRow, LocalPage } from './db/helpers';
 import {
   getDatabaseById, // getDatabaseRowById,
   getEntityCounts, // getLocalDatabases,
+  getLocalPages,
+  getLocalSummaries,
   getPageById,
   getPagesNeedingContent,
   getUnsubmittedPages,
@@ -97,6 +100,9 @@ export function performSync(): void {
 
       s.syncStatus.totalDatabaseRows = counts.databaseRows;
 
+      // Persist sync snapshot into memory during the sync lifecycle itself.
+      insertNotionMemorySnapshot();
+
       // console.log(
       //   `[notion] Sync complete in ${durationMs}ms — ${counts.pages} pages, ${counts.databases} databases, ${counts.databaseRows} db rows`
       // );
@@ -110,6 +116,112 @@ export function performSync(): void {
       publishSyncState();
     }
   })();
+}
+
+function insertNotionMemorySnapshot(): void {
+  const now = Date.now();
+  const nowIso = new Date(now).toISOString();
+  const s = getNotionSkillState();
+  const profile = (state.get('profile') as Record<string, unknown> | null) ?? null;
+  if (!profile?.id) return;
+
+  const pages = getLocalPages({ limit: 100 }).map(p => ({
+    id: p.id,
+    title: p.title,
+    url: p.url,
+    icon: p.icon,
+    parent_type: p.parent_type,
+    parent_id: p.parent_id,
+    created_by_id: p.created_by_id,
+    last_edited_by_id: p.last_edited_by_id,
+    created_time: p.created_time,
+    last_edited_time: p.last_edited_time,
+    content_synced_at: p.content_synced_at,
+    archived: p.archived === 1,
+    synced_at: p.synced_at,
+    has_content: !!p.content_text,
+    content_length: p.content_text ? p.content_text.length : 0,
+    content_text: p.content_text,
+  }));
+
+  const summaries = getLocalSummaries(100).map(summary => ({
+    id: summary.id,
+    pageId: summary.page_id,
+    url: summary.url,
+    summary: summary.summary,
+    category: summary.category,
+    sentiment: summary.sentiment || 'neutral',
+    entities: (() => {
+      if (!summary.entities) return [];
+      try {
+        const parsed = JSON.parse(summary.entities) as unknown;
+        return Array.isArray(parsed) ? parsed : [];
+      } catch {
+        return [];
+      }
+    })(),
+    topics: (() => {
+      if (!summary.topics) return [];
+      try {
+        const parsed = JSON.parse(summary.topics) as unknown;
+        return Array.isArray(parsed) ? (parsed as string[]) : [];
+      } catch {
+        return [];
+      }
+    })(),
+    metadata: (() => {
+      if (!summary.metadata) return {};
+      try {
+        const parsed = JSON.parse(summary.metadata) as unknown;
+        return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {};
+      } catch {
+        return {};
+      }
+    })(),
+    sourceCreatedAt: summary.source_created_at,
+    sourceUpdatedAt: summary.source_updated_at,
+    createdAt: summary.created_at,
+    synced: summary.synced === 1,
+    syncedAt: summary.synced_at,
+  }));
+
+  const metadata = {
+    snapshot_version: 'notion-sync-v2',
+    captured_at: nowIso,
+    id: profile.id,
+    name: (profile.name as string | null) ?? null,
+    email: (profile.email as string | null) ?? null,
+    type: (profile.type as string | null) ?? null,
+    avatar_url: (profile.avatar_url as string | null) ?? null,
+    workspace_name: s.config.workspaceName || null,
+    sync: {
+      in_progress: s.syncStatus.syncInProgress,
+      last_sync_time: s.syncStatus.lastSyncTime || null,
+      next_sync_time: s.syncStatus.nextSyncTime || null,
+      last_sync_duration_ms: s.syncStatus.lastSyncDurationMs || null,
+      total_pages: s.syncStatus.totalPages,
+      total_databases: s.syncStatus.totalDatabases,
+      total_database_rows: s.syncStatus.totalDatabaseRows,
+      pages_with_content: s.syncStatus.pagesWithContent,
+      pages_with_summary: s.syncStatus.pagesWithSummary,
+      summaries_total: s.syncStatus.summariesTotal,
+      summaries_pending: s.syncStatus.summariesPending,
+      last_sync_error: s.syncStatus.lastSyncError || null,
+    },
+    pages,
+    pages_total: pages.length,
+    summaries,
+    summaries_total: summaries.length,
+  };
+
+  syncIntegrationMetadata({
+    title: `Notion metadata sync — ${nowIso}`,
+    content: JSON.stringify(metadata),
+    sourceType: 'doc',
+    metadata,
+    createdAt: now / 1000,
+    updatedAt: now / 1000,
+  });
 }
 
 // ---------------------------------------------------------------------------

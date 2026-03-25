@@ -109,6 +109,24 @@ declare const oauth: {
   revoke(): boolean;
 };
 
+/** Memory insertion bridge (persists through native memory client). */
+interface MemoryInsertParams {
+  title: string;
+  content: string;
+  sourceType?: 'doc' | 'chat' | 'email';
+  metadata?: Record<string, unknown>;
+  priority?: 'high' | 'medium' | 'low';
+  createdAt?: number;
+  updatedAt?: number;
+  documentId?: string;
+}
+
+/** Memory insertion bridge (persists through native memory client). */
+declare const memory: {
+  /** Insert skill-scoped memory payload to backend. */
+  insert(params: MemoryInsertParams): boolean;
+};
+
 /** AI model API (routes to cloud backend). */
 declare const model: {
   /**
