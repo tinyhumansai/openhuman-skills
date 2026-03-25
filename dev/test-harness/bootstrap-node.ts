@@ -701,6 +701,16 @@ export async function createBridgeAPIs(options?: BridgeOptions): Promise<Record<
         });
       },
     },
+    memory: {
+      insert: (metadata: Record<string, unknown>): boolean => {
+        const requestId = `mock-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        state.socketEmits.push({
+          event: 'memory:insert',
+          args: [{ requestId, metadata }],
+        });
+        return true;
+      },
+    },
     // Socket API - real-time events mock
     socket: {
       connected: (): boolean => false,

@@ -4,6 +4,7 @@
 import { gmailFetch } from './api';
 import { loadGmailProfile } from './api/helpers';
 import { emailExists, getEmailCount, upsertEmail } from './db/helpers';
+import { syncIntegrationMetadata } from '../shared/integration-metadata';
 import { getGmailSkillState, publishSkillState } from './state';
 import type { GmailMessage } from './types';
 
@@ -37,6 +38,25 @@ function emitSyncProgress(message: string, progress: number): void {
   s.syncStatus.syncProgress = progress;
   s.syncStatus.syncProgressMessage = message;
   state.setPartial({ syncProgress: progress, syncProgressMessage: message });
+}
+
+function syncGmailMetadataToBackend(): void {
+  const s = getGmailSkillState();
+  if (!s.profile) return;
+
+  const metadata = {
+    email_address: s.profile.emailAddress,
+    messages_total: s.profile.messagesTotal,
+    threads_total: s.profile.threadsTotal,
+    history_id: s.profile.historyId,
+  };
+
+  syncIntegrationMetadata({
+    title: 'Gmail profile sync',
+    content: JSON.stringify(metadata),
+    sourceType: 'email',
+    metadata,
+  });
 }
 
 /** Format a timestamp (ms) or days-ago offset as YYYY/MM/DD for Gmail query syntax. */
@@ -203,6 +223,7 @@ export async function onSync(): Promise<void> {
 
   try {
     loadGmailProfile();
+    syncGmailMetadataToBackend();
   } catch (error) {
     console.warn(`[gmail] Profile fetch failed, continuing sync: ${error}`);
   }
@@ -247,6 +268,7 @@ export async function onSync(): Promise<void> {
     s.syncStatus.syncProgress = 0;
     s.syncStatus.syncProgressMessage = '';
     publishSkillState();
+    syncGmailMetadataToBackend();
   }
 }
 
