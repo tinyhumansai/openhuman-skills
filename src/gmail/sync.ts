@@ -1,10 +1,10 @@
 // Gmail email sync: initial + incremental sync with 30-day window.
 // Fetches messages via Gmail API and upserts into local SQLite database.
 // Skips emails already in the local DB to avoid redundant API calls.
+import { syncIntegrationMetadata } from '../shared/integration-metadata';
 import { gmailFetch } from './api';
 import { loadGmailProfile } from './api/helpers';
 import { emailExists, getEmailCount, upsertEmail } from './db/helpers';
-import { syncIntegrationMetadata } from '../shared/integration-metadata';
 import { getGmailSkillState, publishSkillState } from './state';
 import type { GmailMessage } from './types';
 

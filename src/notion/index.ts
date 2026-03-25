@@ -292,7 +292,6 @@ async function publishState(): Promise<void> {
     lastSyncError: s.syncStatus.lastSyncError,
     pages,
   });
-
 }
 
 // ---------------------------------------------------------------------------

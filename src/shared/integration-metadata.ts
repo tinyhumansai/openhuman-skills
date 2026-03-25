@@ -13,16 +13,10 @@ interface SkillMemoryInsertParams {
   documentId?: string;
 }
 
-export function syncIntegrationMetadata(
-  params: SkillMemoryInsertParams
-): void {
+export function syncIntegrationMetadata(params: SkillMemoryInsertParams): void {
   try {
     const memoryBridge = (
-      globalThis as {
-        memory?: {
-          insert?: (params: SkillMemoryInsertParams) => boolean;
-        };
-      }
+      globalThis as { memory?: { insert?: (params: SkillMemoryInsertParams) => boolean } }
     ).memory;
     if (typeof memoryBridge?.insert !== 'function') return;
     memoryBridge.insert(params);
