@@ -4,7 +4,7 @@
 import { syncIntegrationMetadata } from '../shared/integration-metadata';
 import { gmailFetch } from './api';
 import { loadGmailProfile } from './api/helpers';
-import { emailExists, getEmailCount, upsertEmail } from './db/helpers';
+import { emailExists, getEmailCount, getEmails, upsertEmail } from './db/helpers';
 import { getGmailSkillState, publishSkillState } from './state';
 import type { GmailMessage } from './types';
 
@@ -16,9 +16,9 @@ import type { GmailMessage } from './types';
 const SYNC_WINDOW_DAYS = 30;
 
 /** Max emails to fetch per API page. */
-const PAGE_SIZE = 100;
+const PAGE_SIZE = 20;
 
-/** Max pages to fetch per sync (100 emails/page × 10 pages = 1000 emails). */
+/** Max pages to fetch per sync (20 emails/page × 10 pages = 200 emails). */
 const MAX_PAGES = 10;
 
 // ---------------------------------------------------------------------------
@@ -205,6 +205,8 @@ export async function performInitialSync(onProgress?: SyncProgressCallback): Pro
     s.syncStatus.syncProgress = 0;
     s.syncStatus.syncProgressMessage = '';
     publishSkillState();
+    const emails = getEmails();
+    state.setPartial({ emails });
   }
 }
 
@@ -269,6 +271,8 @@ export async function onSync(): Promise<void> {
     s.syncStatus.syncProgressMessage = '';
     publishSkillState();
     syncGmailMetadataToBackend();
+    const emails = getEmails();
+    state.setPartial({ emails });
   }
 }
 
