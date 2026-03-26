@@ -1185,7 +1185,7 @@ async function main(): Promise<void> {
   }
 
   // ─── Backend Connection ─────────────────────────────────────────
-  const defaultBackendUrl = process.env.BACKEND_URL || process.env.BACKEND_URL || 'https://api.alphahuman.xyz';
+  const defaultBackendUrl = process.env.BACKEND_URL || process.env.BACKEND_URL || 'https://api.tinyhumans.ai';
   const defaultJwtToken = process.env.JWT_TOKEN || process.env.DEV_JWT_TOKEN || '';
 
   console.log(`\n${c.bold}Backend Connection${c.reset}`);

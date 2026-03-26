@@ -33,7 +33,7 @@ export interface LiveBridgeOptions {
   dataDir: string;
   /** JWT token for authenticating with the backend API */
   jwtToken?: string;
-  /** Backend API URL (default: https://api.alphahuman.xyz) */
+  /** Backend API URL (default: https://api.tinyhumans.ai) */
   backendUrl?: string;
 }
 
@@ -204,7 +204,7 @@ export async function createBridgeAPIs(
   options: LiveBridgeOptions,
 ): Promise<Record<string, unknown>> {
   const { dataDir } = options;
-  const backendUrl = options.backendUrl ?? 'https://api.alphahuman.xyz';
+  const backendUrl = options.backendUrl ?? 'https://api.tinyhumans.ai';
   const jwtToken = options.jwtToken ?? '';
   let persistentDb: PersistentDb | null = null;
 

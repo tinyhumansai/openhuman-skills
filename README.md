@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://alphahumanxyz.github.io/openhuman/icon.png" alt="OpenHuman" width="80" />
+  <img src="https://openhumanxyz.github.io/openhuman/icon.png" alt="OpenHuman" width="80" />
 </p>
 
 <h1 align="center">OpenHuman</h1>
@@ -11,7 +11,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/status-early%20beta-orange" alt="Early Beta" />
   <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux%20%7C%20Android%20%7C%20iOS-blue" alt="Platforms" />
-  <a href="https://github.com/alphahumanxyz/openhuman/releases/latest"><img src="https://img.shields.io/github/v/release/alphahumanxyz/openhuman?label=latest" alt="Latest Release" /></a>
+  <a href="https://github.com/tinyhumansai/openhuman/releases/latest"><img src="https://img.shields.io/github/v/release/openhumanxyz/openhuman?label=latest" alt="Latest Release" /></a>
 </p>
 
 ---
@@ -39,28 +39,28 @@ OpenHuman is not a chatbot, browser extension, or cloud-only service. It is a na
 
 | Chip                        | Download                                                                                                        |
 | --------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| Apple Silicon (M1/M2/M3/M4) | [`.dmg` (aarch64)](https://github.com/alphahumanxyz/openhuman/releases/latest/download/AlphaHuman_aarch64.dmg) |
-| Intel                       | [`.dmg` (x64)](https://github.com/alphahumanxyz/openhuman/releases/latest/download/AlphaHuman_x64.dmg)         |
+| Apple Silicon (M1/M2/M3/M4) | [`.dmg` (aarch64)](https://github.com/tinyhumansai/openhuman/releases/latest/download/OpenHuman_aarch64.dmg) |
+| Intel                       | [`.dmg` (x64)](https://github.com/tinyhumansai/openhuman/releases/latest/download/OpenHuman_x64.dmg)         |
 
 ### Windows
 
 | Architecture | Download                                                                                                |
 | ------------ | ------------------------------------------------------------------------------------------------------- |
-| x64          | [`.msi`](https://github.com/alphahumanxyz/openhuman/releases/latest/download/AlphaHuman_x64_en-US.msi) |
+| x64          | [`.msi`](https://github.com/tinyhumansai/openhuman/releases/latest/download/OpenHuman_x64_en-US.msi) |
 
 ### Linux
 
 | Format          | Download                                                                                                      |
 | --------------- | ------------------------------------------------------------------------------------------------------------- |
-| Debian / Ubuntu | [`.deb` (amd64)](https://github.com/alphahumanxyz/openhuman/releases/latest/download/AlphaHuman_amd64.deb)   |
-| Fedora / RHEL   | [`.rpm` (x86_64)](https://github.com/alphahumanxyz/openhuman/releases/latest/download/AlphaHuman_x86_64.rpm) |
-| Universal       | [`.AppImage`](https://github.com/alphahumanxyz/openhuman/releases/latest/download/AlphaHuman_amd64.AppImage) |
+| Debian / Ubuntu | [`.deb` (amd64)](https://github.com/tinyhumansai/openhuman/releases/latest/download/OpenHuman_amd64.deb)   |
+| Fedora / RHEL   | [`.rpm` (x86_64)](https://github.com/tinyhumansai/openhuman/releases/latest/download/OpenHuman_x86_64.rpm) |
+| Universal       | [`.AppImage`](https://github.com/tinyhumansai/openhuman/releases/latest/download/OpenHuman_amd64.AppImage) |
 
 ### Mobile
 
 - **Android** and **iOS** -- Coming soon
 
-Browse all releases: [github.com/alphahumanxyz/openhuman/releases](https://github.com/alphahumanxyz/openhuman/releases)
+Browse all releases: [github.com/openhumanxyz/openhuman/releases](https://github.com/tinyhumansai/openhuman/releases)
 
 ## Skills
 
@@ -86,7 +86,7 @@ OpenHuman uses a pluggable **skills** architecture. Each skill connects to an ex
 
 ## Getting Started
 
-1. **Download** the installer for your platform from the [releases page](https://github.com/alphahumanxyz/openhuman/releases/latest)
+1. **Download** the installer for your platform from the [releases page](https://github.com/tinyhumansai/openhuman/releases/latest)
 2. **Install** the app (drag to Applications on macOS, or use your package manager on Linux)
 3. **Connect a source** -- follow the in-app onboarding to link Telegram, Notion, Gmail, or other services
 4. **Run your first request** -- ask the AI to summarize what you missed, extract action items, or surface key decisions

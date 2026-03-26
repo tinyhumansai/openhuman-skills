@@ -81,7 +81,7 @@ $ yarn repl server-ping
 
   Select skill (1-3): 3
 
-  Backend URL (https://api.openhuman.xyz):
+  Backend URL (https://api.tinyhumans.ai):
   JWT Token:
 
   Loading server-ping...

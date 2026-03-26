@@ -171,7 +171,7 @@ async function main(): Promise<void> {
   }
 
   // Resolve backend connection from env
-  const backendUrl = process.env.BACKEND_URL || process.env.BACKEND_URL || 'https://api.alphahuman.xyz';
+  const backendUrl = process.env.BACKEND_URL || process.env.BACKEND_URL || 'https://api.tinyhumans.ai';
   const jwtToken = process.env.JWT_TOKEN || process.env.DEV_JWT_TOKEN || '';
 
   console.log(`${colors.dim}Data directory: ${dataDir}${colors.reset}`);

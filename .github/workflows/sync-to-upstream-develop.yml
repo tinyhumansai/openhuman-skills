@@ -37,11 +37,11 @@ jobs:
       - name: Update GH repo
         uses: peaceiris/actions-gh-pages@v4
         with:
-          external_repository: alphahumanxyz/alphahuman
+          external_repository: openhumanxyz/openhuman
           publish_dir: ./public
           publish_branch: main
-          user_name: 'github-actions[bot]'
-          user_email: 'github-actions[bot]@users.noreply.github.com'
-          full_commit_message: 'chore: update main branch [skip ci]'
+          user_name: "github-actions[bot]"
+          user_email: "github-actions[bot]@users.noreply.github.com"
+          full_commit_message: "chore: update main branch [skip ci]"
           personal_token: ${{ secrets.XGITHUB_TOKEN }}
-          exclude_assets: ''
+          exclude_assets: ""

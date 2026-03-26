@@ -639,7 +639,7 @@ export async function createBridgeAPIs(options?: BridgeOptions): Promise<Record<
     tdlib,
     // Backend API - authenticated API client mock
     backend: {
-      url: state.env['BACKEND_URL'] ?? 'https://api.alphahuman.xyz',
+      url: state.env['BACKEND_URL'] ?? 'https://api.tinyhumans.ai',
       token: state.env['JWT_TOKEN'] ?? '',
       fetch: (
         path: string,
