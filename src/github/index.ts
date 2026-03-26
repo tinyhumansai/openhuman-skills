@@ -195,7 +195,7 @@ async function onSetupStart(): Promise<SetupStartResult> {
     return {
       step: {
         id: 'device-code',
-        title: 'Authorize AlphaHuman',
+        title: 'Authorize OpenHuman',
         description: `Open ${deviceCode.verification_uri} in your browser and enter this code:\n\n**${deviceCode.user_code}**\n\nOnce you have authorized the app on GitHub, click Continue below.`,
         fields: [
           {

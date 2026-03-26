@@ -1,1 +1,1 @@
-# AlphaHuman Skills package
+# OpenHuman Skills package

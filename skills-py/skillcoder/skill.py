@@ -1,5 +1,5 @@
 """
-Skill Coder - Meta-skill that creates, validates, tests, and scans new AlphaHuman skills on-the-fly.
+Skill Coder - Meta-skill that creates, validates, tests, and scans new OpenHuman skills on-the-fly.
 """
 
 from pathlib import Path

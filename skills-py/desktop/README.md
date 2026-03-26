@@ -284,4 +284,4 @@ This skill provides full control over mouse and keyboard input. Use with caution
 
 ## License
 
-Part of the AlphaHuman Skills ecosystem.
+Part of the OpenHuman Skills ecosystem.

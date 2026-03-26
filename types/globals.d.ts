@@ -1,4 +1,4 @@
-// Ambient type declarations for the AlphaHuman QuickJS skill runtime.
+// Ambient type declarations for the OpenHuman QuickJS skill runtime.
 // These match the friendly API layer injected by the Rust host.
 
 // ---------------------------------------------------------------------------

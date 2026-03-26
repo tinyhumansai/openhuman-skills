@@ -1,1 +1,1 @@
-# Skill Generator — meta-skill that creates new AlphaHuman skills.
+# Skill Generator — meta-skill that creates new OpenHuman skills.

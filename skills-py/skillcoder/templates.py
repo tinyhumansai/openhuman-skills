@@ -2,7 +2,7 @@
 Code generation engine for skill-generator.
 
 Generates skill.py, __init__.py, __main__.py, and manifest.json
-for new AlphaHuman skills based on tool specifications.
+for new OpenHuman skills based on tool specifications.
 """
 
 from __future__ import annotations
@@ -70,7 +70,7 @@ def generate_skill_py(
 
   # Module docstring
   title = " ".join(w.capitalize() for w in name.split("-"))
-  lines.append(f'"""{title} — AlphaHuman skill."""')
+  lines.append(f'"""{title} — OpenHuman skill."""')
   lines.append("")
   lines.append("from __future__ import annotations")
   lines.append("")
@@ -245,7 +245,7 @@ if __name__ == "__main__":
 def generate_init_py(name: str) -> str:
   """Generate __init__.py for a skill."""
   title = " ".join(w.capitalize() for w in name.split("-"))
-  return f"# {title} — AlphaHuman skill.\n"
+  return f"# {title} — OpenHuman skill.\n"
 
 
 def generate_manifest_json(

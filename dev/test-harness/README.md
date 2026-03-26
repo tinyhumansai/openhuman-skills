@@ -1,6 +1,6 @@
 # Skill Test Harness & REPL
 
-Interactive testing tools for developing and debugging AlphaHuman skills outside the Tauri runtime.
+Interactive testing tools for developing and debugging OpenHuman skills outside the Tauri runtime.
 
 ## Quick Start
 
@@ -81,7 +81,7 @@ $ yarn repl server-ping
 
   Select skill (1-3): 3
 
-  Backend URL (https://api.alphahuman.xyz):
+  Backend URL (https://api.openhuman.xyz):
   JWT Token:
 
   Loading server-ping...

@@ -1,1 +1,1 @@
-# GitHub skill for AlphaHuman — gh CLI wrapper implementation.
+# GitHub skill for OpenHuman — gh CLI wrapper implementation.

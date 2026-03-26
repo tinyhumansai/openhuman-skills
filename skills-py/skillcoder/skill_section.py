@@ -43,7 +43,7 @@ _TOOLS: list[SkillTool] = []
 
 skill = SkillDefinition(
   name="skill-generator",
-  description="Meta-skill that creates, validates, tests, and scans new AlphaHuman skills on-the-fly.",
+  description="Meta-skill that creates, validates, tests, and scans new OpenHuman skills on-the-fly.",
   version="1.0.0",
   options=TOOL_CATEGORY_OPTIONS,
   hooks=SkillHooks(

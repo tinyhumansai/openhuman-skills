@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Summary
 
-This is the **AlphaHuman Skills** repository — a plugin/extension system for the AlphaHuman AI agent. Skills extend the agent with domain-specific capabilities for the crypto community platform. This repo is a git submodule of the main AlphaHuman Tauri app.
+This is the **OpenHuman Skills** repository — a plugin/extension system for the OpenHuman AI agent. Skills extend the agent with domain-specific capabilities for the crypto community platform. This repo is a git submodule of the main OpenHuman Tauri app.
 
 ## Architecture
 
@@ -468,7 +468,7 @@ mkdir -p src/my-skill/{api,tools,db,__tests__}
 
 ```json
 {
-  "name": "@alphahuman/skill-my-skill",
+  "name": "@openhuman/skill-my-skill",
   "private": true,
   "dependencies": { "some-library": "^1.0.0" }
 }

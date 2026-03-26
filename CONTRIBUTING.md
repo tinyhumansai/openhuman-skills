@@ -1,10 +1,10 @@
-# Contributing to AlphaHuman Skills
+# Contributing to OpenHuman Skills
 
-Thank you for contributing to the AlphaHuman skills ecosystem. This guide covers everything you need to submit a skill.
+Thank you for contributing to the OpenHuman skills ecosystem. This guide covers everything you need to submit a skill.
 
 ## Ways to Contribute
 
-1. **Create a new skill** — Add capabilities to the AlphaHuman agent
+1. **Create a new skill** — Add capabilities to the OpenHuman agent
 2. **Improve an existing skill** — Better tools, bug fixes, more handlers
 3. **Improve tooling** — Enhance dev tools, CI, documentation
 4. **Add examples** — Show patterns others can follow
@@ -18,7 +18,7 @@ Start by looking at [`src/example-skill/`](src/example-skill/) — it demonstrat
 ```bash
 # Fork and clone
 git clone https://github.com/YOUR-USERNAME/openhuman-skills.git
-cd alphahuman-skills
+cd openhuman-skills
 
 # Install dependencies
 yarn install
@@ -126,7 +126,7 @@ If your skill needs npm packages, create a `package.json` in your skill director
 
 ```json
 {
-  "name": "@alphahuman/skill-my-skill",
+  "name": "@openhuman/skill-my-skill",
   "private": true,
   "dependencies": { "some-library": "^1.0.0" }
 }
@@ -207,7 +207,7 @@ Open a pull request. Fill out the PR template completely.
 1. **Automated CI** runs build, type checking, linting, validation, and tests
 2. **Maintainer review** checks quality, clarity, and safety
 3. **Feedback round** — you may be asked to make changes
-4. **Merge** — skill becomes available to AlphaHuman users
+4. **Merge** — skill becomes available to OpenHuman users
 
 ## Getting Help
 

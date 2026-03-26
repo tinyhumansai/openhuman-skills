@@ -1,6 +1,6 @@
 # Skill Integration Guide
 
-Comprehensive reference for building a new skill for the AlphaHuman platform. Each section documents what the file/module does, why it exists, and includes a checklist to verify completeness.
+Comprehensive reference for building a new skill for the OpenHuman platform. Each section documents what the file/module does, why it exists, and includes a checklist to verify completeness.
 
 ---
 
@@ -496,7 +496,7 @@ Cleans up partial state, resets pending flags.
 
 ## 9. Data Sync (`sync.ts`)
 
-Synchronizes data from the external service into the local SQLite database, then optionally pushes processed data (summaries, signals) to the AlphaHuman backend.
+Synchronizes data from the external service into the local SQLite database, then optionally pushes processed data (summaries, signals) to the OpenHuman backend.
 
 ### Sync Architecture (Multi-Phase)
 
@@ -534,7 +534,7 @@ if (editedMs < cutoffMs) { break; }
 
 ### Cloud Sync (Phase 4)
 
-Push processed data to the AlphaHuman backend:
+Push processed data to the OpenHuman backend:
 
 ```typescript
 // 1. Fetch unsynced summaries from local DB

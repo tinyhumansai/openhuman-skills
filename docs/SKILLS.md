@@ -1,6 +1,6 @@
-# AlphaHuman Skills
+# OpenHuman Skills
 
-A plugin system for the [AlphaHuman](https://github.com/bnbpad/alphahuman) platform. Skills give the AI agent domain-specific knowledge, custom tools, and automated behaviors.
+A plugin system for the [OpenHuman](https://github.com/bnbpad/openhuman) platform. Skills give the AI agent domain-specific knowledge, custom tools, and automated behaviors.
 
 ## Features
 
@@ -426,7 +426,7 @@ Skills can declare their own npm dependencies via a `package.json` in their dire
 ```json
 // src/my-skill/package.json
 {
-  "name": "@alphahuman/skill-my-skill",
+  "name": "@openhuman/skill-my-skill",
   "private": true,
   "dependencies": { "some-library": "^1.0.0" }
 }

@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="https://alphahumanxyz.github.io/alphahuman/icon.png" alt="AlphaHuman" width="80" />
+  <img src="https://alphahumanxyz.github.io/openhuman/icon.png" alt="OpenHuman" width="80" />
 </p>
 
-<h1 align="center">AlphaHuman</h1>
+<h1 align="center">OpenHuman</h1>
 
 <p align="center">
   <strong>A personal AI assistant that cuts through communication noise so you never miss what matters</strong>
@@ -11,16 +11,16 @@
 <p align="center">
   <img src="https://img.shields.io/badge/status-early%20beta-orange" alt="Early Beta" />
   <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux%20%7C%20Android%20%7C%20iOS-blue" alt="Platforms" />
-  <a href="https://github.com/alphahumanxyz/alphahuman/releases/latest"><img src="https://img.shields.io/github/v/release/alphahumanxyz/alphahuman?label=latest" alt="Latest Release" /></a>
+  <a href="https://github.com/alphahumanxyz/openhuman/releases/latest"><img src="https://img.shields.io/github/v/release/alphahumanxyz/openhuman?label=latest" alt="Latest Release" /></a>
 </p>
 
 ---
 
-## What is AlphaHuman?
+## What is OpenHuman?
 
-AlphaHuman is a personal AI assistant that helps you manage high-volume communication without reading everything yourself. It connects to your messaging platforms and productivity tools, understands conversations in context, and produces clear, actionable outputs you can use immediately.
+OpenHuman is a personal AI assistant that helps you manage high-volume communication without reading everything yourself. It connects to your messaging platforms and productivity tools, understands conversations in context, and produces clear, actionable outputs you can use immediately.
 
-AlphaHuman is not a chatbot, browser extension, or cloud-only service. It is a native application that runs on your device, connects to your tools, and works only when you ask it to. Think of it as a second brain that sits across your communication and productivity stack.
+OpenHuman is not a chatbot, browser extension, or cloud-only service. It is a native application that runs on your device, connects to your tools, and works only when you ask it to. Think of it as a second brain that sits across your communication and productivity stack.
 
 ## What It Does
 
@@ -33,38 +33,38 @@ AlphaHuman is not a chatbot, browser extension, or cloud-only service. It is a n
 
 ## Download
 
-> **Early Beta** -- AlphaHuman is under active development. Expect rough edges.
+> **Early Beta** -- OpenHuman is under active development. Expect rough edges.
 
 ### macOS
 
 | Chip                        | Download                                                                                                        |
 | --------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| Apple Silicon (M1/M2/M3/M4) | [`.dmg` (aarch64)](https://github.com/alphahumanxyz/alphahuman/releases/latest/download/AlphaHuman_aarch64.dmg) |
-| Intel                       | [`.dmg` (x64)](https://github.com/alphahumanxyz/alphahuman/releases/latest/download/AlphaHuman_x64.dmg)         |
+| Apple Silicon (M1/M2/M3/M4) | [`.dmg` (aarch64)](https://github.com/alphahumanxyz/openhuman/releases/latest/download/AlphaHuman_aarch64.dmg) |
+| Intel                       | [`.dmg` (x64)](https://github.com/alphahumanxyz/openhuman/releases/latest/download/AlphaHuman_x64.dmg)         |
 
 ### Windows
 
 | Architecture | Download                                                                                                |
 | ------------ | ------------------------------------------------------------------------------------------------------- |
-| x64          | [`.msi`](https://github.com/alphahumanxyz/alphahuman/releases/latest/download/AlphaHuman_x64_en-US.msi) |
+| x64          | [`.msi`](https://github.com/alphahumanxyz/openhuman/releases/latest/download/AlphaHuman_x64_en-US.msi) |
 
 ### Linux
 
 | Format          | Download                                                                                                      |
 | --------------- | ------------------------------------------------------------------------------------------------------------- |
-| Debian / Ubuntu | [`.deb` (amd64)](https://github.com/alphahumanxyz/alphahuman/releases/latest/download/AlphaHuman_amd64.deb)   |
-| Fedora / RHEL   | [`.rpm` (x86_64)](https://github.com/alphahumanxyz/alphahuman/releases/latest/download/AlphaHuman_x86_64.rpm) |
-| Universal       | [`.AppImage`](https://github.com/alphahumanxyz/alphahuman/releases/latest/download/AlphaHuman_amd64.AppImage) |
+| Debian / Ubuntu | [`.deb` (amd64)](https://github.com/alphahumanxyz/openhuman/releases/latest/download/AlphaHuman_amd64.deb)   |
+| Fedora / RHEL   | [`.rpm` (x86_64)](https://github.com/alphahumanxyz/openhuman/releases/latest/download/AlphaHuman_x86_64.rpm) |
+| Universal       | [`.AppImage`](https://github.com/alphahumanxyz/openhuman/releases/latest/download/AlphaHuman_amd64.AppImage) |
 
 ### Mobile
 
 - **Android** and **iOS** -- Coming soon
 
-Browse all releases: [github.com/alphahumanxyz/alphahuman/releases](https://github.com/alphahumanxyz/alphahuman/releases)
+Browse all releases: [github.com/alphahumanxyz/openhuman/releases](https://github.com/alphahumanxyz/openhuman/releases)
 
 ## Skills
 
-AlphaHuman uses a pluggable **skills** architecture. Each skill connects to an external service, syncs relevant data locally, and exposes tools that you (or the AI) can use. Skills run in a sandboxed environment with their own database, storage, and permissions.
+OpenHuman uses a pluggable **skills** architecture. Each skill connects to an external service, syncs relevant data locally, and exposes tools that you (or the AI) can use. Skills run in a sandboxed environment with their own database, storage, and permissions.
 
 | Skill           | Status      | Description                                                   |
 | --------------- | ----------- | ------------------------------------------------------------- |
@@ -86,16 +86,16 @@ AlphaHuman uses a pluggable **skills** architecture. Each skill connects to an e
 
 ## Getting Started
 
-1. **Download** the installer for your platform from the [releases page](https://github.com/alphahumanxyz/alphahuman/releases/latest)
+1. **Download** the installer for your platform from the [releases page](https://github.com/alphahumanxyz/openhuman/releases/latest)
 2. **Install** the app (drag to Applications on macOS, or use your package manager on Linux)
 3. **Connect a source** -- follow the in-app onboarding to link Telegram, Notion, Gmail, or other services
 4. **Run your first request** -- ask the AI to summarize what you missed, extract action items, or surface key decisions
 
 ## Links
 
-- [Architecture Overview](./ARCHITECTURE.md) -- How AlphaHuman is built
+- [Architecture Overview](./ARCHITECTURE.md) -- How OpenHuman is built
 - [Changelog](./CHANGELOG.md) -- Release history
-- [Website](https://alphahuman.xyz) -- Learn more
+- [Website](https://openhuman.xyz) -- Learn more
 
 ---
 
@@ -104,5 +104,5 @@ AlphaHuman uses a pluggable **skills** architecture. Each skill connects to an e
 </p>
 
 <p align="center">
-  <sub>AlphaHuman is in early beta. Features may change, break, or disappear. Use at your own risk.</sub>
+  <sub>OpenHuman is in early beta. Features may change, break, or disappear. Use at your own risk.</sub>
 </p>

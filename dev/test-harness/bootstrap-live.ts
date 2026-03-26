@@ -280,7 +280,7 @@ export async function createBridgeAPIs(
     },
   };
 
-  // Backend — authenticated API client for the AlphaHuman backend
+  // Backend — authenticated API client for the OpenHuman backend
   const backend = {
     url: backendUrl,
     token: jwtToken,

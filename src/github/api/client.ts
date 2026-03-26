@@ -11,7 +11,7 @@ function getHeaders(): Record<string, string> {
     Authorization: `Bearer ${token || ''}`,
     Accept: 'application/vnd.github+json',
     'X-GitHub-Api-Version': '2022-11-28',
-    'User-Agent': 'AlphaHuman-GitHub-Skill/1.0',
+    'User-Agent': 'OpenHuman-GitHub-Skill/1.0',
   };
 }
 
