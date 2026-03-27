@@ -6,6 +6,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This is the **OpenHuman Skills** repository — a plugin/extension system for the OpenHuman AI agent. Skills extend the agent with domain-specific capabilities for the crypto community platform. This repo is a git submodule of the main OpenHuman Tauri app.
 
+## PR Template Requirement
+
+- Use `.github/pull_request_template.md` from the main repository for every PR description.
+- AI tooling must preserve the template section order and include all checklist items.
+
 ## Architecture
 
 Skills are written in **TypeScript** and compiled to **JavaScript** for execution in a sandboxed **QuickJS** runtime embedded in the Rust host application.
