@@ -5,7 +5,7 @@
   "ignoreInProduction": true,
   "description": "Google Calendar integration via Google API — list calendars and events, create, update, and delete events with OAuth2 authentication.",
   "auto_start": false,
-  "platforms": ["windows", "macos", "linux", "android", "ios"],
+  "platforms": ["windows", "macos", "linux"],
   "setup": {
     "required": true,
     "label": "Connect Google Calendar",

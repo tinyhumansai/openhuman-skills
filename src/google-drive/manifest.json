@@ -5,7 +5,7 @@
   "ignoreInProduction": true,
   "description": "Google Drive, Sheets, and Docs integration — list and search files, read/export Drive files, read and write Google Sheets, read and create Google Docs with OAuth2.",
   "auto_start": false,
-  "platforms": ["windows", "macos", "linux", "android", "ios"],
+  "platforms": ["windows", "macos", "linux"],
   "setup": {
     "required": true,
     "label": "Connect Google Drive",

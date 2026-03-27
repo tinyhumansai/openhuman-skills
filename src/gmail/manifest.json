@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "description": "Gmail integration via Google API — comprehensive email management with OAuth2 authentication, send/receive, labels, search, and attachments.",
   "auto_start": false,
-  "platforms": ["windows", "macos", "linux", "android", "ios"],
+  "platforms": ["windows", "macos", "linux"],
   "setup": {
     "required": true,
     "label": "Connect Gmail",

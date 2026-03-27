@@ -309,18 +309,6 @@ _describe('Ping logic', () => {
     _assert(mock.dataFiles['ping-log.txt'], 'should write ping-log.txt');
     _assertContains(mock.dataFiles['ping-log.txt'], 'Ping Log');
   });
-
-  _it('should not send notification on mobile', () => {
-    freshInit({
-      platformOs: 'android',
-      config: { serverUrl: 'https://down.com' },
-      fetchErrors: { 'https://down.com': 'Connection refused' },
-    });
-    (globalThis as any).start();
-    (globalThis as any).onCronTrigger('ping');
-    const mock = _getMockState();
-    _assertEqual(mock.notifications.length, 0, 'should skip notification on mobile');
-  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

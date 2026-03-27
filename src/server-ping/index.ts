@@ -309,11 +309,6 @@ function appendDataLog(timestamp: string): void {
 // ---------------------------------------------------------------------------
 
 function sendNotification(title: string, body: string): void {
-  const currentOs = platform.os();
-  if (currentOs === 'android' || currentOs === 'ios') {
-    console.log(`[server-ping] Notification (mobile, skipped): ${title} — ${body}`);
-    return;
-  }
   try {
     platform.notify(title, body);
   } catch (e) {

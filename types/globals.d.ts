@@ -45,7 +45,7 @@ declare const skills: {
 
 /** Platform information and OS integration. */
 declare const platform: {
-  /** Current OS: "windows", "macos", "linux", "android", "ios". */
+  /** Current OS: "windows", "macos", "linux". */
   os(): string;
   /** Read a whitelisted environment variable. Returns the value or `""`. */
   env(key: string): string;
