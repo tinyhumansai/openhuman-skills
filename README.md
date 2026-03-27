@@ -10,7 +10,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/status-early%20beta-orange" alt="Early Beta" />
-  <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux%20%7C%20Android%20%7C%20iOS-blue" alt="Platforms" />
+  <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-blue" alt="Platforms" />
   <a href="https://github.com/tinyhumansai/openhuman/releases/latest"><img src="https://img.shields.io/github/v/release/openhumanxyz/openhuman?label=latest" alt="Latest Release" /></a>
 </p>
 
@@ -55,10 +55,6 @@ OpenHuman is not a chatbot, browser extension, or cloud-only service. It is a na
 | Debian / Ubuntu | [`.deb` (amd64)](https://github.com/tinyhumansai/openhuman/releases/latest/download/OpenHuman_amd64.deb)   |
 | Fedora / RHEL   | [`.rpm` (x86_64)](https://github.com/tinyhumansai/openhuman/releases/latest/download/OpenHuman_x86_64.rpm) |
 | Universal       | [`.AppImage`](https://github.com/tinyhumansai/openhuman/releases/latest/download/OpenHuman_amd64.AppImage) |
-
-### Mobile
-
-- **Android** and **iOS** -- Coming soon
 
 Browse all releases: [github.com/openhumanxyz/openhuman/releases](https://github.com/tinyhumansai/openhuman/releases)
 

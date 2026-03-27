@@ -237,7 +237,7 @@ const summary = model.summarize(longText, { maxTokens: 100 });
 ### Platform (`platform`)
 
 ```typescript
-const os = platform.os(); // "windows", "macos", "linux", "android", "ios"
+const os = platform.os(); // "windows", "macos", "linux"
 const apiKey = platform.env('MY_API_KEY');
 platform.notify('Title', 'Body');
 ```

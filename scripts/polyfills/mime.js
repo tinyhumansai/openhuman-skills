@@ -64,7 +64,6 @@ const mimeTypes = {
 
   // Other
   exe: 'application/x-msdownload',
-  apk: 'application/vnd.android.package-archive',
   dmg: 'application/x-apple-diskimage',
 };
 

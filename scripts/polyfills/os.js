@@ -18,10 +18,6 @@ export function platform() {
         return 'darwin';
       case 'linux':
         return 'linux';
-      case 'android':
-        return 'android';
-      case 'ios':
-        return 'ios';
       default:
         return os;
     }
