@@ -4,12 +4,7 @@ export const lcmDescribeTool: ToolDefinition = {
     'Get detailed metadata about a specific summary node in the DAG, including depth, token count, time range, parent/child relationships, and descendant statistics.',
   input_schema: {
     type: 'object',
-    properties: {
-      summaryId: {
-        type: 'string',
-        description: 'The summary ID to describe',
-      },
-    },
+    properties: { summaryId: { type: 'string', description: 'The summary ID to describe' } },
     required: ['summaryId'],
   },
   async execute(args: Record<string, unknown>): Promise<string> {

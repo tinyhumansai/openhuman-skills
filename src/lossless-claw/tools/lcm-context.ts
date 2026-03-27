@@ -23,14 +23,9 @@ export const lcmContextTool: ToolDefinition = {
     const parts = globalThis.lcmEngine.assembleContext(conversationId);
     const totalTokens = parts.reduce(
       (sum, part) => sum + globalThis.lcmEngine.estimateTokens(part),
-      0,
+      0
     );
 
-    return JSON.stringify({
-      conversationId,
-      partCount: parts.length,
-      totalTokens,
-      context: parts,
-    });
+    return JSON.stringify({ conversationId, partCount: parts.length, totalTokens, context: parts });
   },
 };

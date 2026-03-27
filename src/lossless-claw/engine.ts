@@ -7,11 +7,7 @@
  * - Summarization uses net.fetch() to Neocortex API (sync)
  * - No OpenClaw dependencies — standalone engine
  */
-import type {
-  ConversationId,
-  CreateSummaryInput,
-  MessageRecord,
-} from './types';
+import type { ConversationId, CreateSummaryInput, MessageRecord } from './types';
 
 // ============================================================================
 // Token estimation
@@ -26,7 +22,7 @@ function generateSummaryId(): string {
   const bytes = new Uint8Array(16);
   crypto.getRandomValues(bytes);
   const hex = Array.from(bytes)
-    .map((b) => b.toString(16).padStart(2, '0'))
+    .map(b => b.toString(16).padStart(2, '0'))
     .join('');
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
@@ -43,10 +39,7 @@ function summarizeText(text: string, isCondensed: boolean = false): string {
     : `Summarize the following conversation messages, preserving key details:\n\n${text}`;
 
   try {
-    const result = model.generate(prompt, {
-      maxTokens,
-      temperature: 0.3,
-    });
+    const result = model.generate(prompt, { maxTokens, temperature: 0.3 });
     return result || text.slice(0, maxTokens * 4);
   } catch (e) {
     console.error(`[lcm] Summarization failed: ${e}`);
@@ -71,10 +64,10 @@ function runLeafCompaction(conversationId: ConversationId): string | null {
   // Protect fresh tail
   const allMessages = globalThis.lcmDb.getMessages(conversationId);
   const tailStart = Math.max(0, allMessages.length - config.freshTailCount);
-  const tailMessageIds = new Set(allMessages.slice(tailStart).map((m) => m.messageId));
+  const tailMessageIds = new Set(allMessages.slice(tailStart).map(m => m.messageId));
 
   // Filter out tail messages from compaction candidates
-  const candidates = unsummarized.filter((m) => !tailMessageIds.has(m.messageId));
+  const candidates = unsummarized.filter(m => !tailMessageIds.has(m.messageId));
   if (candidates.length < config.leafMinFanout) {
     return null;
   }
@@ -118,7 +111,7 @@ function runLeafCompaction(conversationId: ConversationId): string | null {
   globalThis.lcmDb.linkSummaryMessages(summaryId, messageIds);
 
   console.log(
-    `[lcm] Leaf compaction: ${messageIds.length} messages → summary ${summaryId} (${summaryTokens} tokens)`,
+    `[lcm] Leaf compaction: ${messageIds.length} messages → summary ${summaryId} (${summaryTokens} tokens)`
   );
 
   return summaryId;
@@ -130,7 +123,7 @@ function runLeafCompaction(conversationId: ConversationId): string | null {
 
 function runCondensedCompaction(
   conversationId: ConversationId,
-  targetDepth: number,
+  targetDepth: number
 ): string | null {
   const s = globalThis.getLcmState();
   const config = s.config;
@@ -138,23 +131,21 @@ function runCondensedCompaction(
   // Get summaries at (targetDepth - 1) that are not already parents of a condensed summary
   const candidateSummaries = globalThis.lcmDb
     .getSummaries(conversationId)
-    .filter((sum) => sum.depth === targetDepth - 1);
+    .filter(sum => sum.depth === targetDepth - 1);
 
   // Filter to only those not already condensed into a higher summary
   const alreadyCondensed = new Set<string>();
   for (const sum of candidateSummaries) {
-    const childRows = db.all(
-      `SELECT summary_id FROM summary_parents WHERE parent_summary_id = ?`,
-      [sum.summaryId],
-    ) as Array<{ summary_id: string }>;
+    const childRows = db.all(`SELECT summary_id FROM summary_parents WHERE parent_summary_id = ?`, [
+      sum.summaryId,
+    ]) as Array<{ summary_id: string }>;
     if (childRows.length > 0) {
       alreadyCondensed.add(sum.summaryId);
     }
   }
 
-  const uncondensed = candidateSummaries.filter((cs) => !alreadyCondensed.has(cs.summaryId));
-  const minFanout =
-    targetDepth === 1 ? config.leafMinFanout : config.condensedMinFanout;
+  const uncondensed = candidateSummaries.filter(cs => !alreadyCondensed.has(cs.summaryId));
+  const minFanout = targetDepth === 1 ? config.leafMinFanout : config.condensedMinFanout;
 
   if (uncondensed.length < minFanout) {
     return null;
@@ -177,9 +168,7 @@ function runCondensedCompaction(
   const summaryId = generateSummaryId();
 
   // Compute time range from children
-  const times = uncondensed
-    .flatMap((cs) => [cs.earliestAt, cs.latestAt])
-    .filter(Boolean) as string[];
+  const times = uncondensed.flatMap(cs => [cs.earliestAt, cs.latestAt]).filter(Boolean) as string[];
   times.sort();
   const earliestAt = times[0] ?? null;
   const latestAt = times[times.length - 1] ?? null;
@@ -213,7 +202,7 @@ function runCondensedCompaction(
   globalThis.lcmDb.linkSummaryParents(summaryId, parentIds);
 
   console.log(
-    `[lcm] Condensed compaction at depth ${targetDepth}: ${parentIds.length} summaries → ${summaryId} (${summaryTokens} tokens)`,
+    `[lcm] Condensed compaction at depth ${targetDepth}: ${parentIds.length} summaries → ${summaryId} (${summaryTokens} tokens)`
   );
 
   return summaryId;
@@ -275,7 +264,9 @@ function assembleContext(conversationId: ConversationId): string[] {
   const topSummaries = globalThis.lcmDb.getTopLevelSummaries(conversationId);
   for (const sum of topSummaries) {
     if (tokensUsed + sum.tokenCount > config.maxContextTokens) break;
-    contextParts.push(`[Summary ${sum.summaryId} | ${sum.kind} depth=${sum.depth}]\n${sum.content}`);
+    contextParts.push(
+      `[Summary ${sum.summaryId} | ${sum.kind} depth=${sum.depth}]\n${sum.content}`
+    );
     tokensUsed += sum.tokenCount;
   }
 
@@ -301,7 +292,7 @@ function ingestMessage(
   conversationId: ConversationId,
   role: string,
   content: string,
-  tokenCount?: number,
+  tokenCount?: number
 ): void {
   const tokens = tokenCount ?? estimateTokens(content);
   const seq = globalThis.lcmDb.getLatestSeq(conversationId) + 1;
@@ -334,10 +325,7 @@ function getOrCreateConversation(sessionId: string, sessionKey?: string): Conver
     if (existing) return existing.conversationId;
   }
 
-  const conv = globalThis.lcmDb.createConversation({
-    sessionId,
-    sessionKey,
-  });
+  const conv = globalThis.lcmDb.createConversation({ sessionId, sessionKey });
   return conv.conversationId;
 }
 
@@ -348,12 +336,10 @@ function getOrCreateConversation(sessionId: string, sessionKey?: string): Conver
 function publishLcmState(): void {
   const s = globalThis.getLcmState();
   const conversations = globalThis.lcmDb.listConversations();
-  const stats = conversations.length > 0
-    ? {
-        conversationCount: conversations.length,
-        currentConversationId: s.currentConversationId,
-      }
-    : { conversationCount: 0, currentConversationId: null };
+  const stats =
+    conversations.length > 0
+      ? { conversationCount: conversations.length, currentConversationId: s.currentConversationId }
+      : { conversationCount: 0, currentConversationId: null };
 
   state.setPartial({
     connection_status: s.isRunning ? 'connected' : 'disconnected',

@@ -1,13 +1,13 @@
 import {
-  _describe,
-  _it,
   _assert,
   _assertEqual,
-  _assertNotNull,
   _assertGreaterThan,
-  _setup,
+  _assertNotNull,
   _callTool,
+  _describe,
   _getMockState,
+  _it,
+  _setup,
 } from '../../test-harness-globals';
 
 const DEFAULT_CONFIG = {
@@ -22,11 +22,7 @@ const DEFAULT_CONFIG = {
 };
 
 function freshInit(overrides?: { config?: Record<string, unknown> }): void {
-  _setup({
-    stateData: {
-      config: { ...DEFAULT_CONFIG, ...(overrides?.config || {}) },
-    },
-  });
+  _setup({ stateData: { config: { ...DEFAULT_CONFIG, ...(overrides?.config || {}) } } });
   (globalThis as any).init();
 }
 
@@ -42,10 +38,10 @@ _describe('LCM Schema', () => {
     _assertNotNull(s, 'state should be initialized');
 
     // conversations table
-    db.exec(
-      `INSERT INTO conversations (session_id, session_key) VALUES (?, ?)`,
-      ['test-session', 'test-key'],
-    );
+    db.exec(`INSERT INTO conversations (session_id, session_key) VALUES (?, ?)`, [
+      'test-session',
+      'test-key',
+    ]);
     const conv = db.get(`SELECT * FROM conversations WHERE session_id = ?`, [
       'test-session',
     ]) as Record<string, unknown> | null;
@@ -55,17 +51,13 @@ _describe('LCM Schema', () => {
 
   _it('should create messages table', () => {
     freshInit();
-    db.exec(
-      `INSERT INTO conversations (session_id) VALUES (?)`,
-      ['s1'],
-    );
-    const conv = db.get(
-      `SELECT conversation_id FROM conversations WHERE session_id = ?`,
-      ['s1'],
-    ) as { conversation_id: number };
+    db.exec(`INSERT INTO conversations (session_id) VALUES (?)`, ['s1']);
+    const conv = db.get(`SELECT conversation_id FROM conversations WHERE session_id = ?`, [
+      's1',
+    ]) as { conversation_id: number };
     db.exec(
       `INSERT INTO messages (conversation_id, seq, role, content, token_count) VALUES (?, ?, ?, ?, ?)`,
-      [conv.conversation_id, 1, 'user', 'Hello world', 3],
+      [conv.conversation_id, 1, 'user', 'Hello world', 3]
     );
     const msg = db.get(`SELECT * FROM messages WHERE conversation_id = ?`, [
       conv.conversation_id,
@@ -76,21 +68,18 @@ _describe('LCM Schema', () => {
 
   _it('should create summaries table', () => {
     freshInit();
-    db.exec(
-      `INSERT INTO conversations (session_id) VALUES (?)`,
-      ['s1'],
-    );
-    const conv = db.get(
-      `SELECT conversation_id FROM conversations WHERE session_id = ?`,
-      ['s1'],
-    ) as { conversation_id: number };
+    db.exec(`INSERT INTO conversations (session_id) VALUES (?)`, ['s1']);
+    const conv = db.get(`SELECT conversation_id FROM conversations WHERE session_id = ?`, [
+      's1',
+    ]) as { conversation_id: number };
     db.exec(
       `INSERT INTO summaries (summary_id, conversation_id, kind, depth, content, token_count, model) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      ['sum-1', conv.conversation_id, 'leaf', 0, 'Summary text', 10, 'test'],
+      ['sum-1', conv.conversation_id, 'leaf', 0, 'Summary text', 10, 'test']
     );
-    const sum = db.get(`SELECT * FROM summaries WHERE summary_id = ?`, [
-      'sum-1',
-    ]) as Record<string, unknown> | null;
+    const sum = db.get(`SELECT * FROM summaries WHERE summary_id = ?`, ['sum-1']) as Record<
+      string,
+      unknown
+    > | null;
     _assertNotNull(sum, 'summary should be created');
     _assertEqual(sum!.kind, 'leaf');
   });
@@ -117,11 +106,7 @@ _describe('LCM Ingest', () => {
 
   _it('should create conversation on first ingest', () => {
     freshInit();
-    _callTool('lcm_ingest', {
-      sessionId: 'new-session',
-      role: 'user',
-      content: 'First message',
-    });
+    _callTool('lcm_ingest', { sessionId: 'new-session', role: 'user', content: 'First message' });
 
     const s = globalThis.getLcmState();
     _assertNotNull(s.currentConversationId, 'should have a current conversation');
@@ -129,16 +114,8 @@ _describe('LCM Ingest', () => {
 
   _it('should ingest multiple messages', () => {
     freshInit();
-    _callTool('lcm_ingest', {
-      sessionId: 'sess-multi',
-      role: 'user',
-      content: 'Message 1',
-    });
-    _callTool('lcm_ingest', {
-      sessionId: 'sess-multi',
-      role: 'assistant',
-      content: 'Response 1',
-    });
+    _callTool('lcm_ingest', { sessionId: 'sess-multi', role: 'user', content: 'Message 1' });
+    _callTool('lcm_ingest', { sessionId: 'sess-multi', role: 'assistant', content: 'Response 1' });
     const result = _callTool('lcm_ingest', {
       sessionId: 'sess-multi',
       role: 'user',
@@ -201,21 +178,17 @@ _describe('LCM Grep', () => {
       content: 'That is a classic pangram sentence',
     });
 
-    const result = _callTool('lcm_grep', {
-      pattern: 'fox',
-      scope: 'messages',
-    }) as Record<string, unknown>;
+    const result = _callTool('lcm_grep', { pattern: 'fox', scope: 'messages' }) as Record<
+      string,
+      unknown
+    >;
 
     _assertNotNull(result.resultCount, 'should have result count');
   });
 
   _it('should return empty results for no matches', () => {
     freshInit();
-    _callTool('lcm_ingest', {
-      sessionId: 'grep-empty',
-      role: 'user',
-      content: 'Hello world',
-    });
+    _callTool('lcm_ingest', { sessionId: 'grep-empty', role: 'user', content: 'Hello world' });
 
     const result = _callTool('lcm_grep', {
       pattern: 'zzz_nonexistent_zzz',
@@ -230,9 +203,7 @@ _describe('LCM Grep', () => {
     const s = globalThis.getLcmState();
     s.currentConversationId = null;
 
-    const result = _callTool('lcm_grep', {
-      pattern: 'test',
-    }) as Record<string, unknown>;
+    const result = _callTool('lcm_grep', { pattern: 'test' }) as Record<string, unknown>;
 
     _assertNotNull(result.error, 'should have error');
   });
@@ -245,9 +216,10 @@ _describe('LCM Grep', () => {
 _describe('LCM Describe', () => {
   _it('should return error for nonexistent summary', () => {
     freshInit();
-    const result = _callTool('lcm_describe', {
-      summaryId: 'nonexistent-id',
-    }) as Record<string, unknown>;
+    const result = _callTool('lcm_describe', { summaryId: 'nonexistent-id' }) as Record<
+      string,
+      unknown
+    >;
 
     _assertNotNull(result.error, 'should return error for missing summary');
   });
@@ -273,15 +245,15 @@ _describe('LCM Describe', () => {
 
     // Check if any summaries were created
     const s = globalThis.getLcmState();
-    const summaries = db.all(
-      `SELECT summary_id FROM summaries WHERE conversation_id = ?`,
-      [s.currentConversationId],
-    ) as Array<{ summary_id: string }>;
+    const summaries = db.all(`SELECT summary_id FROM summaries WHERE conversation_id = ?`, [
+      s.currentConversationId,
+    ]) as Array<{ summary_id: string }>;
 
     if (summaries.length > 0) {
-      const result = _callTool('lcm_describe', {
-        summaryId: summaries[0].summary_id,
-      }) as Record<string, unknown>;
+      const result = _callTool('lcm_describe', { summaryId: summaries[0].summary_id }) as Record<
+        string,
+        unknown
+      >;
       _assertNotNull(result.summaryId, 'should have summary ID');
       _assertNotNull(result.kind, 'should have kind');
       _assertNotNull(result.content, 'should have content');
@@ -296,9 +268,10 @@ _describe('LCM Describe', () => {
 _describe('LCM Expand', () => {
   _it('should handle expand for nonexistent summary gracefully', () => {
     freshInit();
-    const result = _callTool('lcm_expand', {
-      summaryIds: ['nonexistent'],
-    }) as Record<string, unknown>;
+    const result = _callTool('lcm_expand', { summaryIds: ['nonexistent'] }) as Record<
+      string,
+      unknown
+    >;
 
     _assertEqual(result.expandedCount, 0);
   });
@@ -314,9 +287,7 @@ _describe('LCM Expand Query', () => {
     const s = globalThis.getLcmState();
     s.currentConversationId = null;
 
-    const result = _callTool('lcm_expand_query', {
-      query: 'test',
-    }) as Record<string, unknown>;
+    const result = _callTool('lcm_expand_query', { query: 'test' }) as Record<string, unknown>;
 
     _assertNotNull(result.error, 'should have error');
   });
@@ -334,9 +305,7 @@ _describe('LCM Expand Query', () => {
       content: 'Based on the analysis, BTC shows bullish patterns',
     });
 
-    const result = _callTool('lcm_expand_query', {
-      query: 'Bitcoin',
-    }) as Record<string, unknown>;
+    const result = _callTool('lcm_expand_query', { query: 'Bitcoin' }) as Record<string, unknown>;
 
     _assertNotNull(result.matchCount, 'should have match count');
     _assert(Array.isArray(result.results), 'should have results array');
@@ -355,10 +324,7 @@ _describe('LCM Lifecycle', () => {
     _assertEqual(s.isRunning, true);
 
     const mock = _getMockState();
-    _assertEqual(
-      (mock.stateValues as Record<string, unknown>)?.connection_status,
-      'connected',
-    );
+    _assertEqual((mock.stateValues as Record<string, unknown>)?.connection_status, 'connected');
   });
 
   _it('should stop and persist config', () => {

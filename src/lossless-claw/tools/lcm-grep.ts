@@ -5,10 +5,7 @@ export const lcmGrepTool: ToolDefinition = {
   input_schema: {
     type: 'object',
     properties: {
-      pattern: {
-        type: 'string',
-        description: 'Search pattern (text query or regex)',
-      },
+      pattern: { type: 'string', description: 'Search pattern (text query or regex)' },
       mode: {
         type: 'string',
         enum: ['regex', 'full_text'],
@@ -23,10 +20,7 @@ export const lcmGrepTool: ToolDefinition = {
         type: 'number',
         description: 'Conversation ID to search in. Defaults to current conversation.',
       },
-      limit: {
-        type: 'number',
-        description: 'Max results to return (default: 20)',
-      },
+      limit: { type: 'number', description: 'Max results to return (default: 20)' },
     },
     required: ['pattern'],
   },
@@ -49,7 +43,7 @@ export const lcmGrepTool: ToolDefinition = {
         conversationId,
         pattern,
         mode as 'regex' | 'full_text',
-        limit,
+        limit
       );
       results.push(...msgResults);
     }
@@ -59,7 +53,7 @@ export const lcmGrepTool: ToolDefinition = {
         conversationId,
         pattern,
         mode as 'regex' | 'full_text',
-        limit,
+        limit
       );
       results.push(...sumResults);
     }

@@ -5,10 +5,7 @@ export const lcmExpandQueryTool: ToolDefinition = {
   input_schema: {
     type: 'object',
     properties: {
-      query: {
-        type: 'string',
-        description: 'Search query to find relevant summaries',
-      },
+      query: { type: 'string', description: 'Search query to find relevant summaries' },
       conversationId: {
         type: 'number',
         description: 'Conversation ID to search in. Defaults to current conversation.',
@@ -17,10 +14,7 @@ export const lcmExpandQueryTool: ToolDefinition = {
         type: 'number',
         description: 'Maximum depth to expand matching summaries (default: 2)',
       },
-      tokenBudget: {
-        type: 'number',
-        description: 'Maximum tokens to return (default: 10000)',
-      },
+      tokenBudget: { type: 'number', description: 'Maximum tokens to return (default: 10000)' },
     },
     required: ['query'],
   },
@@ -36,21 +30,11 @@ export const lcmExpandQueryTool: ToolDefinition = {
     }
 
     // Step 1: Search summaries
-    const searchResults = globalThis.lcmDb.grepSummaries(
-      conversationId,
-      query,
-      'full_text',
-      10,
-    );
+    const searchResults = globalThis.lcmDb.grepSummaries(conversationId, query, 'full_text', 10);
 
     if (searchResults.length === 0) {
       // Fall back to message search
-      const msgResults = globalThis.lcmDb.grepMessages(
-        conversationId,
-        query,
-        'full_text',
-        10,
-      );
+      const msgResults = globalThis.lcmDb.grepMessages(conversationId, query, 'full_text', 10);
       return JSON.stringify({
         query,
         matchCount: msgResults.length,
@@ -60,7 +44,7 @@ export const lcmExpandQueryTool: ToolDefinition = {
     }
 
     // Step 2: Expand matching summaries
-    const summaryIds = searchResults.map((r) => String(r.id));
+    const summaryIds = searchResults.map(r => String(r.id));
     const allExpanded: unknown[] = [];
     let remainingBudget = tokenBudget;
 

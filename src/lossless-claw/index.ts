@@ -11,25 +11,23 @@
  * - Context assembly with fresh tail protection
  * - 6 tools: ingest, context, grep, describe, expand, expand_query
  */
-
 // 1. State first
-import './skill-state';
-// 2. DB schema
-import './db/schema';
 // 3. DB helpers
 import './db/helpers';
+// 2. DB schema
+import './db/schema';
 // 4. Core engine
 import './engine';
+import './skill-state';
 // 5. Tools
 import {
-  lcmGrepTool,
-  lcmDescribeTool,
-  lcmExpandTool,
-  lcmExpandQueryTool,
-  lcmIngestTool,
   lcmContextTool,
+  lcmDescribeTool,
+  lcmExpandQueryTool,
+  lcmExpandTool,
+  lcmGrepTool,
+  lcmIngestTool,
 } from './tools';
-
 import type { LcmConfig } from './types';
 
 function init(): void {

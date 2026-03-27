@@ -10,14 +10,8 @@ export const lcmExpandTool: ToolDefinition = {
         items: { type: 'string' },
         description: 'Summary IDs to expand',
       },
-      maxDepth: {
-        type: 'number',
-        description: 'Maximum depth to expand (default: 2)',
-      },
-      tokenBudget: {
-        type: 'number',
-        description: 'Maximum tokens to return (default: 10000)',
-      },
+      maxDepth: { type: 'number', description: 'Maximum depth to expand (default: 2)' },
+      tokenBudget: { type: 'number', description: 'Maximum tokens to return (default: 10000)' },
     },
     required: ['summaryIds'],
   },

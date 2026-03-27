@@ -5,23 +5,14 @@ export const lcmIngestTool: ToolDefinition = {
   input_schema: {
     type: 'object',
     properties: {
-      sessionId: {
-        type: 'string',
-        description: 'Session identifier for the conversation',
-      },
+      sessionId: { type: 'string', description: 'Session identifier for the conversation' },
       role: {
         type: 'string',
         enum: ['system', 'user', 'assistant', 'tool'],
         description: 'Message role',
       },
-      content: {
-        type: 'string',
-        description: 'Message content',
-      },
-      tokenCount: {
-        type: 'number',
-        description: 'Token count (estimated if not provided)',
-      },
+      content: { type: 'string', description: 'Message content' },
+      tokenCount: { type: 'number', description: 'Token count (estimated if not provided)' },
     },
     required: ['sessionId', 'role', 'content'],
   },
@@ -40,11 +31,6 @@ export const lcmIngestTool: ToolDefinition = {
     const msgCount = globalThis.lcmDb.getMessageCount(conversationId);
     const totalTokens = globalThis.lcmDb.getTotalTokenCount(conversationId);
 
-    return JSON.stringify({
-      success: true,
-      conversationId,
-      messageCount: msgCount,
-      totalTokens,
-    });
+    return JSON.stringify({ success: true, conversationId, messageCount: msgCount, totalTokens });
   },
 };

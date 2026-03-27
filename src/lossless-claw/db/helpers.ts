@@ -24,7 +24,7 @@ import type {
 function sanitizeFts5Query(raw: string): string {
   const tokens = raw.split(/\s+/).filter(Boolean);
   if (tokens.length === 0) return '""';
-  return tokens.map((t) => `"${t.replace(/"/g, '')}"`).join(' ');
+  return tokens.map(t => `"${t.replace(/"/g, '')}"`).join(' ');
 }
 
 function escapeLike(term: string): string {
@@ -39,11 +39,11 @@ function createConversation(input: CreateConversationInput): ConversationRecord 
   db.exec(
     `INSERT INTO conversations (session_id, session_key, title)
      VALUES (?, ?, ?)`,
-    [input.sessionId, input.sessionKey ?? null, input.title ?? null],
+    [input.sessionId, input.sessionKey ?? null, input.title ?? null]
   );
   const row = db.get(
     `SELECT * FROM conversations WHERE session_id = ? ORDER BY conversation_id DESC LIMIT 1`,
-    [input.sessionId],
+    [input.sessionId]
   ) as Record<string, unknown> | null;
   return mapConversationRow(row!);
 }
@@ -90,12 +90,12 @@ function createMessage(input: CreateMessageInput): MessageRecord {
   db.exec(
     `INSERT INTO messages (conversation_id, seq, role, content, token_count)
      VALUES (?, ?, ?, ?, ?)`,
-    [input.conversationId, input.seq, input.role, input.content, input.tokenCount],
+    [input.conversationId, input.seq, input.role, input.content, input.tokenCount]
   );
-  const row = db.get(
-    `SELECT * FROM messages WHERE conversation_id = ? AND seq = ?`,
-    [input.conversationId, input.seq],
-  ) as Record<string, unknown>;
+  const row = db.get(`SELECT * FROM messages WHERE conversation_id = ? AND seq = ?`, [
+    input.conversationId,
+    input.seq,
+  ]) as Record<string, unknown>;
 
   // Index in FTS5 if available
   const s = globalThis.getLcmState();
@@ -115,14 +115,14 @@ function createMessage(input: CreateMessageInput): MessageRecord {
 
 function getMessages(
   conversationId: ConversationId,
-  opts?: { limit?: number; offset?: number },
+  opts?: { limit?: number; offset?: number }
 ): MessageRecord[] {
   const limit = opts?.limit ?? 1000;
   const offset = opts?.offset ?? 0;
   const rows = db.all(
     `SELECT * FROM messages WHERE conversation_id = ?
      ORDER BY seq ASC LIMIT ? OFFSET ?`,
-    [conversationId, limit, offset],
+    [conversationId, limit, offset]
   ) as Array<Record<string, unknown>>;
   return rows.map(mapMessageRow);
 }
@@ -135,17 +135,16 @@ function getMessageCount(conversationId: ConversationId): number {
 }
 
 function getLatestSeq(conversationId: ConversationId): number {
-  const row = db.get(
-    `SELECT MAX(seq) as max_seq FROM messages WHERE conversation_id = ?`,
-    [conversationId],
-  ) as { max_seq: number | null } | null;
+  const row = db.get(`SELECT MAX(seq) as max_seq FROM messages WHERE conversation_id = ?`, [
+    conversationId,
+  ]) as { max_seq: number | null } | null;
   return row?.max_seq ?? 0;
 }
 
 function getTotalTokenCount(conversationId: ConversationId): number {
   const row = db.get(
     `SELECT COALESCE(SUM(token_count), 0) as total FROM messages WHERE conversation_id = ?`,
-    [conversationId],
+    [conversationId]
   ) as { total: number };
   return row.total;
 }
@@ -187,7 +186,7 @@ function createSummary(input: CreateSummaryInput): SummaryRecord {
       input.descendantTokenCount ?? 0,
       input.sourceMessageTokenCount ?? 0,
       fileIds,
-    ],
+    ]
   );
 
   // Index in FTS5
@@ -210,7 +209,7 @@ function linkSummaryMessages(summaryId: SummaryId, messageIds: MessageId[]): voi
   for (let i = 0; i < messageIds.length; i++) {
     db.exec(
       `INSERT OR IGNORE INTO summary_messages (summary_id, message_id, ordinal) VALUES (?, ?, ?)`,
-      [summaryId, messageIds[i], i],
+      [summaryId, messageIds[i], i]
     );
   }
 }
@@ -219,7 +218,7 @@ function linkSummaryParents(summaryId: SummaryId, parentIds: SummaryId[]): void 
   for (let i = 0; i < parentIds.length; i++) {
     db.exec(
       `INSERT OR IGNORE INTO summary_parents (summary_id, parent_summary_id, ordinal) VALUES (?, ?, ?)`,
-      [summaryId, parentIds[i], i],
+      [summaryId, parentIds[i], i]
     );
   }
 }
@@ -234,7 +233,7 @@ function getSummaryById(summaryId: SummaryId): SummaryRecord | null {
 
 function getSummaries(
   conversationId: ConversationId,
-  opts?: { kind?: string; minDepth?: number },
+  opts?: { kind?: string; minDepth?: number }
 ): SummaryRecord[] {
   let sql = `SELECT * FROM summaries WHERE conversation_id = ?`;
   const params: unknown[] = [conversationId];
@@ -264,7 +263,7 @@ function getTopLevelSummaries(conversationId: ConversationId): SummaryRecord[] {
          SELECT parent_summary_id FROM summary_parents
        )
      ORDER BY s.created_at ASC`,
-    [conversationId],
+    [conversationId]
   ) as Array<Record<string, unknown>>;
   return rows.map(mapSummaryRow);
 }
@@ -275,7 +274,7 @@ function getChildSummaries(parentSummaryId: SummaryId): SummaryRecord[] {
      JOIN summary_parents sp ON sp.summary_id = s.summary_id
      WHERE sp.parent_summary_id = ?
      ORDER BY sp.ordinal ASC`,
-    [parentSummaryId],
+    [parentSummaryId]
   ) as Array<Record<string, unknown>>;
   return rows.map(mapSummaryRow);
 }
@@ -286,7 +285,7 @@ function getParentSummaries(summaryId: SummaryId): SummaryRecord[] {
      JOIN summary_parents sp ON sp.parent_summary_id = s.summary_id
      WHERE sp.summary_id = ?
      ORDER BY sp.ordinal ASC`,
-    [summaryId],
+    [summaryId]
   ) as Array<Record<string, unknown>>;
   return rows.map(mapSummaryRow);
 }
@@ -294,15 +293,15 @@ function getParentSummaries(summaryId: SummaryId): SummaryRecord[] {
 function getSummaryMessageIds(summaryId: SummaryId): MessageId[] {
   const rows = db.all(
     `SELECT message_id FROM summary_messages WHERE summary_id = ? ORDER BY ordinal ASC`,
-    [summaryId],
+    [summaryId]
   ) as Array<{ message_id: number }>;
-  return rows.map((r) => r.message_id);
+  return rows.map(r => r.message_id);
 }
 
 function getMaxSummaryDepth(conversationId: ConversationId): number {
   const row = db.get(
     `SELECT COALESCE(MAX(depth), -1) as max_depth FROM summaries WHERE conversation_id = ?`,
-    [conversationId],
+    [conversationId]
   ) as { max_depth: number };
   return row.max_depth;
 }
@@ -317,7 +316,7 @@ function getUnsummarizedMessages(conversationId: ConversationId): MessageRecord[
          WHERE s.kind = 'leaf'
        )
      ORDER BY m.seq ASC`,
-    [conversationId],
+    [conversationId]
   ) as Array<Record<string, unknown>>;
   return rows.map(mapMessageRow);
 }
@@ -349,7 +348,7 @@ function grepMessages(
   conversationId: ConversationId,
   pattern: string,
   mode: 'regex' | 'full_text',
-  limit: number,
+  limit: number
 ): GrepResult[] {
   const s = globalThis.getLcmState();
 
@@ -364,9 +363,9 @@ function grepMessages(
          AND m.conversation_id = ?
        ORDER BY rank
        LIMIT ?`,
-      [sanitized, conversationId, limit],
+      [sanitized, conversationId, limit]
     ) as Array<Record<string, unknown>>;
-    return rows.map((r) => ({
+    return rows.map(r => ({
       type: 'message' as const,
       id: r.message_id as number,
       conversationId: r.conversation_id as number,
@@ -383,9 +382,9 @@ function grepMessages(
     `SELECT * FROM messages
      WHERE conversation_id = ? AND content LIKE ? ESCAPE '\\'
      ORDER BY seq ASC LIMIT ?`,
-    [conversationId, likePattern, limit],
+    [conversationId, likePattern, limit]
   ) as Array<Record<string, unknown>>;
-  return rows.map((r) => ({
+  return rows.map(r => ({
     type: 'message' as const,
     id: r.message_id as number,
     conversationId: r.conversation_id as number,
@@ -400,7 +399,7 @@ function grepSummaries(
   conversationId: ConversationId,
   pattern: string,
   mode: 'regex' | 'full_text',
-  limit: number,
+  limit: number
 ): GrepResult[] {
   const s = globalThis.getLcmState();
 
@@ -415,9 +414,9 @@ function grepSummaries(
          AND s.conversation_id = ?
        ORDER BY rank
        LIMIT ?`,
-      [sanitized, conversationId, limit],
+      [sanitized, conversationId, limit]
     ) as Array<Record<string, unknown>>;
-    return rows.map((r) => ({
+    return rows.map(r => ({
       type: 'summary' as const,
       id: r.summary_id as string,
       conversationId: r.conversation_id as number,
@@ -434,9 +433,9 @@ function grepSummaries(
     `SELECT * FROM summaries
      WHERE conversation_id = ? AND content LIKE ? ESCAPE '\\'
      ORDER BY created_at ASC LIMIT ?`,
-    [conversationId, likePattern, limit],
+    [conversationId, likePattern, limit]
   ) as Array<Record<string, unknown>>;
-  return rows.map((r) => ({
+  return rows.map(r => ({
     type: 'summary' as const,
     id: r.summary_id as string,
     conversationId: r.conversation_id as number,
@@ -457,12 +456,12 @@ function describeSummary(summaryId: SummaryId): DescribeResult | null {
 
   const parentRows = db.all(
     `SELECT parent_summary_id FROM summary_parents WHERE summary_id = ? ORDER BY ordinal`,
-    [summaryId],
+    [summaryId]
   ) as Array<{ parent_summary_id: string }>;
 
   const childRows = db.all(
     `SELECT summary_id FROM summary_parents WHERE parent_summary_id = ? ORDER BY ordinal`,
-    [summaryId],
+    [summaryId]
   ) as Array<{ summary_id: string }>;
 
   return {
@@ -476,8 +475,8 @@ function describeSummary(summaryId: SummaryId): DescribeResult | null {
     sourceMessageTokenCount: summary.sourceMessageTokenCount,
     earliestAt: summary.earliestAt,
     latestAt: summary.latestAt,
-    parentIds: parentRows.map((r) => r.parent_summary_id),
-    childIds: childRows.map((r) => r.summary_id),
+    parentIds: parentRows.map(r => r.parent_summary_id),
+    childIds: childRows.map(r => r.summary_id),
   };
 }
 
@@ -488,7 +487,7 @@ function describeSummary(summaryId: SummaryId): DescribeResult | null {
 function expandSummary(
   summaryId: SummaryId,
   maxDepth: number,
-  tokenBudget: number,
+  tokenBudget: number
 ): ExpandResult[] {
   const results: ExpandResult[] = [];
   let tokensUsed = 0;
@@ -549,7 +548,9 @@ function expandSummary(
 // Context Items
 // ============================================================================
 
-function getContextItems(conversationId: ConversationId): Array<{
+function getContextItems(
+  conversationId: ConversationId
+): Array<{
   ordinal: number;
   itemType: string;
   messageId: number | null;
@@ -558,9 +559,9 @@ function getContextItems(conversationId: ConversationId): Array<{
   const rows = db.all(
     `SELECT ordinal, item_type, message_id, summary_id
      FROM context_items WHERE conversation_id = ? ORDER BY ordinal ASC`,
-    [conversationId],
+    [conversationId]
   ) as Array<Record<string, unknown>>;
-  return rows.map((r) => ({
+  return rows.map(r => ({
     ordinal: r.ordinal as number,
     itemType: r.item_type as string,
     messageId: (r.message_id as number) ?? null,
@@ -570,7 +571,7 @@ function getContextItems(conversationId: ConversationId): Array<{
 
 function replaceContextItems(
   conversationId: ConversationId,
-  items: Array<{ itemType: string; messageId?: number; summaryId?: string }>,
+  items: Array<{ itemType: string; messageId?: number; summaryId?: string }>
 ): void {
   db.exec(`DELETE FROM context_items WHERE conversation_id = ?`, [conversationId]);
   for (let i = 0; i < items.length; i++) {
@@ -578,7 +579,7 @@ function replaceContextItems(
     db.exec(
       `INSERT INTO context_items (conversation_id, ordinal, item_type, message_id, summary_id)
        VALUES (?, ?, ?, ?, ?)`,
-      [conversationId, i, item.itemType, item.messageId ?? null, item.summaryId ?? null],
+      [conversationId, i, item.itemType, item.messageId ?? null, item.summaryId ?? null]
     );
   }
 }
