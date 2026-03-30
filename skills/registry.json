@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generated_at": "2026-03-30T19:55:36.919Z",
+  "generated_at": "2026-03-30T19:59:01.473Z",
   "skills": {
     "core": [
       {
@@ -33,8 +33,8 @@
           }
         },
         "ignore_in_production": false,
-        "download_url": "https://raw.githubusercontent.com/tinyhumansai/openhuman-skills/build/skills/gmail/index.js",
-        "manifest_url": "https://raw.githubusercontent.com/tinyhumansai/openhuman-skills/build/skills/gmail/manifest.json",
+        "download_url": "https://raw.githubusercontent.com/tinyhumansai/openhuman-skills/refs/heads/build/skills/gmail/index.js",
+        "manifest_url": "https://raw.githubusercontent.com/tinyhumansai/openhuman-skills/refs/heads/build/skills/gmail/manifest.json",
         "checksum_sha256": "d070cd7ec66477dae101c1148425b08e7b5a08db135e4339669af0ad82f62c40"
       },
       {
@@ -62,8 +62,8 @@
           }
         },
         "ignore_in_production": false,
-        "download_url": "https://raw.githubusercontent.com/tinyhumansai/openhuman-skills/build/skills/notion/index.js",
-        "manifest_url": "https://raw.githubusercontent.com/tinyhumansai/openhuman-skills/build/skills/notion/manifest.json",
+        "download_url": "https://raw.githubusercontent.com/tinyhumansai/openhuman-skills/refs/heads/build/skills/notion/index.js",
+        "manifest_url": "https://raw.githubusercontent.com/tinyhumansai/openhuman-skills/refs/heads/build/skills/notion/manifest.json",
         "checksum_sha256": "6266c2bf835a2b768fbc83a0d710f7f4715a1ca912a019e6aec1ffae2f621e5a"
       }
     ],
