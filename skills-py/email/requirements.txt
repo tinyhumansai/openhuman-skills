@@ -1,2 +1,0 @@
-aioimaplib>=2.0.0
-aiosmtplib>=3.0.0

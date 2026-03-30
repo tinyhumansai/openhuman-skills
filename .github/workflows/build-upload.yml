@@ -1,4 +1,4 @@
-name: Build and Upload Build
+name: Build skills and deploy to GitHub Pages
 
 on:
   push:
@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   build:
-    name: Build and upload
+    name: Build skills and registry
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -26,30 +26,35 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: 'yarn'
+          cache: yarn
 
       - name: Install dependencies
         run: yarn install --frozen-lockfile
 
-      - name: Build
+      # yarn build runs compile/bundle/strip and ends with build:registry (generate-registry.mjs).
+      - name: Build all skills and generate registry
         run: yarn build
+        env:
+          SKILLS_BASE_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}
 
-      - name: Prepare site
+      - name: Prepare GitHub Pages site
         run: |
           mkdir -p gh-pages-out
           mv skills gh-pages-out/
 
-      - name: Upload artifact
+      - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: gh-pages-out
 
-      - name: Update GH repo
-        uses: peaceiris/actions-gh-pages@v4
-        with:
-          publish_dir: ./gh-pages-out
-          publish_branch: build
-          user_name: 'github-actions[bot]'
-          user_email: 'github-actions[bot]@users.noreply.github.com'
-          commit_message: 'chore: update build branch [skip ci]'
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deploy
+        uses: actions/deploy-pages@v4

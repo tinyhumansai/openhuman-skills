@@ -1,1 +1,0 @@
-# No Python dependencies required - uses 1Password CLI (op) directly

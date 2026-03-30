@@ -1,3 +1,0 @@
-"""
-1Password CLI client.
-"""
