@@ -1,0 +1,72 @@
+{
+  "version": 1,
+  "generated_at": "2026-03-30T19:55:36.919Z",
+  "skills": {
+    "core": [
+      {
+        "id": "gmail",
+        "name": "Gmail",
+        "version": "1.0.0",
+        "description": "Gmail integration via Google API — comprehensive email management with OAuth2 authentication, send/receive, labels, search, and attachments.",
+        "runtime": "quickjs",
+        "entry": "index.js",
+        "auto_start": false,
+        "platforms": [
+          "windows",
+          "macos",
+          "linux",
+          "android",
+          "ios"
+        ],
+        "setup": {
+          "required": true,
+          "label": "Connect Gmail",
+          "oauth": {
+            "provider": "gmail",
+            "apiBaseUrl": "https://gmail.googleapis.com/gmail/v1",
+            "scopes": [
+              "https://www.googleapis.com/auth/gmail.readonly",
+              "https://www.googleapis.com/auth/gmail.send",
+              "https://www.googleapis.com/auth/gmail.modify",
+              "https://www.googleapis.com/auth/gmail.labels"
+            ]
+          }
+        },
+        "ignore_in_production": false,
+        "download_url": "https://raw.githubusercontent.com/tinyhumansai/openhuman-skills/build/skills/gmail/index.js",
+        "manifest_url": "https://raw.githubusercontent.com/tinyhumansai/openhuman-skills/build/skills/gmail/manifest.json",
+        "checksum_sha256": "d070cd7ec66477dae101c1148425b08e7b5a08db135e4339669af0ad82f62c40"
+      },
+      {
+        "id": "notion",
+        "name": "Notion",
+        "version": "1.1.0",
+        "description": "Notion workspace integration — 25 tools for pages, databases, blocks, users, comments, search, and local sync with periodic background updates.",
+        "runtime": "quickjs",
+        "entry": "index.js",
+        "auto_start": false,
+        "platforms": [
+          "windows",
+          "macos",
+          "linux",
+          "android",
+          "ios"
+        ],
+        "setup": {
+          "required": true,
+          "label": "Connect Notion",
+          "oauth": {
+            "provider": "notion",
+            "scopes": [],
+            "apiBaseUrl": "https://api.notion.com/v1"
+          }
+        },
+        "ignore_in_production": false,
+        "download_url": "https://raw.githubusercontent.com/tinyhumansai/openhuman-skills/build/skills/notion/index.js",
+        "manifest_url": "https://raw.githubusercontent.com/tinyhumansai/openhuman-skills/build/skills/notion/manifest.json",
+        "checksum_sha256": "6266c2bf835a2b768fbc83a0d710f7f4715a1ca912a019e6aec1ffae2f621e5a"
+      }
+    ],
+    "third_party": []
+  }
+}
