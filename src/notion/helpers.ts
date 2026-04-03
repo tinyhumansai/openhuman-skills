@@ -30,16 +30,52 @@ function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+/**
+ * Resolve the effective Notion credential from either the advanced auth bridge
+ * or the legacy OAuth bridge.
+ *
+ * Returns:
+ * - `{ type: 'token', token: string }` — direct API token (self_hosted or accessToken)
+ * - `{ type: 'proxy' }` — use oauth.fetch() server-side proxy
+ * - `null` — not connected
+ */
+export function getNotionAuth(): { type: 'token'; token: string } | { type: 'proxy' } | null {
+  // Check advanced auth bridge first (self_hosted / text modes)
+  const authCred = auth.getCredential();
+  if (authCred && authCred.mode !== 'managed') {
+    const creds = authCred.credentials;
+    const token = (creds.api_token ?? creds.content ?? creds.access_token) as string | undefined;
+    if (token) {
+      return { type: 'token', token };
+    }
+  }
+
+  // Check OAuth bridge (managed mode or legacy)
+  const oauthCred = oauth.getCredential();
+  if (oauthCred) {
+    if (oauthCred.accessToken) {
+      return { type: 'token', token: oauthCred.accessToken as string };
+    }
+    return { type: 'proxy' };
+  }
+
+  return null;
+}
+
+/** Returns true if any form of Notion credential is available. */
+export function isNotionConnected(): boolean {
+  return getNotionAuth() !== null;
+}
+
 export async function notionFetch<T>(
   endpoint: string,
   options: { method?: string; body?: unknown; apiVersion?: string } = {}
 ): Promise<T> {
-  const credential = oauth.getCredential();
-  if (!credential) throw new Error('Notion not connected. Please complete setup first.');
+  const notionAuth = getNotionAuth();
+  if (!notionAuth) throw new Error('Notion not connected. Please complete setup first.');
 
   const method = options.method || 'GET';
   const path = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
-  const useAccessToken = !!credential.accessToken;
 
   // Use provided API version or detect/cache the best version
   const apiVersion = options.apiVersion || (await detectApiVersion());
@@ -47,14 +83,13 @@ export async function notionFetch<T>(
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     let response: { status: number; headers: Record<string, string>; body: string };
 
-    if (useAccessToken) {
-      // Prefer direct Notion API call with access token provided by the frontend,
-      // mirroring the Gmail skill pattern.
+    if (notionAuth.type === 'token') {
+      // Direct Notion API call with token (self_hosted API token or OAuth accessToken)
       const url = `https://api.notion.com/v1${path}`;
       response = await net.fetch(url, {
         method,
         headers: {
-          Authorization: `Bearer ${credential.accessToken as string}`,
+          Authorization: `Bearer ${notionAuth.token}`,
           'Content-Type': 'application/json',
           'Notion-Version': apiVersion,
         },
@@ -62,7 +97,7 @@ export async function notionFetch<T>(
         timeout: 30,
       });
     } else {
-      // Fallback: use server-side OAuth proxy (original behavior)
+      // Server-side OAuth proxy (managed mode without accessToken)
       response = await oauth.fetch(`/v1${path}`, {
         method,
         headers: { 'Content-Type': 'application/json' },
@@ -357,8 +392,8 @@ export async function detectApiVersion(): Promise<string> {
     return cachedApiVersion;
   }
 
-  const credential = oauth.getCredential();
-  if (!credential) {
+  const notionAuth = getNotionAuth();
+  if (!notionAuth) {
     // Default to legacy version if not authenticated
     cachedApiVersion = LEGACY_API_VERSION;
     return cachedApiVersion;
@@ -366,18 +401,17 @@ export async function detectApiVersion(): Promise<string> {
 
   try {
     // Try to make a simple request with the current API version
-    const useAccessToken = !!credential.accessToken;
     let response: { status: number; headers: Record<string, string>; body: string };
 
-    if (useAccessToken) {
+    if (notionAuth.type === 'token') {
       response = await net.fetch('https://api.notion.com/v1/users?page_size=1', {
         method: 'GET',
         headers: {
-          Authorization: `Bearer ${credential.accessToken as string}`,
+          Authorization: `Bearer ${notionAuth.token}`,
           'Content-Type': 'application/json',
           'Notion-Version': CURRENT_API_VERSION,
         },
-        timeout: 10, // Quick timeout for version detection
+        timeout: 10,
       });
     } else {
       response = await oauth.fetch('/v1/users?page_size=1', {
@@ -388,16 +422,13 @@ export async function detectApiVersion(): Promise<string> {
     }
 
     if (response.status < 400) {
-      // Current API version works
       cachedApiVersion = CURRENT_API_VERSION;
       console.log(`[notion][helpers] Using API version: ${CURRENT_API_VERSION}`);
     } else {
-      // Fall back to legacy version
       cachedApiVersion = LEGACY_API_VERSION;
       console.log(`[notion][helpers] Falling back to API version: ${LEGACY_API_VERSION}`);
     }
   } catch (error) {
-    // On any error, fall back to legacy version
     cachedApiVersion = LEGACY_API_VERSION;
     console.log(
       `[notion][helpers] Error detecting API version, using legacy: ${LEGACY_API_VERSION}`,

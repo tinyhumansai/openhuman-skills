@@ -109,6 +109,36 @@ declare const oauth: {
   revoke(): boolean;
 };
 
+/** Advanced auth credential shape. */
+interface AuthCredential {
+  mode: 'managed' | 'self_hosted' | 'text';
+  credentials: Record<string, unknown>;
+}
+
+/**
+ * Advanced auth credential management.
+ * Used when skills declare `setup.auth` in their manifest.
+ * For managed mode, bridges to the OAuth system for backward compatibility.
+ */
+declare const auth: {
+  /** Get the full auth credential, or null if not set. */
+  getCredential(): AuthCredential | null;
+
+  /** Get the auth mode string, or null. */
+  getMode(): 'managed' | 'self_hosted' | 'text' | null;
+
+  /** Get just the credentials map (e.g. { client_id, client_secret, url, content }). */
+  getCredentials(): Record<string, unknown> | null;
+
+  /**
+   * Make an HTTP request with credentials auto-injected.
+   * For self_hosted: auto-adds Authorization header from client_id/client_secret.
+   * For managed: delegates to oauth.fetch.
+   * For text: no auto-injection (skill should handle manually).
+   */
+  fetch(url: string, options?: OAuthFetchOptions): Promise<OAuthFetchResponse>;
+};
+
 /** Memory insertion bridge (persists through native memory client). */
 interface MemoryInsertParams {
   title: string;
