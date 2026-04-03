@@ -47,9 +47,13 @@ async function init(): Promise<void> {
   const oauthCred = oauth.getCredential();
   if (oauthCred) {
     s.config.credentialId = oauthCred.credentialId;
-    console.log(`[notion] Connected via OAuth to workspace: ${s.config.workspaceName || '(unnamed)'}`);
+    console.log(
+      `[notion] Connected via OAuth to workspace: ${s.config.workspaceName || '(unnamed)'}`
+    );
   } else if (isNotionConnected()) {
-    console.log(`[notion] Connected via auth credential to workspace: ${s.config.workspaceName || '(unnamed)'}`);
+    console.log(
+      `[notion] Connected via auth credential to workspace: ${s.config.workspaceName || '(unnamed)'}`
+    );
   } else {
     console.log('[notion] No credential — waiting for setup');
   }
@@ -160,7 +164,14 @@ async function onDisconnect(): Promise<void> {
 // Advanced auth lifecycle (self_hosted / text modes)
 // ---------------------------------------------------------------------------
 
-async function onAuthComplete(args: { mode: string; credentials: Record<string, unknown> }): Promise<{ status: string; errors?: Array<{ field: string; message: string }>; message?: string }> {
+async function onAuthComplete(args: {
+  mode: string;
+  credentials: Record<string, unknown>;
+}): Promise<{
+  status: string;
+  errors?: Array<{ field: string; message: string }>;
+  message?: string;
+}> {
   console.log(`[notion] onAuthComplete — mode: ${args.mode}`);
   const s = getNotionSkillState();
 
@@ -170,13 +181,12 @@ async function onAuthComplete(args: { mode: string; credentials: Record<string, 
   }
 
   // For self_hosted: validate the API token by making a test call
-  const token = (args.credentials.api_token ?? args.credentials.content ?? args.credentials.access_token) as string | undefined;
+  const token = (args.credentials.api_token ??
+    args.credentials.content ??
+    args.credentials.access_token) as string | undefined;
 
   if (!token) {
-    return {
-      status: 'error',
-      errors: [{ field: 'api_token', message: 'API token is required.' }],
-    };
+    return { status: 'error', errors: [{ field: 'api_token', message: 'API token is required.' }] };
   }
 
   // Test the token against Notion API
@@ -194,20 +204,32 @@ async function onAuthComplete(args: { mode: string; credentials: Record<string, 
     if (response.status === 401 || response.status === 403) {
       return {
         status: 'error',
-        errors: [{ field: 'api_token', message: 'Invalid token. Check that your integration token is correct.' }],
+        errors: [
+          {
+            field: 'api_token',
+            message: 'Invalid token. Check that your integration token is correct.',
+          },
+        ],
       };
     }
 
     if (response.status >= 400) {
       return {
         status: 'error',
-        errors: [{ field: 'api_token', message: `Notion API returned error ${response.status}. Please check your token.` }],
+        errors: [
+          {
+            field: 'api_token',
+            message: `Notion API returned error ${response.status}. Please check your token.`,
+          },
+        ],
       };
     }
 
     // Token is valid — extract workspace info from the bot user
     try {
-      const data = JSON.parse(response.body) as { results?: Array<{ name?: string; type?: string }> };
+      const data = JSON.parse(response.body) as {
+        results?: Array<{ name?: string; type?: string }>;
+      };
       const botUser = data.results?.find(u => u.type === 'bot');
       if (botUser?.name) {
         s.config.workspaceName = botUser.name;

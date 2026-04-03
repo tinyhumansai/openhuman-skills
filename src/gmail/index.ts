@@ -145,7 +145,14 @@ async function onDisconnect(): Promise<void> {
 // Advanced auth lifecycle (self_hosted / text modes)
 // ---------------------------------------------------------------------------
 
-async function onAuthComplete(args: { mode: string; credentials: Record<string, unknown> }): Promise<{ status: string; errors?: Array<{ field: string; message: string }>; message?: string }> {
+async function onAuthComplete(args: {
+  mode: string;
+  credentials: Record<string, unknown>;
+}): Promise<{
+  status: string;
+  errors?: Array<{ field: string; message: string }>;
+  message?: string;
+}> {
   console.log(`[gmail] onAuthComplete — mode: ${args.mode}`);
   const s = getGmailSkillState();
 
@@ -183,28 +190,36 @@ async function onAuthComplete(args: { mode: string; credentials: Record<string, 
         try {
           const parsed = JSON.parse(response.body) as { error_description?: string };
           if (parsed.error_description) errorMsg = parsed.error_description;
-        } catch { /* use default */ }
-        return {
-          status: 'error',
-          errors: [{ field: 'refresh_token', message: errorMsg }],
-        };
+        } catch {
+          /* use default */
+        }
+        return { status: 'error', errors: [{ field: 'refresh_token', message: errorMsg }] };
       }
 
       // Token exchange succeeded — test Gmail API access
       const tokenData = JSON.parse(response.body) as { access_token: string };
-      const profileResp = await net.fetch('https://gmail.googleapis.com/gmail/v1/users/me/profile', {
-        method: 'GET',
-        headers: {
-          Authorization: `Bearer ${tokenData.access_token}`,
-          'Content-Type': 'application/json',
-        },
-        timeout: 10,
-      });
+      const profileResp = await net.fetch(
+        'https://gmail.googleapis.com/gmail/v1/users/me/profile',
+        {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${tokenData.access_token}`,
+            'Content-Type': 'application/json',
+          },
+          timeout: 10,
+        }
+      );
 
       if (profileResp.status !== 200) {
         return {
           status: 'error',
-          errors: [{ field: 'client_id', message: 'Token is valid but Gmail API access failed. Ensure Gmail API is enabled in your Google Cloud project.' }],
+          errors: [
+            {
+              field: 'client_id',
+              message:
+                'Token is valid but Gmail API access failed. Ensure Gmail API is enabled in your Google Cloud project.',
+            },
+          ],
         };
       }
 
@@ -214,7 +229,9 @@ async function onAuthComplete(args: { mode: string; credentials: Record<string, 
         if (profile.emailAddress) {
           s.config.userEmail = profile.emailAddress;
         }
-      } catch { /* non-critical */ }
+      } catch {
+        /* non-critical */
+      }
     } catch (err) {
       return {
         status: 'error',
@@ -241,7 +258,13 @@ async function onAuthComplete(args: { mode: string; credentials: Record<string, 
       } else if (parsed.private_key) {
         return {
           status: 'error',
-          errors: [{ field: 'content', message: 'Service account JSON with private_key is not yet supported. Use a refresh token or access token instead.' }],
+          errors: [
+            {
+              field: 'content',
+              message:
+                'Service account JSON with private_key is not yet supported. Use a refresh token or access token instead.',
+            },
+          ],
         };
       }
     } catch {
@@ -250,14 +273,14 @@ async function onAuthComplete(args: { mode: string; credentials: Record<string, 
 
     // Test the token against Gmail
     try {
-      const profileResp = await net.fetch('https://gmail.googleapis.com/gmail/v1/users/me/profile', {
-        method: 'GET',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        timeout: 10,
-      });
+      const profileResp = await net.fetch(
+        'https://gmail.googleapis.com/gmail/v1/users/me/profile',
+        {
+          method: 'GET',
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          timeout: 10,
+        }
+      );
 
       if (profileResp.status === 401 || profileResp.status === 403) {
         return {
@@ -272,7 +295,9 @@ async function onAuthComplete(args: { mode: string; credentials: Record<string, 
           if (profile.emailAddress) {
             s.config.userEmail = profile.emailAddress;
           }
-        } catch { /* non-critical */ }
+        } catch {
+          /* non-critical */
+        }
       }
     } catch (err) {
       return {

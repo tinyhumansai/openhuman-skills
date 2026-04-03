@@ -87,7 +87,9 @@ async function resolveAccessToken(): Promise<string | null> {
       // Service account with private_key: not supported yet in QuickJS runtime
       // (would need JWT signing). Log a helpful message.
       if (parsed.private_key) {
-        console.warn('[gmail] Service account JSON detected but JWT signing is not yet supported. Use a refresh token flow instead.');
+        console.warn(
+          '[gmail] Service account JSON detected but JWT signing is not yet supported. Use a refresh token flow instead.'
+        );
         return null;
       }
     } catch {
@@ -182,9 +184,7 @@ export async function gmailFetch<T = unknown>(
 
       if (response.status === 401) {
         const bodyPreview = response.body ? response.body.slice(0, 200) : '(empty)';
-        console.log(
-          `[gmail] gmailFetch: 401 Unauthorized url=${url} body=${bodyPreview}`
-        );
+        console.log(`[gmail] gmailFetch: 401 Unauthorized url=${url} body=${bodyPreview}`);
       } else if (response.status >= 400) {
         const bodyPreview = response.body ? response.body.slice(0, 200) : '(empty)';
         console.log(
