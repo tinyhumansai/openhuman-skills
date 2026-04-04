@@ -54,8 +54,8 @@ interface TimerEntry {
 export interface LiveState {
   /** Captured console output */
   consoleOutput: Array<{ level: string; message: string }>;
-  /** Recorded HTTP requests */
-  fetchCalls: Array<{ url: string; options?: FetchOptions }>;
+  /** Recorded HTTP requests with responses */
+  fetchCalls: Array<{ url: string; options?: FetchOptions; response?: { status: number; body?: string } }>;
   /** platform.notify() calls */
   notifications: Array<{ title: string; body?: string }>;
   /** Registered cron schedules */
@@ -100,7 +100,8 @@ function realFetch(
   url: string,
   options?: FetchOptions,
 ): { status: number; headers: Record<string, string>; body: string } {
-  liveState.fetchCalls.push({ url, options });
+  const fetchCallEntry: { url: string; options?: FetchOptions; response?: { status: number; body?: string } } = { url, options };
+  liveState.fetchCalls.push(fetchCallEntry);
 
   const headerFile = join(
     tmpdir(),
@@ -168,6 +169,9 @@ function realFetch(
         }
       }
     }
+
+    // Record response for fetch-log inspection
+    fetchCallEntry.response = { status, body: body.length > 500 ? body.slice(0, 500) + '...' : body };
 
     return { status, headers, body };
   } catch (e: unknown) {

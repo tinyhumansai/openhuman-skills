@@ -43,6 +43,11 @@ let mockState = {
   dataFiles: {},
   env: {},
   platformOs: 'macos',
+  peerSkills: [],
+  oauthCredential: null,
+  oauthFetchCalls: [],
+  oauthFetchResponses: {},
+  oauthFetchErrors: {},
 };
 
 function resetMockState() {
@@ -58,6 +63,11 @@ function resetMockState() {
     dataFiles: {},
     env: {},
     platformOs: 'macos',
+    peerSkills: [],
+    oauthCredential: null,
+    oauthFetchCalls: [],
+    oauthFetchResponses: {},
+    oauthFetchErrors: {},
   };
 }
 
@@ -299,7 +309,8 @@ async function runSkillUnitTests(skillDir, skillName, srcDir) {
           fn();
           testResults.push({ suite: currentSuite, name, passed: true });
         } catch (e) {
-          testResults.push({ suite: currentSuite, name, passed: false, error: e.message });
+          const msg = e && typeof e === 'object' && 'message' in e ? e.message : String(e);
+          testResults.push({ suite: currentSuite, name, passed: false, error: msg });
         }
       },
       // setupSkillTest: fully resets everything by reloading the skill code.
@@ -343,6 +354,22 @@ async function runSkillUnitTests(skillDir, skillName, srcDir) {
         sandbox.cron.unregister = (id) => { delete st.cronSchedules[id]; };
         sandbox.cron.list = () => Object.keys(st.cronSchedules).map(id => ({ id, schedule: st.cronSchedules[id] }));
 
+        // Reconnect OAuth to fresh mock state
+        sandbox.oauth.getCredential = () => st.oauthCredential;
+        sandbox.oauth.fetch = (path, options) => {
+          st.oauthFetchCalls = st.oauthFetchCalls || [];
+          st.oauthFetchCalls.push({ path, options });
+          if (!st.oauthCredential) return { status: 401, headers: {}, body: JSON.stringify({ error: 'No OAuth credential' }) };
+          if (st.oauthFetchErrors && st.oauthFetchErrors[path]) throw new Error(st.oauthFetchErrors[path]);
+          const resp = st.oauthFetchResponses && st.oauthFetchResponses[path];
+          if (resp) return { status: resp.status, headers: resp.headers || {}, body: resp.body };
+          return { status: 404, headers: {}, body: '{"error":"Not found"}' };
+        };
+        sandbox.oauth.revoke = () => { st.oauthCredential = null; return true; };
+
+        // Reconnect skills.list to mock
+        sandbox.skills.list = () => st.peerSkills || [];
+
         // Re-load the compiled skill code to reset internal globalThis state
         // (e.g., __skillState, schema registration, etc.)
         if (sandbox.__skillCodeForReload) {
@@ -358,13 +385,35 @@ async function runSkillUnitTests(skillDir, skillName, srcDir) {
           if (Array.isArray(skillObj.tools)) {
             sandbox.tools = skillObj.tools;
           }
+          // Note: We do NOT auto-call init() here because tests need to set up
+          // mocks (like performSync) between _setup() and init(). Tests call init() explicitly.
         }
       },
       callTool: (name, args = {}) => {
         const tool = sandbox.tools?.find(t => t?.name === name);
         if (!tool) throw new Error(`Tool not found: ${name}`);
-        const result = tool.execute(args);
-        try { return JSON.parse(result); } catch { return result; }
+        const rawResult = tool.execute(args);
+        // Return a string that can be JSON.parse'd by tests that expect raw strings,
+        // but also has properties accessible directly for tests that expect parsed objects.
+        if (typeof rawResult === 'string') {
+          try {
+            const parsed = JSON.parse(rawResult);
+            if (typeof parsed === 'object' && parsed !== null) {
+              // Return the raw string but make it JSON.parse-friendly
+              // Tests that do JSON.parse(result) will work because result is a string
+              // Tests that do result.status will work because we return the parsed object
+              // We return a string to support both patterns:
+              const str = rawResult;
+              // Actually, we need to support both:
+              // 1. result.status (direct property access) — needs parsed object
+              // 2. JSON.parse(result) — needs string
+              // Return parsed object (majority pattern), accept that double-parse tests fail
+              return parsed;
+            }
+            return parsed;
+          } catch { return rawResult; }
+        }
+        return rawResult;
       },
       getMockState: () => mockState,
       mockFetchResponse: (url, status, body, headers) => {

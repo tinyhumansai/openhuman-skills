@@ -9,8 +9,8 @@
  * For unit testing with mocked APIs, use the test harness (yarn test) instead.
  *
  * Usage:
- *   yarn repl [skill-id] [--clean]
- *   npx tsx dev/test-harness/repl-node.ts [skill-id] [--clean]
+ *   yarn repl [skill-id] [--clean] [--watch]
+ *   npx tsx dev/test-harness/repl-node.ts [skill-id] [--clean] [--watch]
  */
 
 import * as readline from 'readline/promises';
@@ -567,7 +567,10 @@ ${c.bold}Commands:${c.reset}
   ${c.cyan}tdlib${c.reset}                       Show TDLib availability and client status
   ${c.cyan}tdlib send <json>${c.reset}           Send raw TDLib request and print response
   ${c.cyan}tdlib receive${c.reset}               Wait 3s for next TDLib update
+  ${c.cyan}fetch-log${c.reset}                   Show recent HTTP request/response log
+  ${c.cyan}published${c.reset}                   Show published state (frontend-visible)
   ${c.cyan}reload${c.reset}                      Reload skill (stop + re-read + init + start)
+  ${c.cyan}build${c.reset}                       Rebuild current skill then reload
   ${c.cyan}exit${c.reset} / ${c.cyan}quit${c.reset}                  Clean exit
 
 ${c.dim}Mode: live (real HTTP via curl, persistent storage, socket.io)${c.reset}
@@ -983,7 +986,7 @@ function cmdEmit(G: G, rest: string): void {
 const ALL_COMMANDS = [
   'help', 'tools', 'call', 'init', 'start', 'stop', 'sync', 'cron', 'session',
   'setup', 'oauth', 'options', 'option', 'state', 'db', 'env', 'backend',
-  'socket', 'emit', 'disconnect', 'tdlib', 'reload', 'exit', 'quit',
+  'socket', 'emit', 'disconnect', 'tdlib', 'reload', 'build', 'fetch-log', 'published', 'exit', 'quit',
 ];
 
 // ─── Suggestion Sources (for ghost text) ────────────────────────────
@@ -1129,10 +1132,13 @@ async function main(): Promise<void> {
   const args = process.argv.slice(2);
   let skillId: string | undefined;
   let cleanFlag = false;
+  let watchFlag = false;
 
   for (const arg of args) {
     if (arg === '--clean') {
       cleanFlag = true;
+    } else if (arg === '--watch') {
+      watchFlag = true;
     } else if (!arg.startsWith('-')) {
       skillId = arg;
     }
@@ -1323,6 +1329,32 @@ async function main(): Promise<void> {
     return readline.createInterface({ input: process.stdin, output: process.stdout });
   }
 
+  // Watch mode: auto-rebuild + reload on source file changes
+  let watcher: import('fs').FSWatcher | null = null;
+  if (watchFlag && skillId) {
+    const srcDir = resolve(rootDir, 'src', skillId);
+    if (existsSync(srcDir)) {
+      const { watch } = await import('fs');
+      let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+      const { execSync } = await import('child_process');
+      watcher = watch(srcDir, { recursive: true }, (_event, filename) => {
+        if (!filename || !filename.endsWith('.ts')) return;
+        if (debounceTimer) clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+          console.log(`\n${c.yellow}File changed: ${filename}${c.reset}`);
+          console.log(`${c.dim}Auto-rebuilding...${c.reset}`);
+          try {
+            execSync('yarn build', { cwd: rootDir, stdio: 'pipe' });
+            console.log(`${c.green}Build complete.${c.reset} Type ${c.cyan}reload${c.reset} to apply.`);
+          } catch (e) {
+            console.log(`${c.red}Build failed: ${e}${c.reset}`);
+          }
+        }, 500);
+      });
+      console.log(`${c.cyan}Watching${c.reset} ${srcDir} for changes`);
+    }
+  }
+
   let running = true;
 
   while (running) {
@@ -1506,6 +1538,79 @@ async function main(): Promise<void> {
           break;
         }
 
+        case 'fetch-log': {
+          const ls = getLiveState();
+          const calls = ls.fetchCalls || [];
+          if (calls.length === 0) {
+            console.log(`${c.dim}No HTTP requests recorded${c.reset}`);
+          } else {
+            console.log(`\n${c.bold}HTTP Request Log (${calls.length} calls):${c.reset}`);
+            const recent = calls.slice(-20); // show last 20
+            for (const call of recent) {
+              const method = call.options?.method || 'GET';
+              const status = call.response?.status ?? '???';
+              const bodyLen = call.response?.body?.length ?? 0;
+              const statusColor = status >= 200 && status < 300 ? c.green : status >= 400 ? c.red : c.yellow;
+              console.log(`  ${c.cyan}${method}${c.reset} ${call.url}`);
+              console.log(`    ${statusColor}${status}${c.reset} ${c.dim}(${bodyLen} bytes)${c.reset}`);
+            }
+            if (calls.length > 20) {
+              console.log(`  ${c.dim}... and ${calls.length - 20} more (showing last 20)${c.reset}`);
+            }
+          }
+          break;
+        }
+
+        case 'published': {
+          const stateApi = ctx.G.state as { get?: (key: string) => unknown; keys?: () => string[] } | undefined;
+          if (stateApi?.keys) {
+            const keys = stateApi.keys();
+            if (keys.length === 0) {
+              console.log(`${c.dim}No published state${c.reset}`);
+            } else {
+              console.log(`\n${c.bold}Published State:${c.reset}`);
+              for (const key of keys) {
+                const val = stateApi.get?.(key);
+                console.log(`  ${c.cyan}${key}${c.reset}: ${JSON.stringify(val, null, 2)}`);
+              }
+            }
+          } else {
+            console.log(`${c.dim}State API not available${c.reset}`);
+          }
+          break;
+        }
+
+        case 'build': {
+          console.log(`${c.dim}Building ${skillId}...${c.reset}`);
+          try {
+            const { execSync } = await import('child_process');
+            // Run the full build pipeline for just this skill
+            execSync(`yarn build`, { cwd: rootDir, stdio: 'pipe' });
+            console.log(`${c.green}Build complete${c.reset}`);
+            // Now reload
+            console.log(`${c.dim}Reloading...${c.reset}`);
+            if (typeof ctx.G.stop === 'function') {
+              try { await (ctx.G.stop as () => void | Promise<void>)(); } catch { /* ignore */ }
+            }
+            ctx.cleanup();
+            ctx = await loadSkill(skillId!, false, { jwtToken, backendUrl });
+            const newToolCount = getTools(ctx.G).length;
+            console.log(`${c.green}Reloaded${c.reset} ${c.bold}${ctx.manifest.name}${c.reset} v${ctx.manifest.version}`);
+            if (newToolCount > 0) console.log(`${c.dim}  ${newToolCount} tools available${c.reset}`);
+            if (typeof ctx.G.init === 'function') {
+              await (ctx.G.init as () => void | Promise<void>)();
+              console.log(`${c.green}init()${c.reset} ok`);
+            }
+            if (typeof ctx.G.start === 'function') {
+              await (ctx.G.start as () => void | Promise<void>)();
+              console.log(`${c.green}start()${c.reset} ok`);
+            }
+          } catch (e) {
+            console.log(`${c.red}Build failed: ${e}${c.reset}`);
+          }
+          break;
+        }
+
         case 'reload': {
           console.log(`${c.dim}Reloading...${c.reset}`);
           // Stop current skill
@@ -1588,6 +1693,7 @@ async function main(): Promise<void> {
     }
   }
   ctx.cleanup();
+  if (watcher) watcher.close();
   ghostInput.destroy();
   console.log(`${c.dim}Bye!${c.reset}`);
 }
