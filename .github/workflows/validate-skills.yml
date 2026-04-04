@@ -22,6 +22,9 @@ jobs:
           submodules: recursive
           token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Install system dependencies
+        run: apt-get update -qq && apt-get install -y --no-install-recommends cmake pkg-config libssl-dev
+
       - name: Install Node dependencies
         run: yarn install --frozen-lockfile
 
