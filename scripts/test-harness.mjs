@@ -48,6 +48,7 @@ let mockState = {
   oauthFetchCalls: [],
   oauthFetchResponses: {},
   oauthFetchErrors: {},
+  authCredential: null,
 };
 
 function resetMockState() {
@@ -68,6 +69,7 @@ function resetMockState() {
     oauthFetchCalls: [],
     oauthFetchResponses: {},
     oauthFetchErrors: {},
+    authCredential: null,
   };
 }
 
@@ -325,6 +327,8 @@ async function runSkillUnitTests(skillDir, skillName, srcDir) {
         if (opts?.platformOs) st.platformOs = opts.platformOs;
         if (opts?.oauthCredential) st.oauthCredential = { ...opts.oauthCredential };
         if (opts?.oauthFetchResponses) Object.assign(st.oauthFetchResponses, opts.oauthFetchResponses);
+        // Auth credential (advanced auth: managed/self_hosted/text)
+        if (opts?.authCredential) st.authCredential = { ...opts.authCredential };
 
         // Recreate in-memory db
         const newDb = createInMemoryDb();
@@ -366,6 +370,16 @@ async function runSkillUnitTests(skillDir, skillName, srcDir) {
           return { status: 404, headers: {}, body: '{"error":"Not found"}' };
         };
         sandbox.oauth.revoke = () => { st.oauthCredential = null; return true; };
+
+        // Reconnect auth bridge to fresh mock state
+        sandbox.auth.getCredential = () => st.authCredential;
+        sandbox.auth.getMode = () => st.authCredential ? st.authCredential.mode : null;
+        sandbox.auth.getCredentials = () => st.authCredential ? st.authCredential.credentials : null;
+        sandbox.auth.fetch = (url, options) => {
+          if (!st.authCredential) return { status: 401, headers: {}, body: '{"error":"No auth credential"}' };
+          // For text/self_hosted mode, use net.fetch with auth headers
+          return sandbox.net.fetch(url, options || {});
+        };
 
         // Reconnect skills.list to mock
         sandbox.skills.list = () => st.peerSkills || [];
@@ -615,11 +629,17 @@ function createBridgeAPIs() {
 
     // Auth API (advanced authentication: managed/self_hosted/text)
     auth: {
-      getCredential: () => null,
-      getMode: () => null,
-      getCredentials: () => null,
-      fetch: (url, options) => ({ status: 401, headers: {}, body: '{"error":"No auth credential"}' }),
-      __setCredential: () => {},
+      getCredential: () => mockState.authCredential,
+      getMode: () => mockState.authCredential ? mockState.authCredential.mode : null,
+      getCredentials: () => mockState.authCredential ? mockState.authCredential.credentials : null,
+      fetch: (url, options) => {
+        if (!mockState.authCredential) return { status: 401, headers: {}, body: '{"error":"No auth credential"}' };
+        // Delegate to net.fetch for self_hosted/text modes
+        if (mockState.fetchErrors[url]) throw new Error(mockState.fetchErrors[url]);
+        const response = mockState.fetchResponses[url] || { status: 200, body: '{}', headers: {} };
+        return { status: response.status, headers: response.headers || {}, body: response.body };
+      },
+      __setCredential: (cred) => { mockState.authCredential = cred; },
     },
 
     // Webhook API
