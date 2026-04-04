@@ -581,22 +581,42 @@ var __skill_bundle = (() => {
  function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
  }
+ function getNotionAuth() {
+  const authCred = auth.getCredential();
+  if (authCred && authCred.mode !== "managed") {
+   const creds = authCred.credentials;
+   const token = creds.api_token ?? creds.content ?? creds.access_token;
+   if (token) {
+    return { type: "token", token };
+   }
+  }
+  const oauthCred = oauth.getCredential();
+  if (oauthCred) {
+   if (oauthCred.accessToken) {
+    return { type: "token", token: oauthCred.accessToken };
+   }
+   return { type: "proxy" };
+  }
+  return null;
+ }
+ function isNotionConnected() {
+  return getNotionAuth() !== null;
+ }
  async function notionFetch(endpoint, options = {}) {
-  const credential = oauth.getCredential();
-  if (!credential)
+  const notionAuth = getNotionAuth();
+  if (!notionAuth)
    throw new Error("Notion not connected. Please complete setup first.");
   const method = options.method || "GET";
   const path = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
-  const useAccessToken = !!credential.accessToken;
   const apiVersion = options.apiVersion || await detectApiVersion();
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
    let response;
-   if (useAccessToken) {
+   if (notionAuth.type === "token") {
     const url = `https://api.notion.com/v1${path}`;
     response = await net.fetch(url, {
      method,
      headers: {
-      Authorization: `Bearer ${credential.accessToken}`,
+      Authorization: `Bearer ${notionAuth.token}`,
       "Content-Type": "application/json",
       "Notion-Version": apiVersion
      },
@@ -812,24 +832,22 @@ var __skill_bundle = (() => {
   if (cachedApiVersion) {
    return cachedApiVersion;
   }
-  const credential = oauth.getCredential();
-  if (!credential) {
+  const notionAuth = getNotionAuth();
+  if (!notionAuth) {
    cachedApiVersion = LEGACY_API_VERSION;
    return cachedApiVersion;
   }
   try {
-   const useAccessToken = !!credential.accessToken;
    let response;
-   if (useAccessToken) {
+   if (notionAuth.type === "token") {
     response = await net.fetch("https://api.notion.com/v1/users?page_size=1", {
      method: "GET",
      headers: {
-      Authorization: `Bearer ${credential.accessToken}`,
+      Authorization: `Bearer ${notionAuth.token}`,
       "Content-Type": "application/json",
       "Notion-Version": CURRENT_API_VERSION
      },
      timeout: 10
-     // Quick timeout for version detection
     });
    } else {
     response = await oauth.fetch("/v1/users?page_size=1", {
@@ -850,6 +868,9 @@ var __skill_bundle = (() => {
    console.log(`[notion][helpers] Error detecting API version, using legacy: ${LEGACY_API_VERSION}`, error);
   }
   return cachedApiVersion;
+ }
+ function resetApiVersionCache() {
+  cachedApiVersion = null;
  }
  async function resolveDataSourceId(databaseId) {
   const apiVersion = await detectApiVersion();
@@ -3261,19 +3282,21 @@ var __skill_bundle = (() => {
   s.syncStatus.totalDatabaseRows = counts.databaseRows;
   s.syncStatus.pagesWithContent = counts.pagesWithContent;
   s.syncStatus.pagesWithSummary = counts.pagesWithSummary;
-  const cred = oauth.getCredential();
-  if (cred) {
-   s.config.credentialId = cred.credentialId;
-   console.log(`[notion] Connected to workspace: ${s.config.workspaceName || "(unnamed)"}`);
+  const oauthCred = oauth.getCredential();
+  if (oauthCred) {
+   s.config.credentialId = oauthCred.credentialId;
+   console.log(`[notion] Connected via OAuth to workspace: ${s.config.workspaceName || "(unnamed)"}`);
+  } else if (isNotionConnected()) {
+   console.log(`[notion] Connected via auth credential to workspace: ${s.config.workspaceName || "(unnamed)"}`);
   } else {
-   console.log("[notion] No OAuth credential \u2014 waiting for setup");
+   console.log("[notion] No credential \u2014 waiting for setup");
   }
   publishState();
  }
  async function start() {
   const s = getNotionSkillState2();
-  if (!oauth.getCredential()) {
-   console.log("[notion] No credential \u2014 skill inactive until OAuth completes");
+  if (!isNotionConnected()) {
+   console.log("[notion] No credential \u2014 skill inactive until auth completes");
    return;
   }
   const cronExpr = `0 */${s.config.syncIntervalMinutes} * * * *`;
@@ -3336,6 +3359,93 @@ var __skill_bundle = (() => {
   cron.unregister("notion-sync");
   publishState();
  }
+ async function onAuthComplete(args) {
+  console.log(`[notion] onAuthComplete \u2014 mode: ${args.mode}`);
+  const s = getNotionSkillState2();
+  if (args.mode === "managed") {
+   return { status: "complete" };
+  }
+  const token = args.credentials.api_token ?? args.credentials.content ?? args.credentials.access_token;
+  if (!token) {
+   return { status: "error", errors: [{ field: "api_token", message: "API token is required." }] };
+  }
+  try {
+   const response = await net.fetch("https://api.notion.com/v1/users?page_size=1", {
+    method: "GET",
+    headers: {
+     Authorization: `Bearer ${token}`,
+     "Content-Type": "application/json",
+     "Notion-Version": "2022-06-28"
+    },
+    timeout: 15
+   });
+   if (response.status === 401 || response.status === 403) {
+    return {
+     status: "error",
+     errors: [
+      {
+       field: "api_token",
+       message: "Invalid token. Check that your integration token is correct."
+      }
+     ]
+    };
+   }
+   if (response.status >= 400) {
+    return {
+     status: "error",
+     errors: [
+      {
+       field: "api_token",
+       message: `Notion API returned error ${response.status}. Please check your token.`
+      }
+     ]
+    };
+   }
+   try {
+    const data = JSON.parse(response.body);
+    const botUser = data.results?.find((u) => u.type === "bot");
+    if (botUser?.name) {
+     s.config.workspaceName = botUser.name;
+    }
+   } catch {
+   }
+  } catch (err) {
+   return {
+    status: "error",
+    errors: [{ field: "api_token", message: `Could not reach Notion API: ${String(err)}` }]
+   };
+  }
+  state.set("config", s.config);
+  resetApiVersionCache();
+  const cronExpr = `0 */${s.config.syncIntervalMinutes} * * * *`;
+  cron.register("notion-sync", cronExpr);
+  publishState();
+  return { status: "complete", message: "Connected to Notion!" };
+ }
+ async function onAuthRevoked(args) {
+  console.log(`[notion] Auth revoked \u2014 mode: ${args.mode || "unknown"}`);
+  const s = getNotionSkillState2();
+  s.config.credentialId = "";
+  s.config.workspaceName = "";
+  state.setPartial({ profile: null });
+  state.delete("config");
+  cron.unregister("notion-sync");
+  resetApiVersionCache();
+  publishState();
+ }
+ async function onSetupStart() {
+  return {
+   step: {
+    id: "auth_done",
+    title: "Setup Complete",
+    description: "Authentication is configured. Click Continue to finish.",
+    fields: []
+   }
+  };
+ }
+ async function onSetupSubmit(_args) {
+  return { status: "complete" };
+ }
  async function onSync() {
   console.log("[notion] Syncing");
   try {
@@ -3386,11 +3496,10 @@ var __skill_bundle = (() => {
  }
  async function onSetOption(args) {
   const s = getNotionSkillState2();
-  const credential = oauth.getCredential();
   switch (args.name) {
    case "syncInterval":
     s.config.syncIntervalMinutes = parseInt(args.value, 10);
-    if (credential) {
+    if (isNotionConnected()) {
      cron.unregister("notion-sync");
      const cronExpr = `0 */${s.config.syncIntervalMinutes} * * * *`;
      cron.register("notion-sync", cronExpr);
@@ -3408,7 +3517,7 @@ var __skill_bundle = (() => {
  }
  async function publishState() {
   const s = getNotionSkillState2();
-  const isConnected = !!oauth.getCredential();
+  const isConnected = isNotionConnected();
   let pages = [];
   if (isConnected) {
    try {
@@ -3445,9 +3554,8 @@ var __skill_bundle = (() => {
   });
  }
  async function onPing() {
-  const cred = oauth.getCredential();
-  if (!cred) {
-   return { ok: false, errorType: "auth", errorMessage: "No OAuth credential" };
+  if (!isNotionConnected()) {
+   return { ok: false, errorType: "auth", errorMessage: "No credential" };
   }
   try {
    await notionFetch("/users?page_size=1");
@@ -3481,6 +3589,10 @@ var __skill_bundle = (() => {
   onSessionEnd,
   onOAuthComplete,
   onOAuthRevoked,
+  onAuthComplete,
+  onAuthRevoked,
+  onSetupStart,
+  onSetupSubmit,
   onDisconnect,
   onSync,
   onListOptions,

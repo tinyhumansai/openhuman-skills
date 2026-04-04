@@ -1,12 +1,12 @@
 {
   "version": 1,
-  "generated_at": "2026-03-30T19:59:01.473Z",
+  "generated_at": "2026-04-04T06:34:03.949Z",
   "skills": {
     "core": [
       {
         "id": "gmail",
         "name": "Gmail",
-        "version": "1.0.0",
+        "version": "1.1.0",
         "description": "Gmail integration via Google API — comprehensive email management with OAuth2 authentication, send/receive, labels, search, and attachments.",
         "runtime": "quickjs",
         "entry": "index.js",
@@ -21,26 +21,66 @@
         "setup": {
           "required": true,
           "label": "Connect Gmail",
-          "oauth": {
-            "provider": "gmail",
-            "apiBaseUrl": "https://gmail.googleapis.com/gmail/v1",
-            "scopes": [
-              "https://www.googleapis.com/auth/gmail.readonly",
-              "https://www.googleapis.com/auth/gmail.send",
-              "https://www.googleapis.com/auth/gmail.modify",
-              "https://www.googleapis.com/auth/gmail.labels"
+          "auth": {
+            "modes": [
+              {
+                "type": "managed",
+                "label": "Connect with Google",
+                "provider": "gmail",
+                "apiBaseUrl": "https://gmail.googleapis.com/gmail/v1",
+                "scopes": [
+                  "https://www.googleapis.com/auth/gmail.readonly",
+                  "https://www.googleapis.com/auth/gmail.send",
+                  "https://www.googleapis.com/auth/gmail.modify",
+                  "https://www.googleapis.com/auth/gmail.labels"
+                ]
+              },
+              {
+                "type": "self_hosted",
+                "label": "Own OAuth Credentials",
+                "description": "Use your own Google Cloud OAuth client ID and secret",
+                "fields": [
+                  {
+                    "name": "client_id",
+                    "type": "text",
+                    "label": "Client ID",
+                    "description": "From Google Cloud Console > APIs & Services > Credentials",
+                    "required": true,
+                    "placeholder": "123456789.apps.googleusercontent.com"
+                  },
+                  {
+                    "name": "client_secret",
+                    "type": "password",
+                    "label": "Client Secret",
+                    "required": true
+                  },
+                  {
+                    "name": "refresh_token",
+                    "type": "password",
+                    "label": "Refresh Token",
+                    "description": "OAuth2 refresh token obtained from the Google OAuth flow",
+                    "required": true
+                  }
+                ]
+              },
+              {
+                "type": "text",
+                "label": "Access Token",
+                "textDescription": "Paste a Google OAuth2 access token or a JSON object containing an \"access_token\" field. You can obtain one via the OAuth 2.0 Playground or your own token exchange.",
+                "textPlaceholder": "ya29.a0AfH6SM..."
+              }
             ]
           }
         },
         "ignore_in_production": false,
         "download_url": "https://raw.githubusercontent.com/tinyhumansai/openhuman-skills/refs/heads/build/skills/gmail/index.js",
         "manifest_url": "https://raw.githubusercontent.com/tinyhumansai/openhuman-skills/refs/heads/build/skills/gmail/manifest.json",
-        "checksum_sha256": "d070cd7ec66477dae101c1148425b08e7b5a08db135e4339669af0ad82f62c40"
+        "checksum_sha256": "a7e45fba7dbad34a829d630fd084ab29565c3bf49a8b7fbd9f719455be934cb5"
       },
       {
         "id": "notion",
         "name": "Notion",
-        "version": "1.1.0",
+        "version": "1.2.0",
         "description": "Notion workspace integration — 25 tools for pages, databases, blocks, users, comments, search, and local sync with periodic background updates.",
         "runtime": "quickjs",
         "entry": "index.js",
@@ -55,16 +95,37 @@
         "setup": {
           "required": true,
           "label": "Connect Notion",
-          "oauth": {
-            "provider": "notion",
-            "scopes": [],
-            "apiBaseUrl": "https://api.notion.com/v1"
+          "auth": {
+            "modes": [
+              {
+                "type": "managed",
+                "label": "Connect with Notion",
+                "provider": "notion",
+                "scopes": [],
+                "apiBaseUrl": "https://api.notion.com/v1"
+              },
+              {
+                "type": "self_hosted",
+                "label": "Notion API Token",
+                "description": "Use your own Notion internal integration token",
+                "fields": [
+                  {
+                    "name": "api_token",
+                    "type": "password",
+                    "label": "Integration Token",
+                    "description": "Create an internal integration at notion.so/my-integrations and paste the token here.",
+                    "required": true,
+                    "placeholder": "ntn_..."
+                  }
+                ]
+              }
+            ]
           }
         },
         "ignore_in_production": false,
         "download_url": "https://raw.githubusercontent.com/tinyhumansai/openhuman-skills/refs/heads/build/skills/notion/index.js",
         "manifest_url": "https://raw.githubusercontent.com/tinyhumansai/openhuman-skills/refs/heads/build/skills/notion/manifest.json",
-        "checksum_sha256": "6266c2bf835a2b768fbc83a0d710f7f4715a1ca912a019e6aec1ffae2f621e5a"
+        "checksum_sha256": "6e60c0a4eb6f44c687ed04af1f1ce3b26c1ce0e9e13ae1fe019477d8c52c2deb"
       }
     ],
     "third_party": []

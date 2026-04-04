@@ -772,28 +772,93 @@ var __skill_bundle = (() => {
   return new Promise((resolve) => setTimeout(resolve, ms));
  }
  var GMAIL_BASE_URL = "https://gmail.googleapis.com/gmail/v1";
- async function gmailFetch(endpoint, options = {}) {
-  const credential = oauth.getCredential();
-  if (!credential) {
-   console.log("[gmail] gmailFetch: no credential (OAuth not connected)");
-   return {
-    success: false,
-    error: { code: 401, message: "Gmail not connected. Complete OAuth setup first." }
-   };
+ var GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
+ var cachedSelfHostedToken = null;
+ async function resolveAccessToken() {
+  const authCred = auth.getCredential();
+  if (authCred && authCred.mode === "self_hosted") {
+   const creds = authCred.credentials;
+   const clientId = creds.client_id;
+   const clientSecret = creds.client_secret;
+   const refreshToken = creds.refresh_token;
+   if (clientId && clientSecret && refreshToken) {
+    if (cachedSelfHostedToken && cachedSelfHostedToken.expiresAt > Date.now() + 6e4) {
+     return cachedSelfHostedToken.token;
+    }
+    try {
+     const body = `client_id=${encodeURIComponent(clientId)}&client_secret=${encodeURIComponent(clientSecret)}&refresh_token=${encodeURIComponent(refreshToken)}&grant_type=refresh_token`;
+     const response = await net.fetch(GOOGLE_TOKEN_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body,
+      timeout: 15
+     });
+     if (response.status === 200) {
+      const data = JSON.parse(response.body);
+      cachedSelfHostedToken = {
+       token: data.access_token,
+       expiresAt: Date.now() + data.expires_in * 1e3
+      };
+      console.log("[gmail] Self-hosted token refreshed, expires in", data.expires_in, "s");
+      return data.access_token;
+     } else {
+      console.error("[gmail] Token refresh failed:", response.status, response.body);
+      return null;
+     }
+    } catch (err) {
+     console.error("[gmail] Token refresh error:", err);
+     return null;
+    }
+   }
   }
-  const accessToken = credential.accessToken;
+  if (authCred && authCred.mode === "text") {
+   const content = authCred.credentials.content ?? "";
+   try {
+    const parsed = JSON.parse(content);
+    if (parsed.access_token) {
+     return parsed.access_token;
+    }
+    if (parsed.private_key) {
+     console.warn("[gmail] Service account JSON detected but JWT signing is not yet supported. Use a refresh token flow instead.");
+     return null;
+    }
+   } catch {
+    if (content.trim()) {
+     return content.trim();
+    }
+   }
+   return null;
+  }
+  const oauthCred = oauth.getCredential();
+  if (oauthCred?.accessToken) {
+   return oauthCred.accessToken;
+  }
+  return null;
+ }
+ function isGmailConnected() {
+  const authCred = auth.getCredential();
+  if (authCred && authCred.mode !== "managed")
+   return true;
+  const oauthCred = oauth.getCredential();
+  return !!oauthCred;
+ }
+ function resetTokenCache() {
+  cachedSelfHostedToken = null;
+ }
+ async function gmailFetch(endpoint, options = {}) {
+  let accessToken = await resolveAccessToken();
   if (!accessToken) {
-   console.log("[gmail] gmailFetch: credential missing accessToken");
+   console.log("[gmail] gmailFetch: no access token available");
    return {
     success: false,
-    error: { code: 401, message: "Gmail credential has no access token. Please reconnect." }
+    error: { code: 401, message: "Gmail not connected. Complete setup first." }
    };
   }
   const cleanPath = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
   const url = `${GMAIL_BASE_URL}${cleanPath}`;
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
    try {
-    console.log("[gmail] gmailFetch:", options.method || "GET", url, accessToken);
+    console.log("[gmail] gmailFetch:", options.method || "GET", url);
     const response = await net.fetch(url, {
      method: options.method || "GET",
      headers: {
@@ -813,9 +878,19 @@ var __skill_bundle = (() => {
      await sleep(waitMs);
      continue;
     }
-    if (response.status === 401) {
+    if (response.status === 401 && attempt < MAX_RETRIES) {
      const bodyPreview = response.body ? response.body.slice(0, 200) : "(empty)";
-     console.log(`[gmail] gmailFetch: 401 Unauthorized url=${url} credentialId=${credential.credentialId} body=${bodyPreview}`);
+     console.log(`[gmail] gmailFetch: 401 Unauthorized url=${url} body=${bodyPreview}`);
+     cachedSelfHostedToken = null;
+     const freshToken = await resolveAccessToken();
+     if (freshToken && freshToken !== accessToken) {
+      accessToken = freshToken;
+      console.log("[gmail] gmailFetch: refreshed token, retrying");
+      continue;
+     }
+    } else if (response.status === 401) {
+     const bodyPreview = response.body ? response.body.slice(0, 200) : "(empty)";
+     console.log(`[gmail] gmailFetch: 401 Unauthorized (final) url=${url} body=${bodyPreview}`);
     } else if (response.status >= 400) {
      const bodyPreview = response.body ? response.body.slice(0, 200) : "(empty)";
      console.log(`[gmail] gmailFetch: error url=${url} status=${response.status} body=${bodyPreview}`);
@@ -7615,14 +7690,13 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
   if (typeof lastHistoryId === "string")
    s2.syncStatus.lastHistoryId = lastHistoryId;
   s2.syncStatus.totalEmails = getEmailCount();
-  const isConnected = !!oauth.getCredential();
+  const isConnected = isGmailConnected();
   console.log(`[gmail] Initialized. Connected: ${isConnected}`);
  }
  async function start() {
   console.log("[gmail] Starting skill...");
   const s2 = getGmailSkillState();
-  const credential = oauth.getCredential();
-  if (credential && s2.config.syncEnabled) {
+  if (isGmailConnected() && s2.config.syncEnabled) {
    const cronExpr = `0 */${s2.config.syncIntervalMinutes} * * * *`;
    cron.register("gmail-sync", cronExpr);
    publishSkillState2();
@@ -7693,6 +7767,171 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
   publishSkillState2();
   console.log("[gmail] Disconnected and cleaned up");
  }
+ async function onAuthComplete(args) {
+  console.log(`[gmail] onAuthComplete \u2014 mode: ${args.mode}`);
+  const s2 = getGmailSkillState();
+  if (args.mode === "managed") {
+   return { status: "complete" };
+  }
+  resetTokenCache();
+  if (args.mode === "self_hosted") {
+   const clientId = args.credentials.client_id;
+   const clientSecret = args.credentials.client_secret;
+   const refreshToken = args.credentials.refresh_token;
+   if (!clientId || !clientSecret || !refreshToken) {
+    return {
+     status: "error",
+     errors: [{ field: "refresh_token", message: "All three fields are required." }]
+    };
+   }
+   try {
+    const body = `client_id=${encodeURIComponent(clientId)}&client_secret=${encodeURIComponent(clientSecret)}&refresh_token=${encodeURIComponent(refreshToken)}&grant_type=refresh_token`;
+    const response = await net.fetch("https://oauth2.googleapis.com/token", {
+     method: "POST",
+     headers: { "Content-Type": "application/x-www-form-urlencoded" },
+     body,
+     timeout: 15
+    });
+    if (response.status !== 200) {
+     let errorMsg = "Invalid credentials.";
+     try {
+      const parsed = JSON.parse(response.body);
+      if (parsed.error_description)
+       errorMsg = parsed.error_description;
+     } catch {
+     }
+     return { status: "error", errors: [{ field: "refresh_token", message: errorMsg }] };
+    }
+    const tokenData = JSON.parse(response.body);
+    const profileResp = await net.fetch("https://gmail.googleapis.com/gmail/v1/users/me/profile", {
+     method: "GET",
+     headers: {
+      Authorization: `Bearer ${tokenData.access_token}`,
+      "Content-Type": "application/json"
+     },
+     timeout: 10
+    });
+    if (profileResp.status !== 200) {
+     return {
+      status: "error",
+      errors: [
+       {
+        field: "client_id",
+        message: "Token is valid but Gmail API access failed. Ensure Gmail API is enabled in your Google Cloud project."
+       }
+      ]
+     };
+    }
+    try {
+     const profile = JSON.parse(profileResp.body);
+     if (profile.emailAddress) {
+      s2.config.userEmail = profile.emailAddress;
+     }
+    } catch {
+    }
+   } catch (err) {
+    return {
+     status: "error",
+     errors: [{ field: "client_id", message: `Could not reach Google API: ${String(err)}` }]
+    };
+   }
+  }
+  if (args.mode === "text") {
+   const content = args.credentials.content ?? "";
+   if (!content.trim()) {
+    return {
+     status: "error",
+     errors: [{ field: "content", message: "Credential content is required." }]
+    };
+   }
+   let token2 = content.trim();
+   try {
+    const parsed = JSON.parse(content);
+    if (parsed.access_token) {
+     token2 = parsed.access_token;
+    } else if (parsed.private_key) {
+     return {
+      status: "error",
+      errors: [
+       {
+        field: "content",
+        message: "Service account JSON with private_key is not yet supported. Use a refresh token or access token instead."
+       }
+      ]
+     };
+    }
+   } catch {
+   }
+   try {
+    const profileResp = await net.fetch("https://gmail.googleapis.com/gmail/v1/users/me/profile", {
+     method: "GET",
+     headers: { Authorization: `Bearer ${token2}`, "Content-Type": "application/json" },
+     timeout: 10
+    });
+    if (profileResp.status === 401 || profileResp.status === 403) {
+     return {
+      status: "error",
+      errors: [{ field: "content", message: "Invalid or expired token." }]
+     };
+    }
+    if (profileResp.status !== 200) {
+     const bodyPreview = profileResp.body ? profileResp.body.slice(0, 200) : "";
+     return {
+      status: "error",
+      errors: [
+       {
+        field: "content",
+        message: `Gmail API returned ${profileResp.status}. ${bodyPreview}`.trim()
+       }
+      ]
+     };
+    }
+    try {
+     const profile = JSON.parse(profileResp.body);
+     if (profile.emailAddress) {
+      s2.config.userEmail = profile.emailAddress;
+     }
+    } catch {
+    }
+   } catch (err) {
+    return {
+     status: "error",
+     errors: [{ field: "content", message: `Could not reach Gmail API: ${String(err)}` }]
+    };
+   }
+  }
+  state.set("config", s2.config);
+  if (s2.config.syncEnabled) {
+   const cronExpr = `0 */${s2.config.syncIntervalMinutes} * * * *`;
+   cron.register("gmail-sync", cronExpr);
+  }
+  publishSkillState2();
+  return { status: "complete", message: "Connected to Gmail!" };
+ }
+ async function onAuthRevoked(args) {
+  console.log(`[gmail] Auth revoked \u2014 mode: ${args.mode || "unknown"}`);
+  const s2 = getGmailSkillState();
+  s2.config.credentialId = "";
+  s2.config.userEmail = "";
+  s2.profile = null;
+  state.delete("config");
+  cron.unregister("gmail-sync");
+  resetTokenCache();
+  publishSkillState2();
+ }
+ async function onSetupStart() {
+  return {
+   step: {
+    id: "auth_done",
+    title: "Setup Complete",
+    description: "Authentication is configured. Click Continue to finish.",
+    fields: []
+   }
+  };
+ }
+ async function onSetupSubmit(_args) {
+  return { status: "complete" };
+ }
  async function onListOptions() {
   const s2 = getGmailSkillState();
   return {
@@ -7744,11 +7983,11 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
  }
  async function onSetOption(args) {
   const s2 = getGmailSkillState();
-  const credential = oauth.getCredential();
+  const connected = isGmailConnected();
   switch (args.name) {
    case "syncEnabled":
     s2.config.syncEnabled = Boolean(args.value);
-    if (s2.config.syncEnabled && credential) {
+    if (s2.config.syncEnabled && connected) {
      const cronExpr = `0 */${s2.config.syncIntervalMinutes} * * * *`;
      cron.register("gmail-sync", cronExpr);
     } else {
@@ -7757,7 +7996,7 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
     break;
    case "syncInterval":
     s2.config.syncIntervalMinutes = parseInt(args.value, 10);
-    if (s2.config.syncEnabled && credential) {
+    if (s2.config.syncEnabled && connected) {
      cron.unregister("gmail-sync");
      const cronExpr = `0 */${s2.config.syncIntervalMinutes} * * * *`;
      cron.register("gmail-sync", cronExpr);
@@ -7778,8 +8017,7 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
  }
  function publishSkillState2() {
   const s2 = getGmailSkillState();
-  const credential = oauth.getCredential();
-  const isConnected = !!credential;
+  const isConnected = isGmailConnected();
   const profile = isConnected && s2.profile != null ? {
    email_address: s2.profile.emailAddress,
    messages_total: s2.profile.messagesTotal,
@@ -7830,6 +8068,10 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
   onSessionEnd,
   onOAuthComplete,
   onOAuthRevoked,
+  onAuthComplete,
+  onAuthRevoked,
+  onSetupStart,
+  onSetupSubmit,
   onSync,
   onDisconnect,
   onListOptions,

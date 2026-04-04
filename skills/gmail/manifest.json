@@ -1,21 +1,61 @@
 {
   "id": "gmail",
   "name": "Gmail",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Gmail integration via Google API — comprehensive email management with OAuth2 authentication, send/receive, labels, search, and attachments.",
   "auto_start": false,
   "platforms": ["windows", "macos", "linux", "android", "ios"],
   "setup": {
     "required": true,
     "label": "Connect Gmail",
-    "oauth": {
-      "provider": "gmail",
-      "apiBaseUrl": "https://gmail.googleapis.com/gmail/v1",
-      "scopes": [
-        "https://www.googleapis.com/auth/gmail.readonly",
-        "https://www.googleapis.com/auth/gmail.send",
-        "https://www.googleapis.com/auth/gmail.modify",
-        "https://www.googleapis.com/auth/gmail.labels"
+    "auth": {
+      "modes": [
+        {
+          "type": "managed",
+          "label": "Connect with Google",
+          "provider": "gmail",
+          "apiBaseUrl": "https://gmail.googleapis.com/gmail/v1",
+          "scopes": [
+            "https://www.googleapis.com/auth/gmail.readonly",
+            "https://www.googleapis.com/auth/gmail.send",
+            "https://www.googleapis.com/auth/gmail.modify",
+            "https://www.googleapis.com/auth/gmail.labels"
+          ]
+        },
+        {
+          "type": "self_hosted",
+          "label": "Own OAuth Credentials",
+          "description": "Use your own Google Cloud OAuth client ID and secret",
+          "fields": [
+            {
+              "name": "client_id",
+              "type": "text",
+              "label": "Client ID",
+              "description": "From Google Cloud Console > APIs & Services > Credentials",
+              "required": true,
+              "placeholder": "123456789.apps.googleusercontent.com"
+            },
+            {
+              "name": "client_secret",
+              "type": "password",
+              "label": "Client Secret",
+              "required": true
+            },
+            {
+              "name": "refresh_token",
+              "type": "password",
+              "label": "Refresh Token",
+              "description": "OAuth2 refresh token obtained from the Google OAuth flow",
+              "required": true
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "label": "Access Token",
+          "textDescription": "Paste a Google OAuth2 access token or a JSON object containing an \"access_token\" field. You can obtain one via the OAuth 2.0 Playground or your own token exchange.",
+          "textPlaceholder": "ya29.a0AfH6SM..."
+        }
       ]
     }
   }
