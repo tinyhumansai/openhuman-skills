@@ -289,15 +289,26 @@ async function onAuthComplete(args: {
         };
       }
 
-      if (profileResp.status === 200) {
-        try {
-          const profile = JSON.parse(profileResp.body) as { emailAddress?: string };
-          if (profile.emailAddress) {
-            s.config.userEmail = profile.emailAddress;
-          }
-        } catch {
-          /* non-critical */
+      if (profileResp.status !== 200) {
+        const bodyPreview = profileResp.body ? profileResp.body.slice(0, 200) : '';
+        return {
+          status: 'error',
+          errors: [
+            {
+              field: 'content',
+              message: `Gmail API returned ${profileResp.status}. ${bodyPreview}`.trim(),
+            },
+          ],
+        };
+      }
+
+      try {
+        const profile = JSON.parse(profileResp.body) as { emailAddress?: string };
+        if (profile.emailAddress) {
+          s.config.userEmail = profile.emailAddress;
         }
+      } catch {
+        /* non-critical */
       }
     } catch (err) {
       return {
@@ -331,6 +342,29 @@ async function onAuthRevoked(args: { mode?: string }): Promise<void> {
   cron.unregister('gmail-sync');
   resetTokenCache();
   publishSkillState();
+}
+
+// ---------------------------------------------------------------------------
+// Setup compatibility stubs (required while validator expects onSetupStart/onSetupSubmit)
+// ---------------------------------------------------------------------------
+
+async function onSetupStart(): Promise<SetupStartResult> {
+  // Auth phase already handled credentials — return a pass-through step
+  return {
+    step: {
+      id: 'auth_done',
+      title: 'Setup Complete',
+      description: 'Authentication is configured. Click Continue to finish.',
+      fields: [],
+    },
+  };
+}
+
+async function onSetupSubmit(_args: {
+  stepId: string;
+  values: Record<string, unknown>;
+}): Promise<SetupSubmitResult> {
+  return { status: 'complete' };
 }
 
 // ---------------------------------------------------------------------------
@@ -494,6 +528,8 @@ const skill: Skill = {
   onOAuthRevoked,
   onAuthComplete,
   onAuthRevoked,
+  onSetupStart,
+  onSetupSubmit,
   onSync,
   onDisconnect,
   onListOptions,

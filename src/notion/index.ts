@@ -263,10 +263,35 @@ async function onAuthRevoked(args: { mode?: string }): Promise<void> {
 
   s.config.credentialId = '';
   s.config.workspaceName = '';
+  // Clear profile from shared state so the frontend no longer sees a stale identity
+  state.setPartial({ profile: null });
   state.delete('config');
   cron.unregister('notion-sync');
   resetApiVersionCache();
   publishState();
+}
+
+// ---------------------------------------------------------------------------
+// Setup compatibility stubs (required while validator expects onSetupStart/onSetupSubmit)
+// ---------------------------------------------------------------------------
+
+async function onSetupStart(): Promise<SetupStartResult> {
+  // Auth phase already handled credentials — return a pass-through step
+  return {
+    step: {
+      id: 'auth_done',
+      title: 'Setup Complete',
+      description: 'Authentication is configured. Click Continue to finish.',
+      fields: [],
+    },
+  };
+}
+
+async function onSetupSubmit(_args: {
+  stepId: string;
+  values: Record<string, unknown>;
+}): Promise<SetupSubmitResult> {
+  return { status: 'complete' };
 }
 
 async function onSync(): Promise<void> {
@@ -461,6 +486,8 @@ const skill: Skill = {
   onOAuthRevoked,
   onAuthComplete,
   onAuthRevoked,
+  onSetupStart,
+  onSetupSubmit,
   onDisconnect,
   onSync,
   onListOptions,

@@ -52,9 +52,9 @@
         },
         {
           "type": "text",
-          "label": "Service Account Key",
-          "textDescription": "Paste the contents of your Google service account JSON key file. The service account must have domain-wide delegation enabled and Gmail API access.",
-          "textPlaceholder": "{\n  \"type\": \"service_account\",\n  \"project_id\": \"...\",\n  \"private_key_id\": \"...\",\n  ...\n}"
+          "label": "Access Token",
+          "textDescription": "Paste a Google OAuth2 access token or a JSON object containing an \"access_token\" field. You can obtain one via the OAuth 2.0 Playground or your own token exchange.",
+          "textPlaceholder": "ya29.a0AfH6SM..."
         }
       ]
     }

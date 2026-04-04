@@ -138,7 +138,7 @@ export async function gmailFetch<T = unknown>(
     timeout?: number;
   } = {}
 ): Promise<GmailApiResponse<T>> {
-  const accessToken = await resolveAccessToken();
+  let accessToken = await resolveAccessToken();
 
   if (!accessToken) {
     console.log('[gmail] gmailFetch: no access token available');
@@ -182,9 +182,22 @@ export async function gmailFetch<T = unknown>(
         continue;
       }
 
-      if (response.status === 401) {
+      // -- 401 Unauthorized: invalidate cached token and retry with fresh one -
+      if (response.status === 401 && attempt < MAX_RETRIES) {
         const bodyPreview = response.body ? response.body.slice(0, 200) : '(empty)';
         console.log(`[gmail] gmailFetch: 401 Unauthorized url=${url} body=${bodyPreview}`);
+        // Invalidate cached token and re-resolve
+        cachedSelfHostedToken = null;
+        const freshToken = await resolveAccessToken();
+        if (freshToken && freshToken !== accessToken) {
+          accessToken = freshToken;
+          console.log('[gmail] gmailFetch: refreshed token, retrying');
+          continue;
+        }
+        // Token didn't change — no point retrying
+      } else if (response.status === 401) {
+        const bodyPreview = response.body ? response.body.slice(0, 200) : '(empty)';
+        console.log(`[gmail] gmailFetch: 401 Unauthorized (final) url=${url} body=${bodyPreview}`);
       } else if (response.status >= 400) {
         const bodyPreview = response.body ? response.body.slice(0, 200) : '(empty)';
         console.log(
