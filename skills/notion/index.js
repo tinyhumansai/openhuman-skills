@@ -18,7 +18,7 @@ var __skill_bundle = (() => {
  };
  var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
- // skills-ts-out/notion/index.js
+ // skills-ts-out/core/notion/index.js
  var index_exports = {};
  __export(index_exports, {
   default: () => index_default
@@ -571,7 +571,7 @@ var __skill_bundle = (() => {
   global.Buffer = Buffer2;
  }
 
- // skills-ts-out/notion/helpers.js
+ // skills-ts-out/core/notion/helpers.js
  var MAX_RETRIES = 3;
  var DEFAULT_BACKOFF_MS = 5e3;
  var CLOUDFLARE_RETRYABLE = /* @__PURE__ */ new Set([520, 521, 522, 523, 524, 525, 526, 527]);
@@ -904,12 +904,12 @@ var __skill_bundle = (() => {
   return apiVersion === CURRENT_API_VERSION;
  }
 
- // skills-ts-out/notion/api/client.js
+ // skills-ts-out/core/notion/api/client.js
  async function apiFetch(endpoint, options) {
   return await notionFetch(endpoint, options);
  }
 
- // skills-ts-out/notion/api/blocks.js
+ // skills-ts-out/core/notion/api/blocks.js
  function getBlock(blockId) {
   return apiFetch(`/blocks/${blockId}`);
  }
@@ -929,7 +929,7 @@ var __skill_bundle = (() => {
   return apiFetch(`/blocks/${blockId}`, { method: "DELETE" });
  }
 
- // skills-ts-out/notion/api/comments.js
+ // skills-ts-out/core/notion/api/comments.js
  function createComment(body) {
   return apiFetch("/comments", { method: "POST", body });
  }
@@ -937,7 +937,7 @@ var __skill_bundle = (() => {
   return apiFetch(`/comments?block_id=${blockId}&page_size=${pageSize}`);
  }
 
- // skills-ts-out/notion/api/databases.js
+ // skills-ts-out/core/notion/api/databases.js
  function getDatabase(databaseId) {
   return apiFetch(`/databases/${databaseId}`);
  }
@@ -1014,7 +1014,7 @@ var __skill_bundle = (() => {
   }
  }
 
- // skills-ts-out/notion/api/pages.js
+ // skills-ts-out/core/notion/api/pages.js
  function getPage(pageId) {
   return apiFetch(`/pages/${pageId}`);
  }
@@ -1034,12 +1034,12 @@ var __skill_bundle = (() => {
   return apiFetch(`/blocks/${pageId}/children?page_size=${pageSize}`);
  }
 
- // skills-ts-out/notion/api/search.js
+ // skills-ts-out/core/notion/api/search.js
  function search(body) {
   return apiFetch("/search", { method: "POST", body });
  }
 
- // skills-ts-out/notion/api/users.js
+ // skills-ts-out/core/notion/api/users.js
  function getUser(userId) {
   return apiFetch(`/users/${userId}`);
  }
@@ -1050,7 +1050,7 @@ var __skill_bundle = (() => {
   return apiFetch(endpoint);
  }
 
- // skills-ts-out/notion/api/index.js
+ // skills-ts-out/core/notion/api/index.js
  var notionApi = {
   // pages
   getPage,
@@ -1082,7 +1082,7 @@ var __skill_bundle = (() => {
   search
  };
 
- // skills-ts-out/notion/state.js
+ // skills-ts-out/core/notion/state.js
  function initNotionSkillState() {
   const s = {
    config: {
@@ -1126,7 +1126,7 @@ var __skill_bundle = (() => {
   return s;
  }
 
- // skills-ts-out/notion/db/helpers.js
+ // skills-ts-out/core/notion/db/helpers.js
  function credId() {
   return getNotionSkillState2().config.credentialId;
  }
@@ -1449,7 +1449,7 @@ var __skill_bundle = (() => {
   };
  }
 
- // skills-ts-out/notion/db/schema.js
+ // skills-ts-out/core/notion/db/schema.js
  function initializeNotionSchema() {
   console.log("[notion] Initializing database schema...");
   db.exec(`CREATE TABLE IF NOT EXISTS pages (
@@ -1665,7 +1665,7 @@ var __skill_bundle = (() => {
   }
  }
 
- // skills-ts-out/notion/sync.js
+ // skills-ts-out/core/notion/sync.js
  function performSync() {
   const s = getNotionSkillState2();
   if (s.syncStatus.syncInProgress) {
@@ -2167,7 +2167,7 @@ var __skill_bundle = (() => {
   });
  }
 
- // skills-ts-out/notion/tools/append-blocks.js
+ // skills-ts-out/core/notion/tools/append-blocks.js
  var appendBlocksTool = {
   name: "append-blocks",
   description: "Append child blocks to a page or block. Supports various block types.",
@@ -2213,7 +2213,7 @@ var __skill_bundle = (() => {
   }
  };
 
- // skills-ts-out/notion/tools/append-text.js
+ // skills-ts-out/core/notion/tools/append-text.js
  var appendTextTool = {
   name: "append-text",
   description: "Append text content to a page or block. Use the page id (or block_id) from list-all-pages or get-page. Creates paragraph blocks with the given text.",
@@ -2269,7 +2269,7 @@ var __skill_bundle = (() => {
   }
  };
 
- // skills-ts-out/notion/tools/create-comment.js
+ // skills-ts-out/core/notion/tools/create-comment.js
  var createCommentTool = {
   name: "create-comment",
   description: "Create a comment on a page or block, or reply to a discussion. Provide either page_id (new comment on page) or discussion_id (reply). Requires Notion integration to have insert comment capability.",
@@ -2324,7 +2324,7 @@ var __skill_bundle = (() => {
   }
  };
 
- // skills-ts-out/notion/tools/create-database.js
+ // skills-ts-out/core/notion/tools/create-database.js
  var createDatabaseTool = {
   name: "create-database",
   description: "Create a new database in Notion. Specify parent page_id and title. Optionally provide properties schema as JSON.",
@@ -2376,7 +2376,7 @@ var __skill_bundle = (() => {
   }
  };
 
- // skills-ts-out/notion/tools/create-page.js
+ // skills-ts-out/core/notion/tools/create-page.js
  var createPageTool = {
   name: "create-page",
   description: "Create a new page in Notion. Parent can be another page or a database. For database parents, properties must match the database schema.",
@@ -2452,7 +2452,7 @@ var __skill_bundle = (() => {
   }
  };
 
- // skills-ts-out/notion/tools/delete-block.js
+ // skills-ts-out/core/notion/tools/delete-block.js
  var deleteBlockTool = {
   name: "delete-block",
   description: "Delete a block. Permanently removes the block from Notion.",
@@ -2476,7 +2476,7 @@ var __skill_bundle = (() => {
   }
  };
 
- // skills-ts-out/notion/tools/delete-page.js
+ // skills-ts-out/core/notion/tools/delete-page.js
  var deletePageTool = {
   name: "delete-page",
   description: "Delete (archive) a page. Archived pages can be restored from Notion's trash.",
@@ -2503,7 +2503,7 @@ var __skill_bundle = (() => {
   }
  };
 
- // skills-ts-out/notion/tools/get-block.js
+ // skills-ts-out/core/notion/tools/get-block.js
  var getBlockTool = {
   name: "get-block",
   description: "Get a block by its ID. Returns the block's type and content.",
@@ -2529,7 +2529,7 @@ var __skill_bundle = (() => {
   }
  };
 
- // skills-ts-out/notion/tools/get-block-children.js
+ // skills-ts-out/core/notion/tools/get-block-children.js
  var getBlockChildrenTool = {
   name: "get-block-children",
   description: "Get the children blocks of a block or page.",
@@ -2561,7 +2561,7 @@ var __skill_bundle = (() => {
   }
  };
 
- // skills-ts-out/notion/tools/get-database.js
+ // skills-ts-out/core/notion/tools/get-database.js
  var getDatabaseTool = {
   name: "get-database",
   description: "Get a database's schema and metadata. Shows all properties and their types.",
@@ -2594,7 +2594,7 @@ var __skill_bundle = (() => {
   }
  };
 
- // skills-ts-out/notion/tools/get-page.js
+ // skills-ts-out/core/notion/tools/get-page.js
  var getPageTool = {
   name: "get-page",
   description: "Get a page's metadata and properties by its ID. Use notion-get-page-content to get the actual content/blocks.",
@@ -2622,7 +2622,7 @@ var __skill_bundle = (() => {
   }
  };
 
- // skills-ts-out/notion/tools/get-page-content.js
+ // skills-ts-out/core/notion/tools/get-page-content.js
  var getPageContentTool = {
   name: "get-page-content",
   description: "Get the content blocks of a page. Returns the text and structure of the page. Use recursive=true to also get nested blocks.",
@@ -2673,7 +2673,7 @@ var __skill_bundle = (() => {
   }
  };
 
- // skills-ts-out/notion/tools/get-user.js
+ // skills-ts-out/core/notion/tools/get-user.js
  var getUserTool = {
   name: "get-user",
   description: "Get a user by their ID.",
@@ -2698,7 +2698,7 @@ var __skill_bundle = (() => {
   }
  };
 
- // skills-ts-out/notion/tools/list-all-databases.js
+ // skills-ts-out/core/notion/tools/list-all-databases.js
  var listAllDatabasesTool = {
   name: "list-all-databases",
   description: "List all databases in the workspace that the integration has access to.",
@@ -2720,7 +2720,7 @@ var __skill_bundle = (() => {
   }
  };
 
- // skills-ts-out/notion/tools/list-all-pages.js
+ // skills-ts-out/core/notion/tools/list-all-pages.js
  function formatLocalPageSummary(p) {
   return {
    id: p.id,
@@ -2761,7 +2761,7 @@ var __skill_bundle = (() => {
   }
  };
 
- // skills-ts-out/notion/tools/list-comments.js
+ // skills-ts-out/core/notion/tools/list-comments.js
  var listCommentsTool = {
   name: "list-comments",
   description: "List comments on a block or page.",
@@ -2798,7 +2798,7 @@ var __skill_bundle = (() => {
   }
  };
 
- // skills-ts-out/notion/tools/list-users.js
+ // skills-ts-out/core/notion/tools/list-users.js
  var listUsersTool = {
   name: "list-users",
   description: "List all users in the workspace that the integration can see.",
@@ -2820,7 +2820,7 @@ var __skill_bundle = (() => {
   }
  };
 
- // skills-ts-out/notion/tools/query-database.js
+ // skills-ts-out/core/notion/tools/query-database.js
  var queryDatabaseTool = {
   name: "query-database",
   description: "Query a database with optional filters and sorts. Returns database rows/pages. Automatically handles API version compatibility.",
@@ -2902,7 +2902,7 @@ var __skill_bundle = (() => {
   }
  };
 
- // skills-ts-out/notion/tools/search.js
+ // skills-ts-out/core/notion/tools/search.js
  function toSearchResultItem(item) {
   const base = {
    object: item.object,
@@ -2982,7 +2982,7 @@ var __skill_bundle = (() => {
   }
  };
 
- // skills-ts-out/notion/tools/summarize-pages.js
+ // skills-ts-out/core/notion/tools/summarize-pages.js
  var summarizePagesTool = {
   name: "summarize-pages",
   description: "AI summarization of Notion pages is now handled by the backend server. Synced page content is submitted to the server which runs summarization.",
@@ -2995,7 +2995,7 @@ var __skill_bundle = (() => {
   }
  };
 
- // skills-ts-out/notion/tools/sync-now.js
+ // skills-ts-out/core/notion/tools/sync-now.js
  var syncNowTool = {
   name: "sync-now",
   description: "Trigger an immediate Notion sync to refresh local data. Returns sync results including counts of synced pages and databases.",
@@ -3035,7 +3035,7 @@ var __skill_bundle = (() => {
   }
  };
 
- // skills-ts-out/notion/tools/sync-status.js
+ // skills-ts-out/core/notion/tools/sync-status.js
  var syncStatusTool = {
   name: "sync-status",
   description: "Get the current Notion sync status including last sync time, total synced pages/databases, sync progress, and any errors.",
@@ -3072,7 +3072,7 @@ var __skill_bundle = (() => {
   }
  };
 
- // skills-ts-out/notion/tools/update-block.js
+ // skills-ts-out/core/notion/tools/update-block.js
  var updateBlockTool = {
   name: "update-block",
   description: "Update a block's content. The structure depends on the block type.",
@@ -3126,7 +3126,7 @@ var __skill_bundle = (() => {
   }
  };
 
- // skills-ts-out/notion/tools/update-database.js
+ // skills-ts-out/core/notion/tools/update-database.js
  var updateDatabaseTool = {
   name: "update-database",
   description: "Update a database's title or properties schema.",
@@ -3172,7 +3172,7 @@ var __skill_bundle = (() => {
   }
  };
 
- // skills-ts-out/notion/tools/update-page.js
+ // skills-ts-out/core/notion/tools/update-page.js
  var updatePageTool = {
   name: "update-page",
   description: "Update a page's properties. Can update title and other properties. Use notion-append-text to add content blocks.",
@@ -3229,7 +3229,7 @@ var __skill_bundle = (() => {
   }
  };
 
- // skills-ts-out/notion/tools/index.js
+ // skills-ts-out/core/notion/tools/index.js
  var tools = [
   appendBlocksTool,
   appendTextTool,
@@ -3259,7 +3259,7 @@ var __skill_bundle = (() => {
  ];
  var tools_default = tools;
 
- // skills-ts-out/notion/index.js
+ // skills-ts-out/core/notion/index.js
  async function init() {
   console.log("[notion] Initializing");
   const s = getNotionSkillState2();

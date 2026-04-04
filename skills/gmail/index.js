@@ -696,17 +696,17 @@ var __skill_bundle = (() => {
   }
  });
 
- // skills-ts-out/gmail/index.js
+ // skills-ts-out/core/gmail/index.js
  var index_exports = {};
  __export(index_exports, {
   default: () => index_default
  });
  init_buffer_inject();
 
- // skills-ts-out/gmail/api/helpers.js
+ // skills-ts-out/core/gmail/api/helpers.js
  init_buffer_inject();
 
- // skills-ts-out/gmail/state.js
+ // skills-ts-out/core/gmail/state.js
  init_buffer_inject();
  var skillState = {
   config: {
@@ -764,7 +764,7 @@ var __skill_bundle = (() => {
   });
  }
 
- // skills-ts-out/gmail/api/index.js
+ // skills-ts-out/core/gmail/api/index.js
  init_buffer_inject();
  var MAX_RETRIES = 3;
  var DEFAULT_BACKOFF_MS = 5e3;
@@ -921,7 +921,7 @@ var __skill_bundle = (() => {
   return { success: false, error: { code: 429, message: "Rate limit exceeded after retries" } };
  }
 
- // skills-ts-out/gmail/api/helpers.js
+ // skills-ts-out/core/gmail/api/helpers.js
  async function loadGmailProfile() {
   const response = await gmailFetch("/users/me/profile", { timeout: 10 });
   if (!response.success) {
@@ -944,7 +944,7 @@ var __skill_bundle = (() => {
   }
  }
 
- // skills-ts-out/gmail/db/helpers.js
+ // skills-ts-out/core/gmail/db/helpers.js
  init_buffer_inject();
 
  // node_modules/html-to-text/lib/html-to-text.mjs
@@ -5953,7 +5953,7 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
   }
  }
 
- // skills-ts-out/gmail/db/helpers.js
+ // skills-ts-out/core/gmail/db/helpers.js
  function getMessageHeaders(message) {
   const p = message?.payload;
   if (!p)
@@ -6258,7 +6258,7 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
   });
  }
 
- // skills-ts-out/gmail/db/schema.js
+ // skills-ts-out/core/gmail/db/schema.js
  init_buffer_inject();
  function initializeGmailSchema() {
   console.log("[gmail] Initializing database schema...");
@@ -6378,7 +6378,7 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
   console.log("[gmail] Database schema initialized successfully");
  }
 
- // skills-ts-out/gmail/sync.js
+ // skills-ts-out/core/gmail/sync.js
  init_buffer_inject();
 
  // skills-ts-out/shared/integration-metadata.js
@@ -6394,7 +6394,7 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
   }
  }
 
- // skills-ts-out/gmail/sync.js
+ // skills-ts-out/core/gmail/sync.js
  var SYNC_WINDOW_DAYS = 30;
  var PAGE_SIZE = 20;
  var MAX_PAGES = 10;
@@ -6575,10 +6575,10 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
   return typeof value === "number" ? value : null;
  }
 
- // skills-ts-out/gmail/tools/index.js
+ // skills-ts-out/core/gmail/tools/index.js
  init_buffer_inject();
 
- // skills-ts-out/gmail/tools/get-email.js
+ // skills-ts-out/core/gmail/tools/get-email.js
  init_buffer_inject();
 
  // skills-ts-out/helpers/index.js
@@ -6674,7 +6674,7 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
   return s2.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
  }
 
- // skills-ts-out/gmail/tools/get-email.js
+ // skills-ts-out/core/gmail/tools/get-email.js
  var getEmailTool = {
   name: "get-email",
   description: "Get full details of a specific email by its ID, including headers, body content, and attachments.",
@@ -6860,7 +6860,7 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
   return attachments;
  }
 
- // skills-ts-out/gmail/tools/get-emails.js
+ // skills-ts-out/core/gmail/tools/get-emails.js
  init_buffer_inject();
  function buildListParams(args) {
   const params = [];
@@ -7001,7 +7001,7 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
   }
  };
 
- // skills-ts-out/gmail/tools/get-labels.js
+ // skills-ts-out/core/gmail/tools/get-labels.js
  init_buffer_inject();
  var getLabelsTool = {
   name: "get-labels",
@@ -7075,7 +7075,7 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
   }
  };
 
- // skills-ts-out/gmail/tools/get-profile.js
+ // skills-ts-out/core/gmail/tools/get-profile.js
  init_buffer_inject();
  var getProfileTool = {
   name: "get-profile",
@@ -7129,7 +7129,7 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
   }
  };
 
- // skills-ts-out/gmail/tools/mark-email.js
+ // skills-ts-out/core/gmail/tools/mark-email.js
  init_buffer_inject();
  var markEmailTool = {
   name: "mark-email",
@@ -7261,7 +7261,7 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
   return operations;
  }
 
- // skills-ts-out/gmail/tools/search-emails.js
+ // skills-ts-out/core/gmail/tools/search-emails.js
  init_buffer_inject();
  var searchEmailsTool = {
   name: "search-emails",
@@ -7433,7 +7433,7 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
   return tips.slice(0, 3);
  }
 
- // skills-ts-out/gmail/tools/send-email.js
+ // skills-ts-out/core/gmail/tools/send-email.js
  init_buffer_inject();
  var sendEmailTool = {
   name: "send-email",
@@ -7657,7 +7657,7 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
   }).join(", ");
  }
 
- // skills-ts-out/gmail/tools/index.js
+ // skills-ts-out/core/gmail/tools/index.js
  var tools = [
   getEmailTool,
   getEmailsTool,
@@ -7668,7 +7668,7 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
   sendEmailTool
  ];
 
- // skills-ts-out/gmail/index.js
+ // skills-ts-out/core/gmail/index.js
  async function init() {
   console.log(`[gmail] Initializing on ${platform.os()}`);
   const s2 = getGmailSkillState();

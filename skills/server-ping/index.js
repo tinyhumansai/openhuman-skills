@@ -18,7 +18,7 @@ var __skill_bundle = (() => {
  };
  var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
- // skills-ts-out/server-ping/index.js
+ // skills-ts-out/core/server-ping/index.js
  var index_exports = {};
  __export(index_exports, {
   default: () => index_default
@@ -571,7 +571,7 @@ var __skill_bundle = (() => {
   global.Buffer = Buffer2;
  }
 
- // skills-ts-out/server-ping/db/helpers.js
+ // skills-ts-out/core/server-ping/db/helpers.js
  function logPing(timestamp, url, status, latencyMs, success, error) {
   db.exec("INSERT INTO ping_log (timestamp, url, status, latency_ms, success, error) VALUES (?, ?, ?, ?, ?, ?)", [timestamp, url, status, latencyMs, success ? 1 : 0, error]);
  }
@@ -583,7 +583,7 @@ var __skill_bundle = (() => {
  }
  globalThis.serverPingDb = { logPing, getLatestPing, getRecentPings };
 
- // skills-ts-out/server-ping/db/schema.js
+ // skills-ts-out/core/server-ping/db/schema.js
  function initializeSchema() {
   db.exec(`CREATE TABLE IF NOT EXISTS ping_log (
    id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -597,7 +597,7 @@ var __skill_bundle = (() => {
  }
  globalThis.initializeServerPingSchema = initializeSchema;
 
- // skills-ts-out/server-ping/setup.js
+ // skills-ts-out/core/server-ping/setup.js
  async function onSetupStart() {
   console.log("[server-ping] onSetupStart");
   const defaultUrl = platform.env("BACKEND_URL") || platform.env("BACKEND_URL") || "";
@@ -695,7 +695,7 @@ var __skill_bundle = (() => {
  }
  globalThis.serverPingSetup = { onSetupStart, onSetupSubmit, onSetupCancel };
 
- // skills-ts-out/server-ping/state.js
+ // skills-ts-out/core/server-ping/state.js
  var _g = globalThis;
  function initSkillState() {
   const stateObj = {
@@ -725,7 +725,7 @@ var __skill_bundle = (() => {
   return s;
  };
 
- // skills-ts-out/server-ping/tools/get-ping-stats.js
+ // skills-ts-out/core/server-ping/tools/get-ping-stats.js
  var getPingStatsTool = {
   name: "get-ping-stats",
   description: "Get current ping statistics including uptime, total pings, failures, and latest latency.",
@@ -748,7 +748,7 @@ var __skill_bundle = (() => {
   }
  };
 
- // skills-ts-out/server-ping/tools/get-ping-history.js
+ // skills-ts-out/core/server-ping/tools/get-ping-history.js
  var getPingHistoryTool = {
   name: "get-ping-history",
   description: "Get recent ping history from the database. Returns the last N ping results.",
@@ -768,7 +768,7 @@ var __skill_bundle = (() => {
   }
  };
 
- // skills-ts-out/server-ping/tools/ping-now.js
+ // skills-ts-out/core/server-ping/tools/ping-now.js
  var pingNowTool = {
   name: "ping-now",
   description: "Trigger an immediate ping to the configured server and return the result.",
@@ -781,7 +781,7 @@ var __skill_bundle = (() => {
   }
  };
 
- // skills-ts-out/server-ping/tools/list-peer-skills.js
+ // skills-ts-out/core/server-ping/tools/list-peer-skills.js
  var listPeerSkillsTool = {
   name: "list-peer-skills",
   description: "List all other running skills in the system (demonstrates inter-skill communication).",
@@ -796,7 +796,7 @@ var __skill_bundle = (() => {
   }
  };
 
- // skills-ts-out/server-ping/tools/update-server-url.js
+ // skills-ts-out/core/server-ping/tools/update-server-url.js
  var updateServerUrlTool = {
   name: "update-server-url",
   description: "Change the monitored server URL at runtime.",
@@ -820,7 +820,7 @@ var __skill_bundle = (() => {
   }
  };
 
- // skills-ts-out/server-ping/tools/read-config.js
+ // skills-ts-out/core/server-ping/tools/read-config.js
  var readConfigTool = {
   name: "read-config",
   description: "Read the current skill configuration from the data directory (demonstrates data file I/O).",
@@ -835,7 +835,7 @@ var __skill_bundle = (() => {
   }
  };
 
- // skills-ts-out/server-ping/index.js
+ // skills-ts-out/core/server-ping/index.js
  function getSkillState2() {
   return globalThis.getSkillState();
  }
