@@ -236,14 +236,60 @@ Use `--clean` to wipe this directory and start fresh. Data persists across REPL 
 
 ## Environment Variables
 
-The test harness reads from `.env` at the repo root. Useful variables:
+The test harness reads from `.env` at the repo root. Copy `.env.example` to `.env` and fill in your values:
+
+```bash
+cp .env.example .env
+```
 
 | Variable | Purpose |
 |---|---|
-| `BACKEND_URL` / `BACKEND_URL` | Backend API URL (REPL default) |
-| `JWT_TOKEN` / `DEV_JWT_TOKEN` | Auth token for backend/OAuth flows |
+| `BACKEND_URL` | Backend API URL (default: `https://api.tinyhumans.ai`) |
+| `JWT_TOKEN` / `DEV_JWT_TOKEN` | Auth token for backend and OAuth proxy flows |
+| `TELEGRAM_API_ID` / `TELEGRAM_API_HASH` | Required for Telegram skill live testing |
+| `GITHUB_TOKEN` | GitHub personal access token for live tests |
+
+**Getting a JWT token:**
+1. Open the OpenHuman app
+2. Go to Settings > Developer
+3. Copy the JWT token
+
+**OAuth flows in the REPL:**
+1. Start the REPL: `yarn repl gmail`
+2. Run the `oauth` command
+3. Follow the prompts to complete the OAuth flow
+4. Credentials are saved to `data/<skill-id>/state.json` and persist across sessions
+
+**Auth credential modes:**
+Skills support three auth modes (configured in `manifest.json`):
+- `managed` — OAuth via backend proxy (use REPL `oauth` command)
+- `self_hosted` — User provides client_id/client_secret via setup wizard
+- `text` — User provides a raw token/key via setup wizard
 
 Skill-specific variables (e.g. API keys) can also be placed in `.env` and accessed via `platform.env('KEY')` in live mode.
+
+## New Bridge APIs
+
+The test harness now mocks all bridge APIs from the Rust runtime:
+
+| API | Description |
+|---|---|
+| `auth.getCredential()` / `auth.fetch()` | Advanced authentication (managed/self_hosted/text modes) |
+| `webhook.register()` / `webhook.createTunnel()` | Webhook/tunnel management |
+| `fetch()` / `Response` / `Headers` | Browser-like fetch API (wraps `net.fetch`) |
+| `memory.insert()` | Memory persistence bridge |
+| `__handleTimer(id)` / `__flushTimers()` | Timer execution helpers for tests |
+
+## New Assertion Helpers
+
+Available in unit tests:
+
+| Helper | Description |
+|---|---|
+| `assertDeepEqual(a, b, msg?)` | Recursive object/array comparison |
+| `assertThrows(fn, expectedMsg?, msg?)` | Verify error paths |
+| `assertMatch(str, regex, msg?)` | Regex matching |
+| `assertArrayLength(arr, len, msg?)` | Array size checks |
 
 ## When to Use What
 

@@ -112,22 +112,33 @@ export async function createBridgeAPIs(options?: BridgeOptions): Promise<Record<
   };
 
   // State API - unified persistent key-value state
+  // Matches Rust bootstrap.js dual-write: state.set writes to BOTH store AND published state
   let stateApi;
   if (dataDir) {
     const pState = createPersistentState(join(dataDir, 'state.json'));
     stateApi = {
       get: (key: string): unknown => pState.get(key),
-      set: (key: string, value: unknown): void => { pState.set(key, value); },
-      setPartial: (partial: Record<string, unknown>): void => { pState.setPartial(partial); },
+      set: (key: string, value: unknown): void => {
+        pState.set(key, value);
+        state.publishedState[key] = value; // Also publish to frontend
+      },
+      setPartial: (partial: Record<string, unknown>): void => {
+        pState.setPartial(partial);
+        Object.assign(state.publishedState, partial); // Also publish to frontend
+      },
       delete: (key: string): void => pState.delete(key),
       keys: (): string[] => pState.keys(),
     };
   } else {
     stateApi = {
       get: (key: string): unknown => state.state[key] ?? null,
-      set: (key: string, value: unknown): void => { state.state[key] = value; },
+      set: (key: string, value: unknown): void => {
+        state.state[key] = value;
+        state.publishedState[key] = value; // Also publish to frontend
+      },
       setPartial: (partial: Record<string, unknown>): void => {
         Object.assign(state.state, partial);
+        Object.assign(state.publishedState, partial); // Also publish to frontend
       },
       delete: (key: string): void => { delete state.state[key]; },
       keys: (): string[] => Object.keys(state.state),
@@ -215,6 +226,100 @@ export async function createBridgeAPIs(options?: BridgeOptions): Promise<Record<
       state.oauthCredential = null;
       state.oauthRevoked = true;
       return true;
+    },
+  };
+
+  // Auth API - advanced authentication (managed/self_hosted/text)
+  // Matches Rust bootstrap.js auth bridge (lines 919-1027)
+  const auth = {
+    getCredential: (): unknown => {
+      return state.authCredential;
+    },
+    getMode: (): string | null => {
+      return state.authCredential ? state.authCredential.mode : null;
+    },
+    getCredentials: (): Record<string, string> | null => {
+      return state.authCredential ? state.authCredential.credentials : null;
+    },
+    fetch: (url: string, options?: Record<string, unknown>): { status: number; headers: Record<string, string>; body: string } => {
+      state.authFetchCalls.push({ url, options: options as FetchOptions | undefined });
+
+      if (!state.authCredential) {
+        return {
+          status: 401,
+          headers: {},
+          body: JSON.stringify({ error: 'No auth credential. Complete auth setup first.' }),
+        };
+      }
+
+      const mode = state.authCredential.mode;
+
+      // Managed mode: delegate to oauth.fetch
+      if (mode === 'managed') {
+        return oauth.fetch(url, options);
+      }
+
+      // Check for mock error
+      if (state.authFetchErrors[url]) {
+        throw new Error(state.authFetchErrors[url]);
+      }
+
+      // Check for mock response
+      const mockResponse = state.authFetchResponses[url];
+      if (mockResponse) {
+        // Auto-clear on 401/403 (matches real runtime behavior)
+        if (mockResponse.status === 401 || mockResponse.status === 403) {
+          state.authCredential = null;
+        }
+        return {
+          status: mockResponse.status,
+          headers: mockResponse.headers ?? {},
+          body: mockResponse.body,
+        };
+      }
+
+      // Default: return 404
+      return {
+        status: 404,
+        headers: {},
+        body: JSON.stringify({ error: 'Not found (no auth mock configured)' }),
+      };
+    },
+    __setCredential: (cred: unknown): void => {
+      state.authCredential = cred as typeof state.authCredential;
+    },
+  };
+
+  // Webhook API - tunnel/webhook management
+  // Matches Rust bootstrap.js webhook bridge (lines 1134-1252)
+  const webhook = {
+    register: (tunnelUuid: string, tunnelName?: string, backendTunnelId?: string): void => {
+      // Remove existing registration for this UUID
+      state.webhookRegistrations = state.webhookRegistrations.filter(r => r.tunnelUuid !== tunnelUuid);
+      state.webhookRegistrations.push({ tunnelUuid, tunnelName, backendTunnelId });
+    },
+    unregister: (tunnelUuid: string): void => {
+      state.webhookRegistrations = state.webhookRegistrations.filter(r => r.tunnelUuid !== tunnelUuid);
+    },
+    list: (): Array<{ tunnel_uuid: string; skill_id: string; tunnel_name: string | null }> => {
+      return state.webhookRegistrations.map(r => ({
+        tunnel_uuid: r.tunnelUuid,
+        skill_id: 'test-skill',
+        tunnel_name: r.tunnelName ?? null,
+      }));
+    },
+    createTunnel: (name: string, description?: string): { id: string; uuid: string; webhookUrl: string } => {
+      const uuid = `mock-tunnel-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      state.webhookCreateTunnelCalls.push({ name, description });
+      webhook.register(uuid, name);
+      const backendUrl = state.env['BACKEND_URL'] ?? 'https://api.tinyhumans.ai';
+      return { id: `mock-id-${uuid}`, uuid, webhookUrl: `${backendUrl}/webhooks/${uuid}` };
+    },
+    listTunnels: (): Array<{ tunnel_uuid: string; skill_id: string; tunnel_name: string | null }> => {
+      return webhook.list();
+    },
+    deleteTunnel: (tunnelUuid: string): void => {
+      webhook.unregister(tunnelUuid);
     },
   };
 
@@ -614,6 +719,88 @@ export async function createBridgeAPIs(options?: BridgeOptions): Promise<Record<
   // Mock Buffer class
   const { Buffer: NodeBuffer } = await import('buffer');
 
+  // Timer execution helpers for tests (matches Rust __handleTimer behavior)
+  const __handleTimer = (id: number): void => {
+    const timer = state.timers.get(id);
+    if (timer) {
+      if (!timer.isInterval) {
+        state.timers.delete(id);
+      }
+      try {
+        timer.callback();
+      } catch (e) {
+        globalThis.console.error('Timer callback error:', e);
+      }
+    }
+  };
+
+  const __flushTimers = (): number => {
+    let fired = 0;
+    for (const [id, timer] of state.timers) {
+      if (!timer.isInterval) {
+        state.timers.delete(id);
+      }
+      try {
+        timer.callback();
+        fired++;
+      } catch (e) {
+        globalThis.console.error('Timer callback error:', e);
+      }
+    }
+    return fired;
+  };
+
+  // Browser-like fetch/Response/Headers (matches Rust bootstrap.js lines 134-239)
+  class MockHeaders {
+    _headers: Record<string, string> = {};
+    constructor(init: Record<string, string> = {}) {
+      if (init) {
+        for (const [key, value] of Object.entries(init)) {
+          this._headers[key.toLowerCase()] = value;
+        }
+      }
+    }
+    get(name: string): string | null { return this._headers[name.toLowerCase()] ?? null; }
+    set(name: string, value: string): void { this._headers[name.toLowerCase()] = value; }
+    has(name: string): boolean { return name.toLowerCase() in this._headers; }
+    delete(name: string): void { delete this._headers[name.toLowerCase()]; }
+    forEach(callback: (value: string, key: string, parent: MockHeaders) => void): void {
+      for (const [key, value] of Object.entries(this._headers)) {
+        callback(value, key, this);
+      }
+    }
+  }
+
+  class MockResponse {
+    _body: string;
+    status: number;
+    statusText: string;
+    headers: MockHeaders;
+    ok: boolean;
+    constructor(body: string, init: { status?: number; statusText?: string; headers?: MockHeaders } = {}) {
+      this._body = body;
+      this.status = init.status ?? 200;
+      this.statusText = init.statusText ?? '';
+      this.headers = init.headers ?? new MockHeaders();
+      this.ok = this.status >= 200 && this.status < 300;
+    }
+    async text(): Promise<string> { return this._body; }
+    async json(): Promise<unknown> { return JSON.parse(this._body); }
+  }
+
+  const mockFetch = async (url: string, options: Record<string, unknown> = {}): Promise<MockResponse> => {
+    const method = (options.method as string) ?? 'GET';
+    const headers = (options.headers as Record<string, string>) ?? {};
+    const body = options.body as string | null ?? null;
+
+    const result = net.fetch(url, { method, headers, body: body ?? undefined });
+    return new MockResponse(result.body, {
+      status: result.status,
+      statusText: '',
+      headers: new MockHeaders(result.headers),
+    });
+  };
+
   return {
     console,
     db,
@@ -624,9 +811,15 @@ export async function createBridgeAPIs(options?: BridgeOptions): Promise<Record<
     cron,
     skills,
     oauth,
+    auth,
+    webhook,
     hooks,
     model,
     tdlib,
+    // Browser-like fetch API (matches Rust bootstrap.js)
+    fetch: mockFetch,
+    Response: MockResponse,
+    Headers: MockHeaders,
     // Backend API - authenticated API client mock
     backend: {
       url: state.env['BACKEND_URL'] ?? 'https://api.tinyhumans.ai',
@@ -795,7 +988,14 @@ export async function createBridgeAPIs(options?: BridgeOptions): Promise<Record<
     onSetOption: undefined,
     onOAuthComplete: undefined,
     onOAuthRevoked: undefined,
+    onAuthComplete: undefined,
+    onAuthRevoked: undefined,
     onHookTriggered: undefined,
+    onWebhookRequest: undefined,
+    onServerEvent: undefined,
+    // Timer execution helpers (for tests to fire pending timers)
+    __handleTimer,
+    __flushTimers,
     // Cleanup hook for persistent DB
     __cleanup: () => {
       if (persistentDb) {

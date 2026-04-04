@@ -30,6 +30,26 @@ export interface SetupSkillTestOptions {
   fetchErrors?: Record<string, string>;
   oauthAvailable?: boolean;
   oauthCredentials?: Record<string, unknown> | null;
+  oauthCredential?: {
+    credentialId: string;
+    provider: string;
+    scopes: string[];
+    isValid: boolean;
+    createdAt: number;
+    accountLabel?: string;
+  };
+  oauthFetchResponses?: Record<
+    string,
+    { status: number; headers?: Record<string, string>; body: string }
+  >;
+  authCredential?: {
+    mode: 'managed' | 'self_hosted' | 'text';
+    credentials: Record<string, string>;
+  };
+  authFetchResponses?: Record<
+    string,
+    { status: number; headers?: Record<string, string>; body: string }
+  >;
   env?: Record<string, string>;
   platformOs?: string;
   counters?: Record<string, unknown>;
@@ -54,3 +74,7 @@ export const _mockFetchResponse = g.mockFetchResponse as (
   headers?: Record<string, string>
 ) => void;
 export const _mockFetchError = g.mockFetchError as (url: string, message?: string) => void;
+
+// Timer execution helpers (matches Rust __handleTimer behavior)
+export const _handleTimer = g.__handleTimer as (id: number) => void;
+export const _flushTimers = g.__flushTimers as () => number;
