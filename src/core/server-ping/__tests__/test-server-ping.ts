@@ -3,11 +3,24 @@
  * Runs against the real Rust QuickJS runtime via JSON-RPC.
  */
 import {
-  describe, it, beforeAll, afterAll,
-  startSkill, stopSkill, callTool, callToolRaw, getSkillStatus,
-  setupStart, setupSubmit, skillRpc,
-  assert, assertEqual, assertNotNull, assertContains, assertGreaterThan,
+  afterAll,
+  assert,
+  assertContains,
+  assertEqual,
+  assertGreaterThan,
+  assertNotNull,
+  beforeAll,
+  callTool,
+  callToolRaw,
+  describe,
+  getSkillStatus,
+  it,
   run,
+  setupStart,
+  setupSubmit,
+  skillRpc,
+  startSkill,
+  stopSkill,
 } from '../../../../dev/test-harness';
 
 const SKILL_ID = 'server-ping';
@@ -43,7 +56,9 @@ describe('Lifecycle', () => {
   });
 
   afterAll(async () => {
-    try { await stopSkill(SKILL_ID); } catch {}
+    try {
+      await stopSkill(SKILL_ID);
+    } catch {}
   });
 });
 
@@ -53,12 +68,14 @@ describe('Lifecycle', () => {
 
 describe('Setup flow', () => {
   beforeAll(async () => {
-    try { await stopSkill(SKILL_ID); } catch {}
+    try {
+      await stopSkill(SKILL_ID);
+    } catch {}
     await startSkill(SKILL_ID);
   });
 
   it('onSetupStart should return server-config step', async () => {
-    const result = await setupStart(SKILL_ID) as any;
+    const result = (await setupStart(SKILL_ID)) as any;
     assertNotNull(result);
     assertNotNull(result.step);
     assertEqual(result.step.id, 'server-config');
@@ -69,28 +86,28 @@ describe('Setup flow', () => {
   });
 
   it('onSetupSubmit should validate empty URL', async () => {
-    const result = await setupSubmit(SKILL_ID, 'server-config', {
+    const result = (await setupSubmit(SKILL_ID, 'server-config', {
       serverUrl: '',
       pingIntervalSec: '10',
-    }) as any;
+    })) as any;
     assertEqual(result.status, 'error');
     assert(result.errors.length > 0, 'should have errors');
     assertEqual(result.errors[0].field, 'serverUrl');
   });
 
   it('onSetupSubmit should validate URL protocol', async () => {
-    const result = await setupSubmit(SKILL_ID, 'server-config', {
+    const result = (await setupSubmit(SKILL_ID, 'server-config', {
       serverUrl: 'ftp://bad.com',
       pingIntervalSec: '10',
-    }) as any;
+    })) as any;
     assertEqual(result.status, 'error');
   });
 
   it('onSetupSubmit step 1 should return next step', async () => {
-    const result = await setupSubmit(SKILL_ID, 'server-config', {
+    const result = (await setupSubmit(SKILL_ID, 'server-config', {
       serverUrl: 'https://good.example.com',
       pingIntervalSec: '30',
-    }) as any;
+    })) as any;
     assertEqual(result.status, 'next');
     assertEqual(result.nextStep.id, 'notification-config');
   });
@@ -102,20 +119,22 @@ describe('Setup flow', () => {
       pingIntervalSec: '10',
     });
     // Step 2
-    const result = await setupSubmit(SKILL_ID, 'notification-config', {
+    const result = (await setupSubmit(SKILL_ID, 'notification-config', {
       notifyOnDown: true,
       notifyOnRecover: false,
-    }) as any;
+    })) as any;
     assertEqual(result.status, 'complete');
   });
 
   it('onSetupSubmit should error on unknown step', async () => {
-    const result = await setupSubmit(SKILL_ID, 'nonexistent', {}) as any;
+    const result = (await setupSubmit(SKILL_ID, 'nonexistent', {})) as any;
     assertEqual(result.status, 'error');
   });
 
   afterAll(async () => {
-    try { await stopSkill(SKILL_ID); } catch {}
+    try {
+      await stopSkill(SKILL_ID);
+    } catch {}
   });
 });
 
@@ -125,12 +144,14 @@ describe('Setup flow', () => {
 
 describe('Tools', () => {
   beforeAll(async () => {
-    try { await stopSkill(SKILL_ID); } catch {}
+    try {
+      await stopSkill(SKILL_ID);
+    } catch {}
     await startSkill(SKILL_ID);
   });
 
   it('get-ping-stats should return stats object', async () => {
-    const stats = await callTool(SKILL_ID, 'get-ping-stats') as any;
+    const stats = (await callTool(SKILL_ID, 'get-ping-stats')) as any;
     assertNotNull(stats);
     assertNotNull(stats.platform, 'should include platform');
     assertEqual(typeof stats.uptimePercent, 'number');
@@ -139,54 +160,54 @@ describe('Tools', () => {
   });
 
   it('get-ping-history should return history', async () => {
-    const history = await callTool(SKILL_ID, 'get-ping-history', { limit: '5' }) as any;
+    const history = (await callTool(SKILL_ID, 'get-ping-history', { limit: '5' })) as any;
     assertNotNull(history);
     assert(Array.isArray(history.history), 'history should be an array');
     assertEqual(typeof history.count, 'number');
   });
 
   it('update-server-url should change URL', async () => {
-    const result = await callTool(SKILL_ID, 'update-server-url', {
+    const result = (await callTool(SKILL_ID, 'update-server-url', {
       url: 'https://new-test.example.com',
-    }) as any;
+    })) as any;
     assertEqual(result.success, true);
     assertEqual(result.newUrl, 'https://new-test.example.com');
 
     // Verify the change via get-ping-stats
-    const stats = await callTool(SKILL_ID, 'get-ping-stats') as any;
+    const stats = (await callTool(SKILL_ID, 'get-ping-stats')) as any;
     assertEqual(stats.serverUrl, 'https://new-test.example.com');
   });
 
   it('update-server-url should reject invalid URL', async () => {
-    const result = await callTool(SKILL_ID, 'update-server-url', {
-      url: 'not-a-url',
-    }) as any;
+    const result = (await callTool(SKILL_ID, 'update-server-url', { url: 'not-a-url' })) as any;
     assert(result.error, 'should return error for invalid URL');
   });
 
   it('ping-now should trigger immediate ping', async () => {
     // First set a valid URL
     await callTool(SKILL_ID, 'update-server-url', { url: 'https://httpbin.org/status/200' });
-    const result = await callTool(SKILL_ID, 'ping-now') as any;
+    const result = (await callTool(SKILL_ID, 'ping-now')) as any;
     assertEqual(result.triggered, true);
     assertGreaterThan(result.pingNumber, 0, 'should have ping number');
     assertNotNull(result.result, 'should return ping result');
   });
 
   it('list-peer-skills should return skills list', async () => {
-    const result = await callTool(SKILL_ID, 'list-peer-skills') as any;
+    const result = (await callTool(SKILL_ID, 'list-peer-skills')) as any;
     assertNotNull(result);
     assert(Array.isArray(result.skills), 'should return skills array');
   });
 
   it('read-config should handle missing file gracefully', async () => {
-    const result = await callTool(SKILL_ID, 'read-config') as any;
+    const result = (await callTool(SKILL_ID, 'read-config')) as any;
     assertNotNull(result);
     // May return error or config depending on whether setup was run
   });
 
   afterAll(async () => {
-    try { await stopSkill(SKILL_ID); } catch {}
+    try {
+      await stopSkill(SKILL_ID);
+    } catch {}
   });
 });
 

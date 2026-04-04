@@ -3,11 +3,23 @@
  * Runs against the real Rust QuickJS runtime via JSON-RPC.
  */
 import {
-  describe, it, beforeAll, afterAll,
-  startSkill, stopSkill, callTool, callToolRaw, getSkillStatus,
-  setupStart, setupSubmit, skillRpc,
-  assert, assertEqual, assertNotNull, assertContains,
+  afterAll,
+  assert,
+  assertContains,
+  assertEqual,
+  assertNotNull,
+  beforeAll,
+  callTool,
+  callToolRaw,
+  describe,
+  getSkillStatus,
+  it,
   run,
+  setupStart,
+  setupSubmit,
+  skillRpc,
+  startSkill,
+  stopSkill,
 } from '../../../../dev/test-harness';
 
 const SKILL_ID = 'notion';
@@ -53,7 +65,9 @@ describe('Lifecycle', () => {
   });
 
   afterAll(async () => {
-    try { await stopSkill(SKILL_ID); } catch {}
+    try {
+      await stopSkill(SKILL_ID);
+    } catch {}
   });
 });
 
@@ -63,24 +77,28 @@ describe('Lifecycle', () => {
 
 describe('Setup flow', () => {
   beforeAll(async () => {
-    try { await stopSkill(SKILL_ID); } catch {}
+    try {
+      await stopSkill(SKILL_ID);
+    } catch {}
     await startSkill(SKILL_ID);
   });
 
   it('onSetupStart should return a step', async () => {
-    const result = await setupStart(SKILL_ID) as any;
+    const result = (await setupStart(SKILL_ID)) as any;
     assertNotNull(result);
     assertNotNull(result.step);
     assertNotNull(result.step.id);
   });
 
   it('onSetupSubmit auth_done should complete', async () => {
-    const result = await setupSubmit(SKILL_ID, 'auth_done', {}) as any;
+    const result = (await setupSubmit(SKILL_ID, 'auth_done', {})) as any;
     assertEqual(result.status, 'complete');
   });
 
   afterAll(async () => {
-    try { await stopSkill(SKILL_ID); } catch {}
+    try {
+      await stopSkill(SKILL_ID);
+    } catch {}
   });
 });
 
@@ -90,7 +108,9 @@ describe('Setup flow', () => {
 
 describe('Tools - input validation', () => {
   beforeAll(async () => {
-    try { await stopSkill(SKILL_ID); } catch {}
+    try {
+      await stopSkill(SKILL_ID);
+    } catch {}
     await startSkill(SKILL_ID);
   });
 
@@ -132,7 +152,9 @@ describe('Tools - input validation', () => {
   });
 
   afterAll(async () => {
-    try { await stopSkill(SKILL_ID); } catch {}
+    try {
+      await stopSkill(SKILL_ID);
+    } catch {}
   });
 });
 

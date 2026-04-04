@@ -3,11 +3,23 @@
  * Runs against the real Rust QuickJS runtime via JSON-RPC.
  */
 import {
-  describe, it, beforeAll, afterAll,
-  startSkill, stopSkill, callTool, callToolRaw, getSkillStatus,
-  setupStart, skillRpc,
-  assert, assertEqual, assertNotNull, assertTrue, assertFalse,
+  afterAll,
+  assert,
+  assertEqual,
+  assertFalse,
+  assertNotNull,
+  assertTrue,
+  beforeAll,
+  callTool,
+  callToolRaw,
+  describe,
+  getSkillStatus,
+  it,
   run,
+  setupStart,
+  skillRpc,
+  startSkill,
+  stopSkill,
 } from '../../../../dev/test-harness';
 
 const SKILL_ID = 'gmail';
@@ -31,7 +43,7 @@ describe('Lifecycle', () => {
     // Gmail should have email-related tools
     assert(
       toolNames.some(n => n.includes('email') || n.includes('label')),
-      `should have email/label tools, got: ${toolNames.join(', ')}`,
+      `should have email/label tools, got: ${toolNames.join(', ')}`
     );
   });
 
@@ -43,7 +55,9 @@ describe('Lifecycle', () => {
   });
 
   afterAll(async () => {
-    try { await stopSkill(SKILL_ID); } catch {}
+    try {
+      await stopSkill(SKILL_ID);
+    } catch {}
   });
 });
 
@@ -53,12 +67,14 @@ describe('Lifecycle', () => {
 
 describe('Setup flow', () => {
   beforeAll(async () => {
-    try { await stopSkill(SKILL_ID); } catch {}
+    try {
+      await stopSkill(SKILL_ID);
+    } catch {}
     await startSkill(SKILL_ID);
   });
 
   it('onSetupStart should return a setup step', async () => {
-    const result = await setupStart(SKILL_ID) as any;
+    const result = (await setupStart(SKILL_ID)) as any;
     assertNotNull(result);
     assertNotNull(result.step);
     assertNotNull(result.step.id);
@@ -66,7 +82,9 @@ describe('Setup flow', () => {
   });
 
   afterAll(async () => {
-    try { await stopSkill(SKILL_ID); } catch {}
+    try {
+      await stopSkill(SKILL_ID);
+    } catch {}
   });
 });
 
@@ -76,37 +94,41 @@ describe('Setup flow', () => {
 
 describe('Tools - without credentials', () => {
   beforeAll(async () => {
-    try { await stopSkill(SKILL_ID); } catch {}
+    try {
+      await stopSkill(SKILL_ID);
+    } catch {}
     await startSkill(SKILL_ID);
   });
 
   it('get-labels should handle missing credentials', async () => {
-    const result = await callTool(SKILL_ID, 'get-labels') as any;
+    const result = (await callTool(SKILL_ID, 'get-labels')) as any;
     assertNotNull(result);
     // Without OAuth, should return an error or empty result
     assert(
       result.error || result.success === false || Array.isArray(result.labels),
-      'should handle missing credentials gracefully',
+      'should handle missing credentials gracefully'
     );
   });
 
   it('get-emails should handle missing credentials', async () => {
-    const result = await callTool(SKILL_ID, 'get-emails') as any;
+    const result = (await callTool(SKILL_ID, 'get-emails')) as any;
     assertNotNull(result);
     assert(
       result.error || result.success === false || Array.isArray(result.emails),
-      'should handle missing credentials gracefully',
+      'should handle missing credentials gracefully'
     );
   });
 
   it('get-email should require message_id', async () => {
-    const result = await callTool(SKILL_ID, 'get-email', {}) as any;
+    const result = (await callTool(SKILL_ID, 'get-email', {})) as any;
     assertNotNull(result);
     assertFalse(result.success);
   });
 
   afterAll(async () => {
-    try { await stopSkill(SKILL_ID); } catch {}
+    try {
+      await stopSkill(SKILL_ID);
+    } catch {}
   });
 });
 
