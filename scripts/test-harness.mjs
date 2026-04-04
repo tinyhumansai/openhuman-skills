@@ -5,6 +5,7 @@
  * This harness provides mock implementations of the QuickJS bridge APIs
  * and runs basic verification tests on bundled skills.
  */
+import Database from 'better-sqlite3';
 import { existsSync, readdirSync, readFileSync } from 'fs';
 import { basename, dirname, join } from 'path';
 import { fileURLToPath } from 'url';
@@ -57,6 +58,45 @@ function resetMockState() {
   };
 }
 
+// Create a real SQLite in-memory database for testing
+function createInMemoryDb() {
+  const database = new Database(':memory:');
+  database.pragma('journal_mode = WAL');
+  database.exec('CREATE TABLE IF NOT EXISTS __kv (key TEXT PRIMARY KEY, value TEXT)');
+
+  return {
+    exec: (sql, params = []) => {
+      if (params.length === 0) {
+        database.exec(sql);
+      } else {
+        database.prepare(sql).run(...params);
+      }
+    },
+    get: (sql, params = []) => {
+      const row = database.prepare(sql).get(...params);
+      return row ?? null;
+    },
+    all: (sql, params = []) => {
+      return database.prepare(sql).all(...params);
+    },
+    kvGet: (key) => {
+      const row = database.prepare('SELECT value FROM __kv WHERE key = ?').get(key);
+      if (!row) return null;
+      try {
+        return JSON.parse(row.value);
+      } catch {
+        return row.value;
+      }
+    },
+    kvSet: (key, value) => {
+      database.prepare('INSERT OR REPLACE INTO __kv (key, value) VALUES (?, ?)').run(key, JSON.stringify(value));
+    },
+    _close: () => {
+      database.close();
+    },
+  };
+}
+
 // Create mock bridge APIs
 function createBridgeAPIs() {
   return {
@@ -72,34 +112,8 @@ function createBridgeAPIs() {
       keys: () => Object.keys(mockState.store),
     },
 
-    // Database API
-    db: {
-      exec: (sql, params = []) => {
-        // Simple CREATE TABLE tracking
-        const createMatch = sql.match(/CREATE TABLE IF NOT EXISTS (\w+)/i);
-        if (createMatch) {
-          mockState.db.tables[createMatch[1]] = { columns: [], rows: [] };
-        }
-        // Track INSERT
-        const insertMatch = sql.match(/INSERT INTO (\w+)/i);
-        if (insertMatch) {
-          const table = mockState.db.tables[insertMatch[1]];
-          if (table) {
-            table.rows.push({ params, sql });
-          }
-        }
-      },
-      get: (sql, params = []) => {
-        return null; // Simplified - return null for now
-      },
-      all: (sql, params = []) => {
-        return []; // Simplified - return empty array
-      },
-      kvGet: key => mockState.store[`kv:${key}`] ?? null,
-      kvSet: (key, value) => {
-        mockState.store[`kv:${key}`] = value;
-      },
-    },
+    // Database API - real SQLite in-memory
+    db: createInMemoryDb(),
 
     // State API
     state: {

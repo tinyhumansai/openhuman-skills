@@ -123,6 +123,27 @@ export interface MockState {
 
   /** Recorded tdlib.ensureInitialized() calls */
   tdlibEnsureInitializedCalls: Array<{ dataDir: string }>;
+
+  /** Auth credential mock (advanced auth: managed/self_hosted/text) */
+  authCredential: AuthCredentialMock | null;
+
+  /** Recorded auth.fetch calls */
+  authFetchCalls: Array<{ url: string; options?: FetchOptions }>;
+
+  /** URL -> mock response for auth.fetch */
+  authFetchResponses: Record<string, { status: number; body: string; headers?: Record<string, string> }>;
+
+  /** URL -> error message for auth.fetch */
+  authFetchErrors: Record<string, string>;
+
+  /** Published state (what the frontend would see via __state) */
+  publishedState: Record<string, unknown>;
+
+  /** Webhook registrations tracked by mock */
+  webhookRegistrations: Array<{ tunnelUuid: string; tunnelName?: string; backendTunnelId?: string }>;
+
+  /** Recorded webhook.createTunnel calls */
+  webhookCreateTunnelCalls: Array<{ name: string; description?: string }>;
 }
 
 export interface DbTable {
@@ -166,6 +187,11 @@ export interface OAuthFetchOptionsMock {
   body?: string;
   timeout?: number;
   baseUrl?: string;
+}
+
+export interface AuthCredentialMock {
+  mode: 'managed' | 'self_hosted' | 'text';
+  credentials: Record<string, string>;
 }
 
 export interface HookEventMock {
@@ -249,6 +275,13 @@ function createFreshState(): MockState {
     tdlibSendResponses: {},
     tdlibReceiveQueue: [],
     tdlibEnsureInitializedCalls: [],
+    authCredential: null,
+    authFetchCalls: [],
+    authFetchResponses: {},
+    authFetchErrors: {},
+    publishedState: {},
+    webhookRegistrations: [],
+    webhookCreateTunnelCalls: [],
   };
 }
 
@@ -276,6 +309,8 @@ export function initMockState(options?: {
   backendFetchResponses?: Record<string, { status: number; body: string; headers?: Record<string, string> }>;
   tdlibAvailable?: boolean;
   tdlibSendResponses?: Record<string, string>;
+  authCredential?: AuthCredentialMock;
+  authFetchResponses?: Record<string, { status: number; body: string; headers?: Record<string, string> }>;
 }): void {
   resetMockState();
 
@@ -314,6 +349,12 @@ export function initMockState(options?: {
   }
   if (options?.tdlibSendResponses) {
     mockState.tdlibSendResponses = { ...options.tdlibSendResponses };
+  }
+  if (options?.authCredential) {
+    mockState.authCredential = { ...options.authCredential };
+  }
+  if (options?.authFetchResponses) {
+    mockState.authFetchResponses = { ...options.authFetchResponses };
   }
 }
 
@@ -402,4 +443,26 @@ export function mockTdlibSendResponse(requestType: string, responseJson: string)
 /** Queue a mock TDLib update to be returned by tdlib.receive() */
 export function mockTdlibUpdate(update: Record<string, unknown>): void {
   mockState.tdlibReceiveQueue.push(update);
+}
+
+/** Set up a mock auth credential (advanced auth: managed/self_hosted/text) */
+export function mockAuthCredential(credential: AuthCredentialMock): void {
+  mockState.authCredential = { ...credential };
+}
+
+/** Set up a mock auth.fetch response for a URL */
+export function mockAuthFetchResponse(
+  url: string,
+  status: number,
+  body: string,
+  headers?: Record<string, string>,
+): void {
+  mockState.authFetchResponses[url] = { status, body, headers };
+  delete mockState.authFetchErrors[url];
+}
+
+/** Set up a mock auth.fetch error for a URL */
+export function mockAuthFetchError(url: string, message = 'Auth fetch error'): void {
+  mockState.authFetchErrors[url] = message;
+  delete mockState.authFetchResponses[url];
 }

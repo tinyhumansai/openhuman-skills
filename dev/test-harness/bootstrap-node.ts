@@ -6,7 +6,6 @@
  */
 
 import { join } from 'path';
-import { dbAll, dbExec, dbGet, dbKvGet, dbKvSet } from './mock-db';
 import { getMockState, type FetchOptions, type HookEventMock, type HookFilterMock, type HookRegistrationMock } from './mock-state';
 import { createPersistentData } from './persistent-data';
 import { createPersistentDb, type PersistentDb } from './persistent-db';
@@ -55,27 +54,18 @@ export async function createBridgeAPIs(options?: BridgeOptions): Promise<Record<
     },
   };
 
-  // Database API - SQLite (real or mock)
-  let db;
-  if (dataDir) {
-    persistentDb = createPersistentDb(join(dataDir, 'skill.db'));
-    const pDb = persistentDb;
-    db = {
-      exec: (sql: string, params?: unknown[]): void => pDb.exec(sql, params ?? []),
-      get: (sql: string, params?: unknown[]): Record<string, unknown> | null => pDb.get(sql, params ?? []),
-      all: (sql: string, params?: unknown[]): Array<Record<string, unknown>> => pDb.all(sql, params ?? []),
-      kvGet: (key: string): unknown => pDb.kvGet(key),
-      kvSet: (key: string, value: unknown): void => pDb.kvSet(key, value),
-    };
-  } else {
-    db = {
-      exec: (sql: string, params?: unknown[]): void => dbExec(sql, params ?? []),
-      get: (sql: string, params?: unknown[]): Record<string, unknown> | null => dbGet(sql, params ?? []),
-      all: (sql: string, params?: unknown[]): Array<Record<string, unknown>> => dbAll(sql, params ?? []),
-      kvGet: (key: string): unknown => dbKvGet(key),
-      kvSet: (key: string, value: unknown): void => dbKvSet(key, value),
-    };
-  }
+  // Database API - always use real SQLite (in-memory when no dataDir, file-backed otherwise)
+  persistentDb = dataDir
+    ? createPersistentDb(join(dataDir, 'skill.db'))
+    : createPersistentDb(':memory:');
+  const pDb = persistentDb;
+  const db = {
+    exec: (sql: string, params?: unknown[]): void => pDb.exec(sql, params ?? []),
+    get: (sql: string, params?: unknown[]): Record<string, unknown> | null => pDb.get(sql, params ?? []),
+    all: (sql: string, params?: unknown[]): Array<Record<string, unknown>> => pDb.all(sql, params ?? []),
+    kvGet: (key: string): unknown => pDb.kvGet(key),
+    kvSet: (key: string, value: unknown): void => pDb.kvSet(key, value),
+  };
 
   // Network API - HTTP mock
   const net = {

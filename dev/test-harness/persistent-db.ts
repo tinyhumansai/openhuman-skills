@@ -19,7 +19,10 @@ export interface PersistentDb {
 }
 
 export function createPersistentDb(dbPath: string): PersistentDb {
-  mkdirSync(dirname(dbPath), { recursive: true });
+  // Support :memory: for in-memory databases (used by unit tests)
+  if (dbPath !== ':memory:') {
+    mkdirSync(dirname(dbPath), { recursive: true });
+  }
 
   const database = new Database(dbPath);
   database.pragma('journal_mode = WAL');
