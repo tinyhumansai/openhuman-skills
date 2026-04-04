@@ -12,7 +12,7 @@ import { fileURLToPath } from 'url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const rootDir = join(__dirname, '..');
 const skillsOutDir = join(rootDir, 'skills');
-const skillsSrcDir = join(rootDir, 'skills-ts-out');
+const skillsSrcDir = join(rootDir, 'skills-ts-out', 'core');
 
 // Header comment for bundled skills.
 // No CommonJS shim needed — with ES module TS output, esbuild IIFE handles
@@ -199,7 +199,7 @@ for (const skillName of skills) {
 // Copy non-bundled skills (no tools dir, no local imports) from skills-ts-out to skills.
 // With ES module TS output these files have `export default skill;` which we
 // convert to a globalThis.__skill assignment for the V8/QuickJS runtime.
-const srcDir = join(rootDir, 'src');
+const srcDir = join(rootDir, 'src', 'core');
 for (const skillName of skills) {
   // Skip if already bundled
   if (bundledSkills.has(skillName)) continue;

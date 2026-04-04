@@ -958,7 +958,7 @@ async function testSkill(skillDir, skillName) {
     }
 
     // Run unit tests from __tests__/ directory
-    const srcDir = join(rootDir, 'src');
+    const srcDir = join(rootDir, 'src', 'core');
     await runSkillUnitTests(skillDir, skillName, srcDir);
   } catch (e) {
     console.log(`  ${colors.red}✗${colors.reset} Failed to evaluate skill: ${e.message}`);
