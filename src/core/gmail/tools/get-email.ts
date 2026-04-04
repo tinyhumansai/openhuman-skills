@@ -1,6 +1,6 @@
 // Tool: get-email
 // Get full details of a specific email by ID
-import { isSensitiveText } from '../../helpers';
+import { isSensitiveText } from '../../../helpers';
 import { gmailFetch } from '../api/index';
 import { getEmailById, upsertEmail } from '../db/helpers';
 import { getGmailSkillState } from '../state';

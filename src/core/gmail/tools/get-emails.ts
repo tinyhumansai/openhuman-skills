@@ -1,6 +1,6 @@
 // Tool: gmail-get-emails
 // Get emails with filtering and search.
-import { isSensitiveText } from '../../helpers';
+import { isSensitiveText } from '../../../helpers';
 import { GmailApiResponse, gmailFetch } from '../api/index';
 import { upsertEmail } from '../db/helpers';
 import { getGmailSkillState } from '../state';

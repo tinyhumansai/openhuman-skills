@@ -1,6 +1,6 @@
 // Tool: search-emails
 // Advanced email search using Gmail query syntax
-import { isSensitiveText } from '../../helpers';
+import { isSensitiveText } from '../../../helpers';
 import { gmailFetch } from '../api/index';
 import { upsertEmail } from '../db/helpers';
 import { getGmailSkillState } from '../state';

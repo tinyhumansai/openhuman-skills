@@ -1,7 +1,7 @@
 // Notion sync engine
 // Periodically downloads pages, databases, users, and page content from Notion
 // into local SQLite for fast local querying.
-import { syncIntegrationMetadata } from '../shared/integration-metadata';
+import { syncIntegrationMetadata } from '../../shared/integration-metadata';
 import { notionApi } from './api/index';
 import type { LocalDatabaseRow, LocalPage } from './db/helpers';
 import {

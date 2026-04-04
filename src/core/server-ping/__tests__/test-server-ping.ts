@@ -13,7 +13,7 @@ import {
   _mockFetchError,
   _mockFetchResponse,
   _setup,
-} from '../../test-harness-globals';
+} from '../../../test-harness-globals';
 
 // Default clean config to reset skill state between tests.
 // Since the skill uses module-level CONFIG that persists across calls,

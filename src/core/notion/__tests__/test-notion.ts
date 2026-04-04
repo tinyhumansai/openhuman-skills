@@ -12,7 +12,7 @@ import {
   _it,
   _mockFetchResponse,
   _setup,
-} from '../../test-harness-globals';
+} from '../../../test-harness-globals';
 
 // Mock Notion API responses
 const MOCK_USER_ME = { object: 'user', id: 'user-123', name: 'Test Bot', type: 'bot' };

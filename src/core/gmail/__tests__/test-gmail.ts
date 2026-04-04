@@ -15,7 +15,7 @@ import {
   _setup,
   _mockFetchResponse,
   _mockFetchError,
-} from '../../test-harness-globals';
+} from '../../../test-harness-globals';
 
 const g = globalThis as Record<string, unknown>;
 const setupSkillTest = _setup;
