@@ -15,6 +15,113 @@ function sleep(ms: number): Promise<void> {
 }
 
 const GMAIL_BASE_URL = 'https://gmail.googleapis.com/gmail/v1';
+const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
+
+/** Cached access token for self_hosted mode (refresh_token → access_token exchange). */
+let cachedSelfHostedToken: { token: string; expiresAt: number } | null = null;
+
+/**
+ * Resolve a Gmail access token from the available credential sources.
+ *
+ * Priority:
+ * 1. Advanced auth (self_hosted): exchange refresh_token for access_token
+ * 2. Advanced auth (text): use service account key (access_token field if pre-exchanged)
+ * 3. OAuth credential with accessToken
+ * 4. null — not connected
+ */
+async function resolveAccessToken(): Promise<string | null> {
+  // Check advanced auth bridge first
+  const authCred = auth.getCredential();
+  if (authCred && authCred.mode === 'self_hosted') {
+    const creds = authCred.credentials;
+    const clientId = creds.client_id as string | undefined;
+    const clientSecret = creds.client_secret as string | undefined;
+    const refreshToken = creds.refresh_token as string | undefined;
+
+    if (clientId && clientSecret && refreshToken) {
+      // Use cached token if still valid (with 60s buffer)
+      if (cachedSelfHostedToken && cachedSelfHostedToken.expiresAt > Date.now() + 60_000) {
+        return cachedSelfHostedToken.token;
+      }
+
+      // Exchange refresh_token for access_token
+      try {
+        const body = `client_id=${encodeURIComponent(clientId)}&client_secret=${encodeURIComponent(clientSecret)}&refresh_token=${encodeURIComponent(refreshToken)}&grant_type=refresh_token`;
+        const response = await net.fetch(GOOGLE_TOKEN_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body,
+          timeout: 15,
+        });
+
+        if (response.status === 200) {
+          const data = JSON.parse(response.body) as { access_token: string; expires_in: number };
+          cachedSelfHostedToken = {
+            token: data.access_token,
+            expiresAt: Date.now() + data.expires_in * 1000,
+          };
+          console.log('[gmail] Self-hosted token refreshed, expires in', data.expires_in, 's');
+          return data.access_token;
+        } else {
+          console.error('[gmail] Token refresh failed:', response.status, response.body);
+          return null;
+        }
+      } catch (err) {
+        console.error('[gmail] Token refresh error:', err);
+        return null;
+      }
+    }
+  }
+
+  if (authCred && authCred.mode === 'text') {
+    // Text mode: the user pasted a service account JSON or an access token.
+    // If the content looks like a raw token (no JSON structure), use it directly.
+    const content = (authCred.credentials.content ?? '') as string;
+    try {
+      const parsed = JSON.parse(content) as Record<string, unknown>;
+      // Service account JSON — would need JWT exchange (complex).
+      // For now, check if there's an access_token or private_key field.
+      if (parsed.access_token) {
+        return parsed.access_token as string;
+      }
+      // Service account with private_key: not supported yet in QuickJS runtime
+      // (would need JWT signing). Log a helpful message.
+      if (parsed.private_key) {
+        console.warn(
+          '[gmail] Service account JSON detected but JWT signing is not yet supported. Use a refresh token flow instead.'
+        );
+        return null;
+      }
+    } catch {
+      // Not JSON — treat as a raw access/bearer token
+      if (content.trim()) {
+        return content.trim();
+      }
+    }
+    return null;
+  }
+
+  // Fall back to OAuth credential
+  const oauthCred = oauth.getCredential();
+  if (oauthCred?.accessToken) {
+    return oauthCred.accessToken as string;
+  }
+
+  return null;
+}
+
+/** Returns true if any form of Gmail credential is available. */
+export function isGmailConnected(): boolean {
+  const authCred = auth.getCredential();
+  if (authCred && authCred.mode !== 'managed') return true;
+  const oauthCred = oauth.getCredential();
+  return !!oauthCred;
+}
+
+/** Reset cached self-hosted token (e.g., on credential change). */
+export function resetTokenCache(): void {
+  cachedSelfHostedToken = null;
+}
 
 export interface GmailApiResponse<T> {
   success: boolean;
@@ -31,22 +138,13 @@ export async function gmailFetch<T = unknown>(
     timeout?: number;
   } = {}
 ): Promise<GmailApiResponse<T>> {
-  const credential = oauth.getCredential();
+  let accessToken = await resolveAccessToken();
 
-  if (!credential) {
-    console.log('[gmail] gmailFetch: no credential (OAuth not connected)');
-    return {
-      success: false,
-      error: { code: 401, message: 'Gmail not connected. Complete OAuth setup first.' },
-    };
-  }
-
-  const accessToken = credential.accessToken;
   if (!accessToken) {
-    console.log('[gmail] gmailFetch: credential missing accessToken');
+    console.log('[gmail] gmailFetch: no access token available');
     return {
       success: false,
-      error: { code: 401, message: 'Gmail credential has no access token. Please reconnect.' },
+      error: { code: 401, message: 'Gmail not connected. Complete setup first.' },
     };
   }
 
@@ -56,7 +154,7 @@ export async function gmailFetch<T = unknown>(
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
-      console.log('[gmail] gmailFetch:', options.method || 'GET', url, accessToken);
+      console.log('[gmail] gmailFetch:', options.method || 'GET', url);
       const response = await net.fetch(url, {
         method: options.method || 'GET',
         headers: {
@@ -84,11 +182,22 @@ export async function gmailFetch<T = unknown>(
         continue;
       }
 
-      if (response.status === 401) {
+      // -- 401 Unauthorized: invalidate cached token and retry with fresh one -
+      if (response.status === 401 && attempt < MAX_RETRIES) {
         const bodyPreview = response.body ? response.body.slice(0, 200) : '(empty)';
-        console.log(
-          `[gmail] gmailFetch: 401 Unauthorized url=${url} credentialId=${credential.credentialId} body=${bodyPreview}`
-        );
+        console.log(`[gmail] gmailFetch: 401 Unauthorized url=${url} body=${bodyPreview}`);
+        // Invalidate cached token and re-resolve
+        cachedSelfHostedToken = null;
+        const freshToken = await resolveAccessToken();
+        if (freshToken && freshToken !== accessToken) {
+          accessToken = freshToken;
+          console.log('[gmail] gmailFetch: refreshed token, retrying');
+          continue;
+        }
+        // Token didn't change — no point retrying
+      } else if (response.status === 401) {
+        const bodyPreview = response.body ? response.body.slice(0, 200) : '(empty)';
+        console.log(`[gmail] gmailFetch: 401 Unauthorized (final) url=${url} body=${bodyPreview}`);
       } else if (response.status >= 400) {
         const bodyPreview = response.body ? response.body.slice(0, 200) : '(empty)';
         console.log(

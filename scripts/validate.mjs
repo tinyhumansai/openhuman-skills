@@ -203,6 +203,12 @@ function validateSetupFlow(skillDir, manifest) {
   // Also check tool files and other ts files that might define these
   const allContent = getAllTsContent(join(srcDir, skillDir));
 
+  // Advanced auth skills use onAuthComplete; may also define onOAuthComplete for managed mode
+  if (manifest.setup.auth) {
+    validateAdvancedAuthSetup(skillDir, manifest, allContent);
+    return;
+  }
+
   // OAuth skills use onOAuthComplete instead of onSetupStart/onSetupSubmit
   if (manifest.setup.oauth) {
     validateOAuthSetup(skillDir, manifest, allContent);
@@ -260,6 +266,51 @@ function validateOAuthSetup(skillDir, manifest, allContent) {
   }
 }
 
+function validateAdvancedAuthSetup(skillDir, manifest, allContent) {
+  const authConfig = manifest.setup.auth;
+
+  if (!authConfig.modes || !Array.isArray(authConfig.modes) || authConfig.modes.length === 0) {
+    error(skillDir, 'setup.auth.modes must be a non-empty array');
+    return;
+  }
+
+  const modeTypes = authConfig.modes.map(m => m.type);
+  pass(`Auth modes: ${modeTypes.join(', ')}`);
+
+  // Validate managed mode if present
+  const managedMode = authConfig.modes.find(m => m.type === 'managed');
+  if (managedMode) {
+    if (!managedMode.provider || typeof managedMode.provider !== 'string') {
+      error(skillDir, 'managed auth mode must have a provider string');
+    } else {
+      pass(`Managed auth provider: "${managedMode.provider}"`);
+    }
+
+    // Managed mode should have onOAuthComplete
+    const hasOAuthComplete = allContent.includes('onOAuthComplete');
+    if (!hasOAuthComplete) {
+      warn(skillDir, 'Managed auth mode present but onOAuthComplete not defined');
+    }
+  }
+
+  // Non-managed modes should have onAuthComplete
+  const hasNonManaged = authConfig.modes.some(m => m.type !== 'managed');
+  if (hasNonManaged) {
+    const hasAuthComplete = allContent.includes('onAuthComplete');
+    if (!hasAuthComplete) {
+      error(skillDir, 'Non-managed auth modes present but onAuthComplete not defined');
+    } else {
+      pass('Auth lifecycle: onAuthComplete defined');
+    }
+  }
+
+  // Self-hosted mode should have fields
+  const selfHosted = authConfig.modes.find(m => m.type === 'self_hosted');
+  if (selfHosted && (!selfHosted.fields || selfHosted.fields.length === 0)) {
+    warn(skillDir, 'self_hosted auth mode has no fields defined');
+  }
+}
+
 // ── Helpers ──────────────────────────────────────────────────────────
 
 function getAllTsFiles(dir) {
@@ -297,7 +348,7 @@ if (!existsSync(srcDir)) {
 }
 
 // Directories under src/ that are not skills (shared helpers, etc.) — skip validation
-const SKIP_DIRS = ['helpers'];
+const SKIP_DIRS = ['helpers', 'shared'];
 
 const skillDirs = readdirSync(srcDir, { withFileTypes: true })
   .filter(d => d.isDirectory() && !SKIP_DIRS.includes(d.name))

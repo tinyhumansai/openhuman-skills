@@ -19,6 +19,17 @@ interface Skill {
   }) => Promise<SetupSubmitResult>;
   onSetupCancel?: () => Promise<void>;
   onOAuthComplete?: (args: OAuthCompleteArgs) => Promise<unknown>;
+  /** Called when advanced auth credentials are submitted (self_hosted / text modes). */
+  onAuthComplete?: (args: {
+    mode: string;
+    credentials: Record<string, unknown>;
+  }) => Promise<{
+    status: string;
+    errors?: Array<{ field: string; message: string }>;
+    message?: string;
+  }>;
+  /** Called when advanced auth credentials are revoked. */
+  onAuthRevoked?: (args: { mode?: string }) => Promise<void>;
   onDisconnect?: () => Promise<void>;
   publishState?: () => Promise<void>;
   onOAuthRevoked?: (args: OAuthRevokedArgs) => Promise<void>;

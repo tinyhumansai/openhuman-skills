@@ -1,6 +1,7 @@
 // Gmail skill main entry point
 // Gmail integration with OAuth bridge; sync sends list API response (id + threadId) to frontend.
 import { loadGmailProfile } from './api/helpers';
+import { isGmailConnected, resetTokenCache } from './api/index';
 import { getEmailCount } from './db/helpers';
 import { initializeGmailSchema } from './db/schema';
 import { getGmailSkillState } from './state';
@@ -38,16 +39,14 @@ async function init(): Promise<void> {
   if (typeof lastHistoryId === 'string') s.syncStatus.lastHistoryId = lastHistoryId;
   s.syncStatus.totalEmails = getEmailCount();
 
-  const isConnected = !!oauth.getCredential();
+  const isConnected = isGmailConnected();
   console.log(`[gmail] Initialized. Connected: ${isConnected}`);
 }
 
 async function start(): Promise<void> {
   console.log('[gmail] Starting skill...');
   const s = getGmailSkillState();
-  const credential = oauth.getCredential();
-
-  if (credential && s.config.syncEnabled) {
+  if (isGmailConnected() && s.config.syncEnabled) {
     // Register periodic sync via cron without blocking startup on full sync.
     const cronExpr = `0 */${s.config.syncIntervalMinutes} * * * *`;
     cron.register('gmail-sync', cronExpr);
@@ -143,6 +142,232 @@ async function onDisconnect(): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+// Advanced auth lifecycle (self_hosted / text modes)
+// ---------------------------------------------------------------------------
+
+async function onAuthComplete(args: {
+  mode: string;
+  credentials: Record<string, unknown>;
+}): Promise<{
+  status: string;
+  errors?: Array<{ field: string; message: string }>;
+  message?: string;
+}> {
+  console.log(`[gmail] onAuthComplete — mode: ${args.mode}`);
+  const s = getGmailSkillState();
+
+  if (args.mode === 'managed') {
+    return { status: 'complete' };
+  }
+
+  // Reset any cached tokens from a previous credential
+  resetTokenCache();
+
+  if (args.mode === 'self_hosted') {
+    const clientId = args.credentials.client_id as string | undefined;
+    const clientSecret = args.credentials.client_secret as string | undefined;
+    const refreshToken = args.credentials.refresh_token as string | undefined;
+
+    if (!clientId || !clientSecret || !refreshToken) {
+      return {
+        status: 'error',
+        errors: [{ field: 'refresh_token', message: 'All three fields are required.' }],
+      };
+    }
+
+    // Validate by exchanging refresh_token for access_token
+    try {
+      const body = `client_id=${encodeURIComponent(clientId)}&client_secret=${encodeURIComponent(clientSecret)}&refresh_token=${encodeURIComponent(refreshToken)}&grant_type=refresh_token`;
+      const response = await net.fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body,
+        timeout: 15,
+      });
+
+      if (response.status !== 200) {
+        let errorMsg = 'Invalid credentials.';
+        try {
+          const parsed = JSON.parse(response.body) as { error_description?: string };
+          if (parsed.error_description) errorMsg = parsed.error_description;
+        } catch {
+          /* use default */
+        }
+        return { status: 'error', errors: [{ field: 'refresh_token', message: errorMsg }] };
+      }
+
+      // Token exchange succeeded — test Gmail API access
+      const tokenData = JSON.parse(response.body) as { access_token: string };
+      const profileResp = await net.fetch(
+        'https://gmail.googleapis.com/gmail/v1/users/me/profile',
+        {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${tokenData.access_token}`,
+            'Content-Type': 'application/json',
+          },
+          timeout: 10,
+        }
+      );
+
+      if (profileResp.status !== 200) {
+        return {
+          status: 'error',
+          errors: [
+            {
+              field: 'client_id',
+              message:
+                'Token is valid but Gmail API access failed. Ensure Gmail API is enabled in your Google Cloud project.',
+            },
+          ],
+        };
+      }
+
+      // Extract email from profile
+      try {
+        const profile = JSON.parse(profileResp.body) as { emailAddress?: string };
+        if (profile.emailAddress) {
+          s.config.userEmail = profile.emailAddress;
+        }
+      } catch {
+        /* non-critical */
+      }
+    } catch (err) {
+      return {
+        status: 'error',
+        errors: [{ field: 'client_id', message: `Could not reach Google API: ${String(err)}` }],
+      };
+    }
+  }
+
+  if (args.mode === 'text') {
+    const content = (args.credentials.content ?? '') as string;
+    if (!content.trim()) {
+      return {
+        status: 'error',
+        errors: [{ field: 'content', message: 'Credential content is required.' }],
+      };
+    }
+
+    // Try to validate — if it looks like a token, test it directly
+    let token = content.trim();
+    try {
+      const parsed = JSON.parse(content) as Record<string, unknown>;
+      if (parsed.access_token) {
+        token = parsed.access_token as string;
+      } else if (parsed.private_key) {
+        return {
+          status: 'error',
+          errors: [
+            {
+              field: 'content',
+              message:
+                'Service account JSON with private_key is not yet supported. Use a refresh token or access token instead.',
+            },
+          ],
+        };
+      }
+    } catch {
+      // Not JSON — treat as raw token
+    }
+
+    // Test the token against Gmail
+    try {
+      const profileResp = await net.fetch(
+        'https://gmail.googleapis.com/gmail/v1/users/me/profile',
+        {
+          method: 'GET',
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          timeout: 10,
+        }
+      );
+
+      if (profileResp.status === 401 || profileResp.status === 403) {
+        return {
+          status: 'error',
+          errors: [{ field: 'content', message: 'Invalid or expired token.' }],
+        };
+      }
+
+      if (profileResp.status !== 200) {
+        const bodyPreview = profileResp.body ? profileResp.body.slice(0, 200) : '';
+        return {
+          status: 'error',
+          errors: [
+            {
+              field: 'content',
+              message: `Gmail API returned ${profileResp.status}. ${bodyPreview}`.trim(),
+            },
+          ],
+        };
+      }
+
+      try {
+        const profile = JSON.parse(profileResp.body) as { emailAddress?: string };
+        if (profile.emailAddress) {
+          s.config.userEmail = profile.emailAddress;
+        }
+      } catch {
+        /* non-critical */
+      }
+    } catch (err) {
+      return {
+        status: 'error',
+        errors: [{ field: 'content', message: `Could not reach Gmail API: ${String(err)}` }],
+      };
+    }
+  }
+
+  // Save config and start sync
+  state.set('config', s.config);
+
+  if (s.config.syncEnabled) {
+    const cronExpr = `0 */${s.config.syncIntervalMinutes} * * * *`;
+    cron.register('gmail-sync', cronExpr);
+  }
+
+  publishSkillState();
+
+  return { status: 'complete', message: 'Connected to Gmail!' };
+}
+
+async function onAuthRevoked(args: { mode?: string }): Promise<void> {
+  console.log(`[gmail] Auth revoked — mode: ${args.mode || 'unknown'}`);
+  const s = getGmailSkillState();
+
+  s.config.credentialId = '';
+  s.config.userEmail = '';
+  s.profile = null;
+  state.delete('config');
+  cron.unregister('gmail-sync');
+  resetTokenCache();
+  publishSkillState();
+}
+
+// ---------------------------------------------------------------------------
+// Setup compatibility stubs (required while validator expects onSetupStart/onSetupSubmit)
+// ---------------------------------------------------------------------------
+
+async function onSetupStart(): Promise<SetupStartResult> {
+  // Auth phase already handled credentials — return a pass-through step
+  return {
+    step: {
+      id: 'auth_done',
+      title: 'Setup Complete',
+      description: 'Authentication is configured. Click Continue to finish.',
+      fields: [],
+    },
+  };
+}
+
+async function onSetupSubmit(_args: {
+  stepId: string;
+  values: Record<string, unknown>;
+}): Promise<SetupSubmitResult> {
+  return { status: 'complete' };
+}
+
+// ---------------------------------------------------------------------------
 // Options system
 // ---------------------------------------------------------------------------
 
@@ -199,12 +424,12 @@ async function onListOptions(): Promise<{ options: SkillOption[] }> {
 
 async function onSetOption(args: { name: string; value: unknown }): Promise<void> {
   const s = getGmailSkillState();
-  const credential = oauth.getCredential();
+  const connected = isGmailConnected();
 
   switch (args.name) {
     case 'syncEnabled':
       s.config.syncEnabled = Boolean(args.value);
-      if (s.config.syncEnabled && credential) {
+      if (s.config.syncEnabled && connected) {
         const cronExpr = `0 */${s.config.syncIntervalMinutes} * * * *`;
         cron.register('gmail-sync', cronExpr);
       } else {
@@ -214,7 +439,7 @@ async function onSetOption(args: { name: string; value: unknown }): Promise<void
 
     case 'syncInterval':
       s.config.syncIntervalMinutes = parseInt(args.value as string, 10);
-      if (s.config.syncEnabled && credential) {
+      if (s.config.syncEnabled && connected) {
         cron.unregister('gmail-sync');
         const cronExpr = `0 */${s.config.syncIntervalMinutes} * * * *`;
         cron.register('gmail-sync', cronExpr);
@@ -241,8 +466,7 @@ async function onSetOption(args: { name: string; value: unknown }): Promise<void
 
 function publishSkillState(): void {
   const s = getGmailSkillState();
-  const credential = oauth.getCredential();
-  const isConnected = !!credential;
+  const isConnected = isGmailConnected();
 
   // Profile and emails for frontend gmail store (gmailSlice) — only when connected
   const profile =
@@ -302,6 +526,10 @@ const skill: Skill = {
   onSessionEnd,
   onOAuthComplete,
   onOAuthRevoked,
+  onAuthComplete,
+  onAuthRevoked,
+  onSetupStart,
+  onSetupSubmit,
   onSync,
   onDisconnect,
   onListOptions,

@@ -5,7 +5,7 @@
 import { notionApi } from './api/index';
 import { getEntityCounts, getLocalPages } from './db/helpers';
 import { initializeNotionSchema } from './db/schema';
-import { formatUserSummary, notionFetch } from './helpers';
+import { formatUserSummary, isNotionConnected, notionFetch, resetApiVersionCache } from './helpers';
 import { getNotionSkillState } from './state';
 import type { NotionSkillConfig } from './state';
 import { performSync } from './sync';
@@ -43,12 +43,19 @@ async function init(): Promise<void> {
   s.syncStatus.pagesWithContent = counts.pagesWithContent;
   s.syncStatus.pagesWithSummary = counts.pagesWithSummary;
 
-  const cred = oauth.getCredential();
-  if (cred) {
-    s.config.credentialId = cred.credentialId;
-    console.log(`[notion] Connected to workspace: ${s.config.workspaceName || '(unnamed)'}`);
+  // Check for credentials from either OAuth (managed) or advanced auth (self_hosted/text)
+  const oauthCred = oauth.getCredential();
+  if (oauthCred) {
+    s.config.credentialId = oauthCred.credentialId;
+    console.log(
+      `[notion] Connected via OAuth to workspace: ${s.config.workspaceName || '(unnamed)'}`
+    );
+  } else if (isNotionConnected()) {
+    console.log(
+      `[notion] Connected via auth credential to workspace: ${s.config.workspaceName || '(unnamed)'}`
+    );
   } else {
-    console.log('[notion] No OAuth credential — waiting for setup');
+    console.log('[notion] No credential — waiting for setup');
   }
 
   publishState();
@@ -57,8 +64,8 @@ async function init(): Promise<void> {
 async function start(): Promise<void> {
   const s = getNotionSkillState();
 
-  if (!oauth.getCredential()) {
-    console.log('[notion] No credential — skill inactive until OAuth completes');
+  if (!isNotionConnected()) {
+    console.log('[notion] No credential — skill inactive until auth completes');
     return;
   }
 
@@ -153,6 +160,140 @@ async function onDisconnect(): Promise<void> {
   publishState();
 }
 
+// ---------------------------------------------------------------------------
+// Advanced auth lifecycle (self_hosted / text modes)
+// ---------------------------------------------------------------------------
+
+async function onAuthComplete(args: {
+  mode: string;
+  credentials: Record<string, unknown>;
+}): Promise<{
+  status: string;
+  errors?: Array<{ field: string; message: string }>;
+  message?: string;
+}> {
+  console.log(`[notion] onAuthComplete — mode: ${args.mode}`);
+  const s = getNotionSkillState();
+
+  if (args.mode === 'managed') {
+    // Managed mode is handled by onOAuthComplete — just return success
+    return { status: 'complete' };
+  }
+
+  // For self_hosted: validate the API token by making a test call
+  const token = (args.credentials.api_token ??
+    args.credentials.content ??
+    args.credentials.access_token) as string | undefined;
+
+  if (!token) {
+    return { status: 'error', errors: [{ field: 'api_token', message: 'API token is required.' }] };
+  }
+
+  // Test the token against Notion API
+  try {
+    const response = await net.fetch('https://api.notion.com/v1/users?page_size=1', {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        'Notion-Version': '2022-06-28',
+      },
+      timeout: 15,
+    });
+
+    if (response.status === 401 || response.status === 403) {
+      return {
+        status: 'error',
+        errors: [
+          {
+            field: 'api_token',
+            message: 'Invalid token. Check that your integration token is correct.',
+          },
+        ],
+      };
+    }
+
+    if (response.status >= 400) {
+      return {
+        status: 'error',
+        errors: [
+          {
+            field: 'api_token',
+            message: `Notion API returned error ${response.status}. Please check your token.`,
+          },
+        ],
+      };
+    }
+
+    // Token is valid — extract workspace info from the bot user
+    try {
+      const data = JSON.parse(response.body) as {
+        results?: Array<{ name?: string; type?: string }>;
+      };
+      const botUser = data.results?.find(u => u.type === 'bot');
+      if (botUser?.name) {
+        s.config.workspaceName = botUser.name;
+      }
+    } catch {
+      // Non-critical: workspace name extraction failed
+    }
+  } catch (err) {
+    return {
+      status: 'error',
+      errors: [{ field: 'api_token', message: `Could not reach Notion API: ${String(err)}` }],
+    };
+  }
+
+  // Persist config and reset API version cache (new credential may have different access)
+  state.set('config', s.config);
+  resetApiVersionCache();
+
+  // Register sync cron
+  const cronExpr = `0 */${s.config.syncIntervalMinutes} * * * *`;
+  cron.register('notion-sync', cronExpr);
+
+  publishState();
+
+  return { status: 'complete', message: 'Connected to Notion!' };
+}
+
+async function onAuthRevoked(args: { mode?: string }): Promise<void> {
+  console.log(`[notion] Auth revoked — mode: ${args.mode || 'unknown'}`);
+  const s = getNotionSkillState();
+
+  s.config.credentialId = '';
+  s.config.workspaceName = '';
+  // Clear profile from shared state so the frontend no longer sees a stale identity
+  state.setPartial({ profile: null });
+  state.delete('config');
+  cron.unregister('notion-sync');
+  resetApiVersionCache();
+  publishState();
+}
+
+// ---------------------------------------------------------------------------
+// Setup compatibility stubs (required while validator expects onSetupStart/onSetupSubmit)
+// ---------------------------------------------------------------------------
+
+async function onSetupStart(): Promise<SetupStartResult> {
+  // Auth phase already handled credentials — return a pass-through step
+  return {
+    step: {
+      id: 'auth_done',
+      title: 'Setup Complete',
+      description: 'Authentication is configured. Click Continue to finish.',
+      fields: [],
+    },
+  };
+}
+
+async function onSetupSubmit(_args: {
+  stepId: string;
+  values: Record<string, unknown>;
+}): Promise<SetupSubmitResult> {
+  return { status: 'complete' };
+}
+
 async function onSync(): Promise<void> {
   console.log('[notion] Syncing');
 
@@ -215,12 +356,11 @@ async function onListOptions(): Promise<{ options: SkillOption[] }> {
 
 async function onSetOption(args: { name: string; value: unknown }): Promise<void> {
   const s = getNotionSkillState();
-  const credential = oauth.getCredential();
 
   switch (args.name) {
     case 'syncInterval':
       s.config.syncIntervalMinutes = parseInt(args.value as string, 10);
-      if (credential) {
+      if (isNotionConnected()) {
         cron.unregister('notion-sync');
         const cronExpr = `0 */${s.config.syncIntervalMinutes} * * * *`;
         cron.register('notion-sync', cronExpr);
@@ -246,7 +386,7 @@ async function onSetOption(args: { name: string; value: unknown }): Promise<void
 
 async function publishState(): Promise<void> {
   const s = getNotionSkillState();
-  const isConnected = !!oauth.getCredential();
+  const isConnected = isNotionConnected();
 
   // Fetch recent pages from local DB (populated after sync)
   let pages: Array<{
@@ -305,9 +445,8 @@ async function publishState(): Promise<void> {
 // ---------------------------------------------------------------------------
 
 async function onPing(): Promise<PingResult> {
-  const cred = oauth.getCredential();
-  if (!cred) {
-    return { ok: false, errorType: 'auth', errorMessage: 'No OAuth credential' };
+  if (!isNotionConnected()) {
+    return { ok: false, errorType: 'auth', errorMessage: 'No credential' };
   }
   try {
     // Use notionFetch so transient Cloudflare 52x errors are retried automatically
@@ -345,6 +484,10 @@ const skill: Skill = {
   onSessionEnd,
   onOAuthComplete,
   onOAuthRevoked,
+  onAuthComplete,
+  onAuthRevoked,
+  onSetupStart,
+  onSetupSubmit,
   onDisconnect,
   onSync,
   onListOptions,
