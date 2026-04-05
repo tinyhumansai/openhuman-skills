@@ -72,6 +72,33 @@ async function onSetupSubmit(args: {
       };
     }
 
+    // Verify the server is reachable before proceeding
+    try {
+      const response = net.fetch(url, { method: 'GET', timeout: 10000 });
+      if (response.status >= 500) {
+        return {
+          status: 'error',
+          errors: [
+            {
+              field: 'serverUrl',
+              message: `Server returned error ${response.status}. Verify the URL is correct.`,
+            },
+          ],
+        };
+      }
+      // Any 1xx–4xx means the server is reachable (even 404 = server is there)
+    } catch (e) {
+      return {
+        status: 'error',
+        errors: [
+          {
+            field: 'serverUrl',
+            message: `Could not reach server: ${String(e)}. Check the URL and try again.`,
+          },
+        ],
+      };
+    }
+
     s.config.serverUrl = url;
     s.config.pingIntervalSec = parseInt(values.pingIntervalSec as string) || 10;
 
