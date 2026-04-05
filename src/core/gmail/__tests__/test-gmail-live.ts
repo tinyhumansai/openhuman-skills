@@ -1,126 +1,234 @@
+#!/usr/bin/env npx tsx
 /**
- * Gmail skill live integration test — exercises the full encrypted OAuth flow.
+ * Gmail skill live integration script.
  *
- * Supports two modes:
+ * Interactive sequential script that walks through the full skill lifecycle:
+ *   start → authenticate → verify connection → exercise tools → sync → stop
  *
- * 1. Self-hosted (own Google OAuth credentials):
- *    GMAIL_CLIENT_ID=xxx \
- *    GMAIL_CLIENT_SECRET=xxx \
- *    GMAIL_REFRESH_TOKEN=xxx \
- *    yarn test src/core/gmail/__tests__/test-gmail-live.ts
+ * Credentials can be passed via env vars or entered interactively when prompted.
  *
- * 2. Encrypted OAuth (managed mode):
- *    The clientKey is returned directly in the OAuth callback URL by the backend
- *    (no separate fetch step). For testing, provide it as an env var:
+ * Usage:
+ *   # Interactive — prompts for everything:
+ *   npx tsx src/core/gmail/__tests__/test-gmail-live.ts
  *
- *    GMAIL_INTEGRATION_ID=<24-char-hex> \
- *    CLIENT_KEY_SHARE=<base64-encoded-client-key> \
- *    yarn test src/core/gmail/__tests__/test-gmail-live.ts
+ *   # Self-hosted via env:
+ *   GMAIL_CLIENT_ID=x GMAIL_CLIENT_SECRET=x GMAIL_REFRESH_TOKEN=x \
+ *     npx tsx src/core/gmail/__tests__/test-gmail-live.ts
  *
- * Flow:
- *   1. Starts the Gmail skill in the runtime
- *   2. Injects OAuth credential + clientKeyShare via oauth/complete RPC
- *   3. The skill's oauth.fetch() routes through /proxy/encrypted/:id/ with X-Encryption-Key
- *   4. Backend XOR-combines client+server shares to decrypt tokens and proxy requests
- *   5. Verifies connection, exercises tools, triggers sync
+ *   # Encrypted OAuth via env:
+ *   GMAIL_INTEGRATION_ID=<id> CLIENT_KEY_SHARE=<key> \
+ *     npx tsx src/core/gmail/__tests__/test-gmail-live.ts
  */
+import * as readline from 'readline';
 import {
-  afterAll,
-  assert,
-  assertEqual,
-  assertNotNull,
   authComplete,
   callTool,
-  describe,
   getSkillStatus,
-  it,
   oauthComplete,
-  run,
   setSetupComplete,
   startSkill,
   stopSkill,
-  triggerSync,
 } from '../../../../dev/test-harness';
 
 // ---------------------------------------------------------------------------
-// Configuration from environment
+// Formatting helpers
+// ---------------------------------------------------------------------------
+
+const C = {
+  reset: '\x1b[0m',
+  bold: '\x1b[1m',
+  dim: '\x1b[2m',
+  green: '\x1b[32m',
+  red: '\x1b[31m',
+  yellow: '\x1b[33m',
+  cyan: '\x1b[36m',
+  blue: '\x1b[34m',
+};
+
+function header(text: string) {
+  console.log(`\n${C.cyan}${'─'.repeat(60)}${C.reset}`);
+  console.log(`${C.cyan}  ${text}${C.reset}`);
+  console.log(`${C.cyan}${'─'.repeat(60)}${C.reset}`);
+}
+
+function step(label: string) {
+  process.stdout.write(`${C.blue}  ▸ ${label}${C.reset} `);
+}
+
+function ok(detail?: string) {
+  console.log(`${C.green}✓${C.reset}${detail ? ` ${C.dim}${detail}${C.reset}` : ''}`);
+}
+
+function fail(detail: string) {
+  console.log(`${C.red}✗ ${detail}${C.reset}`);
+}
+
+function info(label: string, value: unknown) {
+  console.log(`${C.dim}    ${label}: ${C.reset}${value}`);
+}
+
+// ---------------------------------------------------------------------------
+// Prompt helper
+// ---------------------------------------------------------------------------
+
+const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+
+function prompt(question: string, defaultValue?: string): Promise<string> {
+  const suffix = defaultValue ? ` ${C.dim}[${defaultValue}]${C.reset}` : '';
+  return new Promise(resolve => {
+    rl.question(`${C.yellow}  ? ${question}${suffix}: ${C.reset}`, answer => {
+      resolve(answer.trim() || defaultValue || '');
+    });
+  });
+}
+
+function promptSecret(question: string): Promise<string> {
+  return new Promise(resolve => {
+    process.stdout.write(`${C.yellow}  ? ${question}: ${C.reset}`);
+    const stdin = process.stdin;
+    const wasRaw = stdin.isRaw;
+    if (stdin.isTTY) stdin.setRawMode(true);
+
+    let input = '';
+    const onData = (ch: Buffer) => {
+      const c = ch.toString();
+      if (c === '\n' || c === '\r') {
+        if (stdin.isTTY) stdin.setRawMode(wasRaw ?? false);
+        stdin.removeListener('data', onData);
+        console.log();
+        resolve(input.trim());
+      } else if (c === '\x7f' || c === '\b') {
+        input = input.slice(0, -1);
+      } else if (c === '\x03') {
+        process.exit(1);
+      } else {
+        input += c;
+      }
+    };
+    stdin.on('data', onData);
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Tool caller (safe, never throws)
 // ---------------------------------------------------------------------------
 
 const SKILL_ID = 'gmail';
 
-// Self-hosted mode
-const GMAIL_CLIENT_ID = process.env.GMAIL_CLIENT_ID || '';
-const GMAIL_CLIENT_SECRET = process.env.GMAIL_CLIENT_SECRET || '';
-const GMAIL_REFRESH_TOKEN = process.env.GMAIL_REFRESH_TOKEN || '';
-
-// Encrypted OAuth mode — clientKey comes from the OAuth callback URL, not a separate fetch
-const INTEGRATION_ID = process.env.GMAIL_INTEGRATION_ID || '';
-const CLIENT_KEY_SHARE = process.env.CLIENT_KEY_SHARE || '';
-
-const isSelfHosted = !!(GMAIL_CLIENT_ID && GMAIL_CLIENT_SECRET && GMAIL_REFRESH_TOKEN);
-const isEncryptedOAuth = !!INTEGRATION_ID && !!CLIENT_KEY_SHARE;
-
-if (!isSelfHosted && !isEncryptedOAuth) {
-  console.error(
-    '\n  Missing credentials. Provide one of:\n' +
-      '    - GMAIL_CLIENT_ID + GMAIL_CLIENT_SECRET + GMAIL_REFRESH_TOKEN (self-hosted)\n' +
-      '    - GMAIL_INTEGRATION_ID + CLIENT_KEY_SHARE (encrypted OAuth mode)\n'
-  );
-  process.exit(1);
-}
-
-const mode = isSelfHosted ? 'self_hosted' : 'encrypted_oauth';
-console.log(`\n  Mode: ${mode}`);
-if (isEncryptedOAuth) {
-  console.log(`  Integration ID: ${INTEGRATION_ID}`);
-  console.log(`  Client key: <redacted, ${CLIENT_KEY_SHARE.length} chars>`);
-}
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/** Call a tool, returning result or error object (never throws). */
-async function callToolSafe(toolName: string, args: Record<string, unknown> = {}): Promise<any> {
+async function callToolSafe(
+  toolName: string,
+  args: Record<string, unknown> = {},
+): Promise<{ data?: any; error?: string }> {
   try {
-    return await callTool(SKILL_ID, toolName, args);
+    const data = await callTool(SKILL_ID, toolName, args);
+    return { data };
   } catch (e: any) {
     return { error: e.message };
   }
 }
 
 // ---------------------------------------------------------------------------
-// Tests: Start & Auth
+// Main
 // ---------------------------------------------------------------------------
 
-describe('Gmail Live — Start & Auth', () => {
-  it('should start the skill', async () => {
-    try {
-      await stopSkill(SKILL_ID);
-    } catch {}
+async function main() {
+  console.log(`\n${C.bold}  Gmail Skill — Live Integration Script${C.reset}`);
 
-    const snap = await startSkill(SKILL_ID);
-    assertEqual(snap.status, 'running');
-    assertEqual(snap.name, 'Gmail');
-    console.log(`    Tools registered: ${snap.tools.length}`);
-  });
+  // ── Collect credentials ──────────────────────────────────────────────────
 
-  if (isSelfHosted) {
-    it('should authenticate with self-hosted credentials', async () => {
-      const result = (await authComplete(SKILL_ID, 'self_hosted', {
-        client_id: GMAIL_CLIENT_ID,
-        client_secret: GMAIL_CLIENT_SECRET,
-        refresh_token: GMAIL_REFRESH_TOKEN,
-      })) as any;
-      console.log(`    Auth result: ${JSON.stringify(result)}`);
-      assertEqual(result.status, 'complete', `Expected complete, got: ${JSON.stringify(result)}`);
-    });
+  header('1. Credentials');
+
+  let mode: 'self_hosted' | 'encrypted_oauth' = 'self_hosted';
+  let clientId = process.env.GMAIL_CLIENT_ID || '';
+  let clientSecret = process.env.GMAIL_CLIENT_SECRET || '';
+  let refreshToken = process.env.GMAIL_REFRESH_TOKEN || '';
+  let integrationId = process.env.GMAIL_INTEGRATION_ID || '';
+  let clientKeyShare = process.env.CLIENT_KEY_SHARE || '';
+
+  const hasSelfHostedEnv = !!(clientId && clientSecret && refreshToken);
+  const hasOAuthEnv = !!(integrationId && clientKeyShare);
+
+  if (!hasSelfHostedEnv && !hasOAuthEnv) {
+    const choice = await prompt(
+      'Auth mode — (1) Own OAuth credentials  (2) Encrypted OAuth',
+      '1',
+    );
+
+    if (choice === '2') {
+      mode = 'encrypted_oauth';
+      integrationId = await prompt('Integration ID (24-char hex)');
+      clientKeyShare = await promptSecret('Client key share (base64)');
+
+      if (!integrationId || !clientKeyShare) {
+        fail('Integration ID and client key share are both required.');
+        process.exit(1);
+      }
+    } else {
+      mode = 'self_hosted';
+      clientId = await prompt('Google Client ID');
+      clientSecret = await promptSecret('Google Client Secret');
+      refreshToken = await promptSecret('Refresh Token');
+
+      if (!clientId || !clientSecret || !refreshToken) {
+        fail('All three fields are required.');
+        process.exit(1);
+      }
+    }
+  } else {
+    mode = hasSelfHostedEnv ? 'self_hosted' : 'encrypted_oauth';
   }
 
-  if (isEncryptedOAuth) {
-    it('should inject encrypted OAuth credential with client key', async () => {
+  info('Mode', mode);
+  if (mode === 'self_hosted') {
+    info('Client ID', `${clientId.slice(0, 12)}...`);
+  } else {
+    info('Integration ID', integrationId);
+    info('Client key', `<${clientKeyShare.length} chars>`);
+  }
+
+  // ── Start skill ──────────────────────────────────────────────────────────
+
+  header('2. Start Skill');
+
+  step('Stopping any existing instance...');
+  try { await stopSkill(SKILL_ID); ok(); } catch { ok('(was not running)'); }
+
+  step('Starting gmail skill...');
+  try {
+    const snap = await startSkill(SKILL_ID);
+    ok(`status=${snap.status}, tools=${snap.tools.length}`);
+  } catch (e: any) {
+    fail(e.message);
+    process.exit(1);
+  }
+
+  // ── Authenticate ─────────────────────────────────────────────────────────
+
+  header('3. Authenticate');
+
+  if (mode === 'self_hosted') {
+    step('Sending auth/complete with self-hosted credentials...');
+    try {
+      const result = (await authComplete(SKILL_ID, 'self_hosted', {
+        client_id: clientId,
+        client_secret: clientSecret,
+        refresh_token: refreshToken,
+      })) as any;
+      if (result.status === 'complete') {
+        ok(result.message || '');
+      } else {
+        fail(JSON.stringify(result.errors || result));
+        process.exit(1);
+      }
+    } catch (e: any) {
+      fail(e.message);
+      process.exit(1);
+    }
+  } else {
+    step('Sending oauth/complete with encrypted credential...');
+    try {
       const result = await oauthComplete(SKILL_ID, {
-        credentialId: INTEGRATION_ID,
+        credentialId: integrationId,
         provider: 'gmail',
         grantedScopes: [
           'https://www.googleapis.com/auth/gmail.readonly',
@@ -128,93 +236,137 @@ describe('Gmail Live — Start & Auth', () => {
           'https://www.googleapis.com/auth/gmail.modify',
           'https://www.googleapis.com/auth/gmail.labels',
         ],
-        clientKeyShare: CLIENT_KEY_SHARE,
+        clientKeyShare,
       });
-      console.log(`    OAuth complete result: ${JSON.stringify(result)}`);
-    });
+      ok(JSON.stringify(result).slice(0, 120));
+    } catch (e: any) {
+      fail(e.message);
+      process.exit(1);
+    }
   }
 
-  it('should mark setup as complete', async () => {
+  step('Marking setup complete...');
+  try {
     await setSetupComplete(SKILL_ID, true);
+    ok();
+  } catch (e: any) {
+    fail(e.message);
+  }
+
+  // ── Verify connection ────────────────────────────────────────────────────
+
+  header('4. Verify Connection');
+
+  step('Waiting for state to settle...');
+  await new Promise(r => setTimeout(r, 1500));
+  ok();
+
+  step('Checking skill status...');
+  try {
     const snap = await getSkillStatus(SKILL_ID);
-    assertEqual(snap.setup_complete, true);
-  });
+    const s = snap.state as Record<string, unknown> | undefined;
+    info('connection_status', s?.connection_status ?? '(none)');
+    info('auth_status', s?.auth_status ?? '(none)');
+    info('userEmail', s?.userEmail ?? '(none)');
 
-  it('should show connected status', async () => {
-    await new Promise(r => setTimeout(r, 1000));
-    const snap = await getSkillStatus(SKILL_ID);
-    console.log(`    Connection status: ${snap.state?.connection_status}`);
-    console.log(`    Auth status: ${snap.state?.auth_status}`);
-    assertEqual(snap.state?.connection_status, 'connected');
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Tests: Tool Verification
-// ---------------------------------------------------------------------------
-
-describe('Gmail Live — Tools', () => {
-  it('get-profile should return Gmail profile', async () => {
-    const result = await callToolSafe('get-profile', {});
-    console.log(
-      `    Profile: ${result.error ? result.error : JSON.stringify(result).slice(0, 200)}`
-    );
-    assert(!result.error, `get-profile failed: ${result.error}`);
-  });
-
-  it('get-labels should return labels', async () => {
-    const result = await callToolSafe('get-labels', {});
-    const labels = result.labels || [];
-    console.log(`    Labels: ${result.error ? result.error : `${labels.length} labels`}`);
-    assert(!result.error, `get-labels failed: ${result.error}`);
-  });
-
-  it('get-emails should return recent emails', async () => {
-    const result = await callToolSafe('get-emails', { max_results: 5 });
-    console.log(
-      `    Emails: ${result.error ? result.error : `${(result.emails || result.messages || []).length} emails`}`
-    );
-    assert(!result.error, `get-emails failed: ${result.error}`);
-  });
-
-  it('search-emails should return results', async () => {
-    const result = await callToolSafe('search-emails', { query: 'in:inbox', max_results: 3 });
-    console.log(
-      `    Search: ${result.error ? result.error : `${(result.emails || result.messages || []).length} results`}`
-    );
-    assert(!result.error, `search-emails failed: ${result.error}`);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Tests: Sync
-// ---------------------------------------------------------------------------
-
-describe('Gmail Live — Sync', () => {
-  it('should trigger sync without error', async () => {
-    try {
-      await triggerSync(SKILL_ID);
-      await new Promise(r => setTimeout(r, 3000));
-      console.log('    Sync triggered successfully');
-    } catch (e: any) {
-      console.log(`    Sync result: ${e.message}`);
+    if (s?.connection_status === 'connected') {
+      ok('connected');
+    } else {
+      fail(`Expected connected, got ${s?.connection_status}`);
     }
-  });
+  } catch (e: any) {
+    fail(e.message);
+  }
 
-  it('should have updated state after sync', async () => {
+  // ── Exercise tools ───────────────────────────────────────────────────────
+
+  header('5. Exercise Tools');
+
+  step('get-profile...');
+  {
+    const { data, error } = await callToolSafe('get-profile', {});
+    if (error) { fail(error); }
+    else {
+      const email = data?.emailAddress || data?.email || JSON.stringify(data).slice(0, 80);
+      ok(String(email));
+    }
+  }
+
+  step('get-labels...');
+  {
+    const { data, error } = await callToolSafe('get-labels', {});
+    if (error) { fail(error); }
+    else {
+      const labels = data?.labels || [];
+      ok(`${labels.length} labels`);
+      for (const l of labels.slice(0, 5)) {
+        info('label', l.name || l.id);
+      }
+      if (labels.length > 5) info('', `...and ${labels.length - 5} more`);
+    }
+  }
+
+  step('get-emails (max 5)...');
+  {
+    const { data, error } = await callToolSafe('get-emails', { max_results: 5 });
+    if (error) { fail(error); }
+    else {
+      const emails = data?.emails || data?.messages || [];
+      ok(`${emails.length} emails`);
+      for (const e of emails.slice(0, 3)) {
+        info('email', `${e.subject || e.id} — ${e.from || ''}`);
+      }
+    }
+  }
+
+  step('search-emails (in:inbox, max 3)...');
+  {
+    const { data, error } = await callToolSafe('search-emails', { query: 'in:inbox', max_results: 3 });
+    if (error) { fail(error); }
+    else {
+      const emails = data?.emails || data?.messages || [];
+      ok(`${emails.length} results`);
+    }
+  }
+
+  // ── Sync ─────────────────────────────────────────────────────────────────
+  // The Rust runtime auto-triggers onSync() immediately after auth succeeds,
+  // so we just wait for it to finish and verify the state.
+
+  header('6. Sync (auto-triggered by runtime after auth)');
+
+  step('Waiting for auto-sync to complete...');
+  await new Promise(r => setTimeout(r, 5000));
+  ok();
+
+  step('Checking post-sync state...');
+  try {
     const snap = await getSkillStatus(SKILL_ID);
-    console.log(`    User email: ${snap.state?.userEmail ?? 'N/A'}`);
-    console.log(`    Total emails: ${snap.state?.totalEmails ?? 'N/A'}`);
-    console.log(`    Last sync: ${snap.state?.lastSyncTime ?? 'N/A'}`);
-    console.log(`    Sync in progress: ${snap.state?.syncInProgress ?? 'N/A'}`);
-  });
+    const s = snap.state as Record<string, unknown> | undefined;
+    info('userEmail', s?.userEmail ?? 'N/A');
+    info('totalEmails', s?.totalEmails ?? 'N/A');
+    info('lastSyncTime', s?.lastSyncTime ?? 'N/A');
+    info('syncInProgress', s?.syncInProgress ?? 'N/A');
+    ok();
+  } catch (e: any) {
+    fail(e.message);
+  }
 
-  afterAll(async () => {
-    try {
-      await stopSkill(SKILL_ID);
-    } catch {}
-  });
+  // ── Cleanup ──────────────────────────────────────────────────────────────
+
+  header('7. Cleanup');
+
+  step('Stopping skill...');
+  try { await stopSkill(SKILL_ID); ok(); } catch (e: any) { fail(e.message); }
+
+  console.log(`\n${C.green}${C.bold}  Done.${C.reset}\n`);
+
+  rl.close();
+  process.exit(0);
+}
+
+main().catch(e => {
+  console.error(`\n${C.red}Fatal: ${e.message}${C.reset}`);
+  rl.close();
+  process.exit(1);
 });
-
-// Run all tests
-run();
