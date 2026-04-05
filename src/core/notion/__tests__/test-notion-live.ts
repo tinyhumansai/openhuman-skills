@@ -10,12 +10,14 @@
  *   JWT_TOKEN       — session JWT from the OpenHuman backend
  *   BACKEND_URL     — backend API base (default: https://api.tinyhumans.ai)
  *
+ * Reads .env from the repo root automatically (JWT_TOKEN, BACKEND_URL, etc.).
+ *
  * Usage:
- *   JWT_TOKEN=<jwt> npx tsx src/core/notion/__tests__/test-notion-live.ts
- *   JWT_TOKEN=<jwt> BACKEND_URL=https://staging-api.example.com npx tsx ...
+ *   npx tsx src/core/notion/__tests__/test-notion-live.ts
  */
-import * as readline from 'readline';
+import 'dotenv/config';
 import { exec } from 'child_process';
+import * as readline from 'readline';
 
 import {
   authComplete,

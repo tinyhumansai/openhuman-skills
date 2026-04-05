@@ -10,10 +10,12 @@
  *   JWT_TOKEN       — session JWT from the OpenHuman backend
  *   BACKEND_URL     — backend API base (default: https://api.tinyhumans.ai)
  *
+ * Reads .env from the repo root automatically (JWT_TOKEN, BACKEND_URL, etc.).
+ *
  * Usage:
- *   JWT_TOKEN=<jwt> npx tsx src/core/gmail/__tests__/test-gmail-live.ts
- *   JWT_TOKEN=<jwt> BACKEND_URL=https://staging-api.example.com npx tsx ...
+ *   npx tsx src/core/gmail/__tests__/test-gmail-live.ts
  */
+import 'dotenv/config';
 import { exec } from 'child_process';
 import * as readline from 'readline';
 
