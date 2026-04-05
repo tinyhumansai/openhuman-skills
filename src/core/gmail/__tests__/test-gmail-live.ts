@@ -1,25 +1,22 @@
 #!/usr/bin/env npx tsx
+
 /**
  * Gmail skill live integration script.
  *
  * Interactive sequential script that walks through the full skill lifecycle:
- *   start → authenticate → verify connection → exercise tools → sync → stop
+ *   start → authenticate → verify connection → exercise tools → verify sync
  *
- * Credentials can be passed via env vars or entered interactively when prompted.
+ * Env vars (required):
+ *   JWT_TOKEN       — session JWT from the OpenHuman backend
+ *   BACKEND_URL     — backend API base (default: https://api.tinyhumans.ai)
  *
  * Usage:
- *   # Interactive — prompts for everything:
- *   npx tsx src/core/gmail/__tests__/test-gmail-live.ts
- *
- *   # Self-hosted via env:
- *   GMAIL_CLIENT_ID=x GMAIL_CLIENT_SECRET=x GMAIL_REFRESH_TOKEN=x \
- *     npx tsx src/core/gmail/__tests__/test-gmail-live.ts
- *
- *   # Encrypted OAuth via env:
- *   GMAIL_INTEGRATION_ID=<id> CLIENT_KEY_SHARE=<key> \
- *     npx tsx src/core/gmail/__tests__/test-gmail-live.ts
+ *   JWT_TOKEN=<jwt> npx tsx src/core/gmail/__tests__/test-gmail-live.ts
+ *   JWT_TOKEN=<jwt> BACKEND_URL=https://staging-api.example.com npx tsx ...
  */
+import { exec } from 'child_process';
 import * as readline from 'readline';
+
 import {
   authComplete,
   callTool,
@@ -31,7 +28,7 @@ import {
 } from '../../../../dev/test-harness';
 
 // ---------------------------------------------------------------------------
-// Formatting helpers
+// Formatting
 // ---------------------------------------------------------------------------
 
 const C = {
@@ -68,7 +65,7 @@ function info(label: string, value: unknown) {
 }
 
 // ---------------------------------------------------------------------------
-// Prompt helper
+// Prompt
 // ---------------------------------------------------------------------------
 
 const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
@@ -88,7 +85,6 @@ function promptSecret(question: string): Promise<string> {
     const stdin = process.stdin;
     const wasRaw = stdin.isRaw;
     if (stdin.isTTY) stdin.setRawMode(true);
-
     let input = '';
     const onData = (ch: Buffer) => {
       const c = ch.toString();
@@ -109,8 +105,21 @@ function promptSecret(question: string): Promise<string> {
   });
 }
 
+/** Open a URL in the default browser. */
+function openUrl(url: string) {
+  const cmd =
+    process.platform === 'darwin'
+      ? `open "${url}"`
+      : process.platform === 'win32'
+        ? `start "${url}"`
+        : `xdg-open "${url}"`;
+  exec(cmd, err => {
+    if (err) console.warn(`${C.dim}    (could not open browser: ${err.message})${C.reset}`);
+  });
+}
+
 // ---------------------------------------------------------------------------
-// Tool caller (safe, never throws)
+// Tool caller
 // ---------------------------------------------------------------------------
 
 const SKILL_ID = 'gmail';
@@ -128,70 +137,106 @@ async function callToolSafe(
 }
 
 // ---------------------------------------------------------------------------
+// Config
+// ---------------------------------------------------------------------------
+
+const JWT_TOKEN = process.env.JWT_TOKEN || '';
+const BACKEND_URL = (process.env.BACKEND_URL || 'https://api.tinyhumans.ai').replace(/\/+$/, '');
+
+if (!JWT_TOKEN) {
+  console.error(`\n${C.red}  JWT_TOKEN env var is required.${C.reset}`);
+  console.error(
+    `${C.dim}  Usage: JWT_TOKEN=<jwt> npx tsx src/core/gmail/__tests__/test-gmail-live.ts${C.reset}\n`,
+  );
+  process.exit(1);
+}
+
+// ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 
 async function main() {
   console.log(`\n${C.bold}  Gmail Skill — Live Integration Script${C.reset}`);
+  info('Backend', BACKEND_URL);
+  info('JWT', `<${JWT_TOKEN.length} chars>`);
 
-  // ── Collect credentials ──────────────────────────────────────────────────
+  // ── Choose auth mode ─────────────────────────────────────────────────────
 
-  header('1. Credentials');
+  header('1. Authentication Mode');
 
-  let mode: 'self_hosted' | 'encrypted_oauth' = 'self_hosted';
-  let clientId = process.env.GMAIL_CLIENT_ID || '';
-  let clientSecret = process.env.GMAIL_CLIENT_SECRET || '';
-  let refreshToken = process.env.GMAIL_REFRESH_TOKEN || '';
-  let integrationId = process.env.GMAIL_INTEGRATION_ID || '';
-  let clientKeyShare = process.env.CLIENT_KEY_SHARE || '';
+  const choice = await prompt(
+    'Auth mode — (1) Encrypted OAuth via browser  (2) Own OAuth credentials',
+    '1',
+  );
 
-  const hasSelfHostedEnv = !!(clientId && clientSecret && refreshToken);
-  const hasOAuthEnv = !!(integrationId && clientKeyShare);
+  const mode = choice === '2' ? 'self_hosted' : 'encrypted_oauth';
+  let clientId = '';
+  let clientSecret = '';
+  let refreshToken = '';
+  let integrationId = '';
+  let clientKeyShare = '';
 
-  if (!hasSelfHostedEnv && !hasOAuthEnv) {
-    const choice = await prompt(
-      'Auth mode — (1) Own OAuth credentials  (2) Encrypted OAuth',
-      '1',
-    );
-
-    if (choice === '2') {
-      mode = 'encrypted_oauth';
-      integrationId = await prompt('Integration ID (24-char hex)');
-      clientKeyShare = await promptSecret('Client key share (base64)');
-
-      if (!integrationId || !clientKeyShare) {
-        fail('Integration ID and client key share are both required.');
-        process.exit(1);
-      }
-    } else {
-      mode = 'self_hosted';
-      clientId = await prompt('Google Client ID');
-      clientSecret = await promptSecret('Google Client Secret');
-      refreshToken = await promptSecret('Refresh Token');
-
-      if (!clientId || !clientSecret || !refreshToken) {
-        fail('All three fields are required.');
-        process.exit(1);
-      }
+  if (mode === 'self_hosted') {
+    clientId = await prompt('Google Client ID');
+    clientSecret = await promptSecret('Google Client Secret');
+    refreshToken = await promptSecret('Refresh Token');
+    if (!clientId || !clientSecret || !refreshToken) {
+      fail('All three fields are required.');
+      process.exit(1);
     }
   } else {
-    mode = hasSelfHostedEnv ? 'self_hosted' : 'encrypted_oauth';
-  }
+    // ── Initiate OAuth ───────────────────────────────────────────────────
 
-  info('Mode', mode);
-  if (mode === 'self_hosted') {
-    info('Client ID', `${clientId.slice(0, 12)}...`);
-  } else {
-    info('Integration ID', integrationId);
-    info('Client key', `<${clientKeyShare.length} chars>`);
+    header('2. OAuth Flow');
+
+    step('Requesting OAuth URL from backend...');
+    const connectUrl = `${BACKEND_URL}/auth/gmail/connect?skillId=gmail&responseType=json&encryptionMode=encrypted`;
+    const connectResp = await fetch(connectUrl, {
+      headers: { Authorization: `Bearer ${JWT_TOKEN}` },
+    });
+    if (!connectResp.ok) {
+      const text = await connectResp.text();
+      fail(`Backend returned ${connectResp.status}: ${text}`);
+      process.exit(1);
+    }
+    const connectData = (await connectResp.json()) as { oauthUrl?: string; success?: boolean };
+    const oauthUrl = connectData.oauthUrl;
+    if (!oauthUrl) {
+      fail(`No oauthUrl in response: ${JSON.stringify(connectData)}`);
+      process.exit(1);
+    }
+    ok();
+
+    console.log(`\n${C.yellow}  Opening Google OAuth page in your browser...${C.reset}`);
+    console.log(`${C.dim}  If it doesn't open, visit this URL manually:${C.reset}`);
+    console.log(`${C.dim}  ${oauthUrl}${C.reset}\n`);
+    openUrl(oauthUrl);
+
+    console.log(
+      `${C.yellow}  After authorizing, the backend will return a JSON response.${C.reset}`,
+    );
+    console.log(`${C.yellow}  Copy the integrationId and clientKey from it.${C.reset}\n`);
+
+    integrationId = await prompt('Integration ID (24-char hex from callback)');
+    clientKeyShare = await promptSecret('Client key share (base64 from callback)');
+
+    if (!integrationId || !clientKeyShare) {
+      fail('Both integration ID and client key share are required.');
+      process.exit(1);
+    }
   }
 
   // ── Start skill ──────────────────────────────────────────────────────────
 
-  header('2. Start Skill');
+  header('3. Start Skill');
 
   step('Stopping any existing instance...');
-  try { await stopSkill(SKILL_ID); ok(); } catch { ok('(was not running)'); }
+  try {
+    await stopSkill(SKILL_ID);
+    ok();
+  } catch {
+    ok('(was not running)');
+  }
 
   step('Starting gmail skill...');
   try {
@@ -204,7 +249,7 @@ async function main() {
 
   // ── Authenticate ─────────────────────────────────────────────────────────
 
-  header('3. Authenticate');
+  header('4. Authenticate');
 
   if (mode === 'self_hosted') {
     step('Sending auth/complete with self-hosted credentials...');
@@ -255,7 +300,7 @@ async function main() {
 
   // ── Verify connection ────────────────────────────────────────────────────
 
-  header('4. Verify Connection');
+  header('5. Verify Connection');
 
   step('Waiting for state to settle...');
   await new Promise(r => setTimeout(r, 1500));
@@ -268,40 +313,31 @@ async function main() {
     info('connection_status', s?.connection_status ?? '(none)');
     info('auth_status', s?.auth_status ?? '(none)');
     info('userEmail', s?.userEmail ?? '(none)');
-
-    if (s?.connection_status === 'connected') {
-      ok('connected');
-    } else {
-      fail(`Expected connected, got ${s?.connection_status}`);
-    }
+    if (s?.connection_status === 'connected') ok('connected');
+    else fail(`Expected connected, got ${s?.connection_status}`);
   } catch (e: any) {
     fail(e.message);
   }
 
   // ── Exercise tools ───────────────────────────────────────────────────────
 
-  header('5. Exercise Tools');
+  header('6. Exercise Tools');
 
   step('get-profile...');
   {
     const { data, error } = await callToolSafe('get-profile', {});
-    if (error) { fail(error); }
-    else {
-      const email = data?.emailAddress || data?.email || JSON.stringify(data).slice(0, 80);
-      ok(String(email));
-    }
+    if (error) fail(error);
+    else ok(String(data?.emailAddress || data?.email || JSON.stringify(data).slice(0, 80)));
   }
 
   step('get-labels...');
   {
     const { data, error } = await callToolSafe('get-labels', {});
-    if (error) { fail(error); }
+    if (error) fail(error);
     else {
       const labels = data?.labels || [];
       ok(`${labels.length} labels`);
-      for (const l of labels.slice(0, 5)) {
-        info('label', l.name || l.id);
-      }
+      for (const l of labels.slice(0, 5)) info('label', l.name || l.id);
       if (labels.length > 5) info('', `...and ${labels.length - 5} more`);
     }
   }
@@ -309,31 +345,27 @@ async function main() {
   step('get-emails (max 5)...');
   {
     const { data, error } = await callToolSafe('get-emails', { max_results: 5 });
-    if (error) { fail(error); }
+    if (error) fail(error);
     else {
       const emails = data?.emails || data?.messages || [];
       ok(`${emails.length} emails`);
-      for (const e of emails.slice(0, 3)) {
-        info('email', `${e.subject || e.id} — ${e.from || ''}`);
-      }
+      for (const e of emails.slice(0, 3)) info('email', `${e.subject || e.id} — ${e.from || ''}`);
     }
   }
 
   step('search-emails (in:inbox, max 3)...');
   {
-    const { data, error } = await callToolSafe('search-emails', { query: 'in:inbox', max_results: 3 });
-    if (error) { fail(error); }
-    else {
-      const emails = data?.emails || data?.messages || [];
-      ok(`${emails.length} results`);
-    }
+    const { data, error } = await callToolSafe('search-emails', {
+      query: 'in:inbox',
+      max_results: 3,
+    });
+    if (error) fail(error);
+    else ok(`${(data?.emails || data?.messages || []).length} results`);
   }
 
-  // ── Sync ─────────────────────────────────────────────────────────────────
-  // The Rust runtime auto-triggers onSync() immediately after auth succeeds,
-  // so we just wait for it to finish and verify the state.
+  // ── Verify sync (auto-triggered by Rust runtime after auth) ─────────────
 
-  header('6. Sync (auto-triggered by runtime after auth)');
+  header('7. Verify Sync');
 
   step('Waiting for auto-sync to complete...');
   await new Promise(r => setTimeout(r, 5000));
@@ -354,13 +386,17 @@ async function main() {
 
   // ── Cleanup ──────────────────────────────────────────────────────────────
 
-  header('7. Cleanup');
+  header('8. Cleanup');
 
   step('Stopping skill...');
-  try { await stopSkill(SKILL_ID); ok(); } catch (e: any) { fail(e.message); }
+  try {
+    await stopSkill(SKILL_ID);
+    ok();
+  } catch (e: any) {
+    fail(e.message);
+  }
 
   console.log(`\n${C.green}${C.bold}  Done.${C.reset}\n`);
-
   rl.close();
   process.exit(0);
 }

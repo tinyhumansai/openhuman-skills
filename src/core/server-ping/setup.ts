@@ -74,7 +74,7 @@ async function onSetupSubmit(args: {
 
     // Verify the server is reachable before proceeding
     try {
-      const response = net.fetch(url, { method: 'GET', timeout: 10000 });
+      const response = await net.fetch(url, { method: 'GET', timeout: 10000 });
       if (response.status >= 500) {
         return {
           status: 'error',
