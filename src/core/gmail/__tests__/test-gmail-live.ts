@@ -15,9 +15,9 @@
  * Usage:
  *   npx tsx src/core/gmail/__tests__/test-gmail-live.ts
  */
-import 'dotenv/config';
-import { exec } from 'child_process';
 import * as readline from 'readline';
+import { exec } from 'child_process';
+import 'dotenv/config';
 
 import {
   authComplete,
@@ -128,7 +128,7 @@ const SKILL_ID = 'gmail';
 
 async function callToolSafe(
   toolName: string,
-  args: Record<string, unknown> = {},
+  args: Record<string, unknown> = {}
 ): Promise<{ data?: any; error?: string }> {
   try {
     const result = await callToolRaw(SKILL_ID, toolName, args, 60_000);
@@ -137,7 +137,11 @@ async function callToolSafe(
     }
     const text = result.content?.[0]?.text;
     if (!text) return { data: null };
-    try { return { data: JSON.parse(text) }; } catch { return { data: text }; }
+    try {
+      return { data: JSON.parse(text) };
+    } catch {
+      return { data: text };
+    }
   } catch (e: any) {
     return { error: e.message };
   }
@@ -168,7 +172,7 @@ const ENV_REFRESH_TOKEN = process.env.GMAIL_REFRESH_TOKEN || '';
 if (!JWT_TOKEN) {
   console.error(`\n${C.red}  JWT_TOKEN env var is required.${C.reset}`);
   console.error(
-    `${C.dim}  Usage: JWT_TOKEN=<jwt> npx tsx src/core/gmail/__tests__/test-gmail-live.ts${C.reset}\n`,
+    `${C.dim}  Usage: JWT_TOKEN=<jwt> npx tsx src/core/gmail/__tests__/test-gmail-live.ts${C.reset}\n`
   );
   process.exit(1);
 }
@@ -204,7 +208,6 @@ async function main() {
     info('Mode', 'encrypted_oauth');
     info('Integration ID', integrationId);
     info('Client key', `<${clientKeyShare.length} chars>`);
-
   } else if (hasSelfHostedEnv || ENV_AUTH_MODE === 'self_hosted') {
     // Self-hosted credentials provided via env
     mode = 'self_hosted';
@@ -214,9 +217,9 @@ async function main() {
 
     if (!clientId || !clientSecret || !refreshToken) {
       header('1. Credentials');
-      clientId = clientId || await prompt('Google Client ID');
-      clientSecret = clientSecret || await promptSecret('Google Client Secret');
-      refreshToken = refreshToken || await promptSecret('Refresh Token');
+      clientId = clientId || (await prompt('Google Client ID'));
+      clientSecret = clientSecret || (await promptSecret('Google Client Secret'));
+      refreshToken = refreshToken || (await promptSecret('Refresh Token'));
       if (!clientId || !clientSecret || !refreshToken) {
         fail('All three fields are required.');
         process.exit(1);
@@ -226,14 +229,13 @@ async function main() {
     }
     info('Mode', 'self_hosted');
     info('Client ID', `${clientId.slice(0, 12)}...`);
-
   } else {
     // Nothing in env — interactive mode
     header('1. Authentication Mode');
 
     const choice = await prompt(
       'Auth mode — (1) Encrypted OAuth via browser  (2) Own OAuth credentials',
-      '1',
+      '1'
     );
     mode = choice === '2' ? 'self_hosted' : 'encrypted_oauth';
 
@@ -274,7 +276,7 @@ async function main() {
       openUrl(oauthUrl);
 
       console.log(
-        `${C.yellow}  After authorizing, the backend will return a JSON response.${C.reset}`,
+        `${C.yellow}  After authorizing, the backend will return a JSON response.${C.reset}`
       );
       console.log(`${C.yellow}  Copy the integrationId and clientKey from it.${C.reset}\n`);
 

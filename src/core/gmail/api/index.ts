@@ -216,9 +216,7 @@ export async function gmailFetch<T = unknown>(
         }
       } else if (response.status >= 400) {
         const bodyPreview = response.body ? response.body.slice(0, 200) : '(empty)';
-        console.log(
-          `[gmail] gmailFetch: error status=${response.status} body=${bodyPreview}`
-        );
+        console.log(`[gmail] gmailFetch: error status=${response.status} body=${bodyPreview}`);
       }
 
       // Update rate limit info from headers
