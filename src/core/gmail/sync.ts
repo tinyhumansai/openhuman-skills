@@ -2,7 +2,7 @@
 // Fetches messages via Gmail API and upserts into local SQLite database.
 // Skips emails already in the local DB to avoid redundant API calls.
 import { syncIntegrationMetadata } from '../../shared/integration-metadata';
-import { gmailFetch } from './api';
+import { gmailFetch, isGmailConnected } from './api';
 import { loadGmailProfile } from './api/helpers';
 import { emailExists, getEmailCount, getEmails, upsertEmail } from './db/helpers';
 import { getGmailSkillState, publishSkillState } from './state';
@@ -133,9 +133,15 @@ async function runSyncPages(
 
     pageToken = result.nextPageToken;
 
-    for (const msgRef of result.messages) {
-      if (await syncMessage(msgRef.id)) newEmails++;
-      else skipped++;
+    // Sync messages in parallel (5 concurrent) to avoid sequential proxy round-trips
+    const CONCURRENCY = 5;
+    for (let i = 0; i < result.messages.length; i += CONCURRENCY) {
+      const batch = result.messages.slice(i, i + CONCURRENCY);
+      const results = await Promise.all(batch.map(msgRef => syncMessage(msgRef.id)));
+      for (const wasNew of results) {
+        if (wasNew) newEmails++;
+        else skipped++;
+      }
     }
 
     log?.(`Page ${page}: ${newEmails} new, ${skipped} skipped`, Math.min(10 + page * 10, 90));
@@ -156,8 +162,8 @@ async function runSyncPages(
 export async function performInitialSync(onProgress?: SyncProgressCallback): Promise<void> {
   const s = getGmailSkillState();
 
-  if (!oauth.getCredential()) {
-    console.log('[gmail-sync] No OAuth credential, skipping initial sync');
+  if (!isGmailConnected()) {
+    console.log('[gmail-sync] No credential, skipping initial sync');
     return;
   }
 
@@ -221,7 +227,7 @@ export async function performInitialSync(onProgress?: SyncProgressCallback): Pro
 export async function onSync(): Promise<void> {
   const s = getGmailSkillState();
 
-  if (!oauth.getCredential() || s.syncStatus.syncInProgress) return;
+  if (!isGmailConnected() || s.syncStatus.syncInProgress) return;
 
   try {
     loadGmailProfile();
