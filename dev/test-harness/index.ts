@@ -213,6 +213,43 @@ export async function setSetupComplete(skillId: string, complete: boolean = true
 }
 
 /**
+ * Complete the auth flow for a skill (self_hosted / text mode).
+ * Sends `auth/complete` RPC with mode and credentials.
+ */
+export async function authComplete(
+  skillId: string,
+  mode: string,
+  credentials: Record<string, unknown>,
+): Promise<unknown> {
+  return skillRpc(skillId, 'auth/complete', { mode, credentials });
+}
+
+/**
+ * Complete the OAuth flow for a skill (managed mode).
+ * Sends `oauth/complete` RPC with credential info and optional clientKeyShare
+ * for encrypted OAuth.
+ */
+export async function oauthComplete(
+  skillId: string,
+  args: {
+    credentialId: string;
+    provider: string;
+    grantedScopes?: string[];
+    accountLabel?: string;
+    clientKeyShare?: string;
+  },
+): Promise<unknown> {
+  return skillRpc(skillId, 'oauth/complete', args);
+}
+
+/**
+ * Trigger a sync on a running skill.
+ */
+export async function triggerSync(skillId: string): Promise<unknown> {
+  return skillRpc(skillId, 'sync', {});
+}
+
+/**
  * Read a file from the skill's data directory.
  */
 export async function dataRead(skillId: string, filename: string): Promise<string | null> {
