@@ -142,8 +142,23 @@ async function callToolSafe(
 // Config
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Config from env
+// ---------------------------------------------------------------------------
+
 const JWT_TOKEN = process.env.JWT_TOKEN || '';
 const BACKEND_URL = (process.env.BACKEND_URL || 'https://api.tinyhumans.ai').replace(/\/+$/, '');
+
+// Pre-filled credentials from env — if all are set, skip interactive prompts.
+// AUTH_MODE: "oauth" (default) or "self_hosted"
+// For oauth:       GMAIL_INTEGRATION_ID + GMAIL_CLIENT_KEY_SHARE
+// For self_hosted: GMAIL_CLIENT_ID + GMAIL_CLIENT_SECRET + GMAIL_REFRESH_TOKEN
+const ENV_AUTH_MODE = process.env.AUTH_MODE || '';
+const ENV_INTEGRATION_ID = process.env.GMAIL_INTEGRATION_ID || '';
+const ENV_CLIENT_KEY = process.env.GMAIL_CLIENT_KEY_SHARE || '';
+const ENV_CLIENT_ID = process.env.GMAIL_CLIENT_ID || '';
+const ENV_CLIENT_SECRET = process.env.GMAIL_CLIENT_SECRET || '';
+const ENV_REFRESH_TOKEN = process.env.GMAIL_REFRESH_TOKEN || '';
 
 if (!JWT_TOKEN) {
   console.error(`\n${C.red}  JWT_TOKEN env var is required.${C.reset}`);
@@ -162,69 +177,109 @@ async function main() {
   info('Backend', BACKEND_URL);
   info('JWT', `<${JWT_TOKEN.length} chars>`);
 
-  // ── Choose auth mode ─────────────────────────────────────────────────────
+  // ── Resolve credentials (env or interactive) ─────────────────────────────
 
-  header('1. Authentication Mode');
-
-  const choice = await prompt(
-    'Auth mode — (1) Encrypted OAuth via browser  (2) Own OAuth credentials',
-    '1',
-  );
-
-  const mode = choice === '2' ? 'self_hosted' : 'encrypted_oauth';
+  let mode: 'self_hosted' | 'encrypted_oauth';
   let clientId = '';
   let clientSecret = '';
   let refreshToken = '';
   let integrationId = '';
   let clientKeyShare = '';
 
-  if (mode === 'self_hosted') {
-    clientId = await prompt('Google Client ID');
-    clientSecret = await promptSecret('Google Client Secret');
-    refreshToken = await promptSecret('Refresh Token');
+  const hasOAuthEnv = !!(ENV_INTEGRATION_ID && ENV_CLIENT_KEY);
+  const hasSelfHostedEnv = !!(ENV_CLIENT_ID && ENV_CLIENT_SECRET && ENV_REFRESH_TOKEN);
+
+  if (hasOAuthEnv || (ENV_AUTH_MODE === 'oauth' && hasOAuthEnv)) {
+    // All OAuth credentials provided via env — skip prompts entirely
+    mode = 'encrypted_oauth';
+    integrationId = ENV_INTEGRATION_ID;
+    clientKeyShare = ENV_CLIENT_KEY;
+
+    header('1. Credentials (from env)');
+    info('Mode', 'encrypted_oauth');
+    info('Integration ID', integrationId);
+    info('Client key', `<${clientKeyShare.length} chars>`);
+
+  } else if (hasSelfHostedEnv || ENV_AUTH_MODE === 'self_hosted') {
+    // Self-hosted credentials provided via env
+    mode = 'self_hosted';
+    clientId = ENV_CLIENT_ID;
+    clientSecret = ENV_CLIENT_SECRET;
+    refreshToken = ENV_REFRESH_TOKEN;
+
     if (!clientId || !clientSecret || !refreshToken) {
-      fail('All three fields are required.');
-      process.exit(1);
+      header('1. Credentials');
+      clientId = clientId || await prompt('Google Client ID');
+      clientSecret = clientSecret || await promptSecret('Google Client Secret');
+      refreshToken = refreshToken || await promptSecret('Refresh Token');
+      if (!clientId || !clientSecret || !refreshToken) {
+        fail('All three fields are required.');
+        process.exit(1);
+      }
+    } else {
+      header('1. Credentials (from env)');
     }
+    info('Mode', 'self_hosted');
+    info('Client ID', `${clientId.slice(0, 12)}...`);
+
   } else {
-    // ── Initiate OAuth ───────────────────────────────────────────────────
+    // Nothing in env — interactive mode
+    header('1. Authentication Mode');
 
-    header('2. OAuth Flow');
-
-    step('Requesting OAuth URL from backend...');
-    const connectUrl = `${BACKEND_URL}/auth/gmail/connect?skillId=gmail&responseType=json&encryptionMode=encrypted`;
-    const connectResp = await fetch(connectUrl, {
-      headers: { Authorization: `Bearer ${JWT_TOKEN}` },
-    });
-    if (!connectResp.ok) {
-      const text = await connectResp.text();
-      fail(`Backend returned ${connectResp.status}: ${text}`);
-      process.exit(1);
-    }
-    const connectData = (await connectResp.json()) as { oauthUrl?: string; success?: boolean };
-    const oauthUrl = connectData.oauthUrl;
-    if (!oauthUrl) {
-      fail(`No oauthUrl in response: ${JSON.stringify(connectData)}`);
-      process.exit(1);
-    }
-    ok();
-
-    console.log(`\n${C.yellow}  Opening Google OAuth page in your browser...${C.reset}`);
-    console.log(`${C.dim}  If it doesn't open, visit this URL manually:${C.reset}`);
-    console.log(`${C.dim}  ${oauthUrl}${C.reset}\n`);
-    openUrl(oauthUrl);
-
-    console.log(
-      `${C.yellow}  After authorizing, the backend will return a JSON response.${C.reset}`,
+    const choice = await prompt(
+      'Auth mode — (1) Encrypted OAuth via browser  (2) Own OAuth credentials',
+      '1',
     );
-    console.log(`${C.yellow}  Copy the integrationId and clientKey from it.${C.reset}\n`);
+    mode = choice === '2' ? 'self_hosted' : 'encrypted_oauth';
 
-    integrationId = await prompt('Integration ID (24-char hex from callback)');
-    clientKeyShare = await promptSecret('Client key share (base64 from callback)');
+    if (mode === 'self_hosted') {
+      clientId = await prompt('Google Client ID');
+      clientSecret = await promptSecret('Google Client Secret');
+      refreshToken = await promptSecret('Refresh Token');
+      if (!clientId || !clientSecret || !refreshToken) {
+        fail('All three fields are required.');
+        process.exit(1);
+      }
+    } else {
+      // ── Initiate OAuth via browser ─────────────────────────────────────
 
-    if (!integrationId || !clientKeyShare) {
-      fail('Both integration ID and client key share are required.');
-      process.exit(1);
+      header('2. OAuth Flow');
+
+      step('Requesting OAuth URL from backend...');
+      const connectUrl = `${BACKEND_URL}/auth/gmail/connect?skillId=gmail&responseType=json&encryptionMode=encrypted`;
+      const connectResp = await fetch(connectUrl, {
+        headers: { Authorization: `Bearer ${JWT_TOKEN}` },
+      });
+      if (!connectResp.ok) {
+        const text = await connectResp.text();
+        fail(`Backend returned ${connectResp.status}: ${text}`);
+        process.exit(1);
+      }
+      const connectData = (await connectResp.json()) as { oauthUrl?: string; success?: boolean };
+      const oauthUrl = connectData.oauthUrl;
+      if (!oauthUrl) {
+        fail(`No oauthUrl in response: ${JSON.stringify(connectData)}`);
+        process.exit(1);
+      }
+      ok();
+
+      console.log(`\n${C.yellow}  Opening Google OAuth page in your browser...${C.reset}`);
+      console.log(`${C.dim}  If it doesn't open, visit this URL manually:${C.reset}`);
+      console.log(`${C.dim}  ${oauthUrl}${C.reset}\n`);
+      openUrl(oauthUrl);
+
+      console.log(
+        `${C.yellow}  After authorizing, the backend will return a JSON response.${C.reset}`,
+      );
+      console.log(`${C.yellow}  Copy the integrationId and clientKey from it.${C.reset}\n`);
+
+      integrationId = await prompt('Integration ID (24-char hex from callback)');
+      clientKeyShare = await promptSecret('Client key share (base64 from callback)');
+
+      if (!integrationId || !clientKeyShare) {
+        fail('Both integration ID and client key share are required.');
+        process.exit(1);
+      }
     }
   }
 

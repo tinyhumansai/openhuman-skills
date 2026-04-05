@@ -2,7 +2,7 @@
 // Fetches messages via Gmail API and upserts into local SQLite database.
 // Skips emails already in the local DB to avoid redundant API calls.
 import { syncIntegrationMetadata } from '../../shared/integration-metadata';
-import { gmailFetch } from './api';
+import { gmailFetch, isGmailConnected } from './api';
 import { loadGmailProfile } from './api/helpers';
 import { emailExists, getEmailCount, getEmails, upsertEmail } from './db/helpers';
 import { getGmailSkillState, publishSkillState } from './state';
@@ -156,8 +156,8 @@ async function runSyncPages(
 export async function performInitialSync(onProgress?: SyncProgressCallback): Promise<void> {
   const s = getGmailSkillState();
 
-  if (!oauth.getCredential()) {
-    console.log('[gmail-sync] No OAuth credential, skipping initial sync');
+  if (!isGmailConnected()) {
+    console.log('[gmail-sync] No credential, skipping initial sync');
     return;
   }
 
@@ -221,7 +221,7 @@ export async function performInitialSync(onProgress?: SyncProgressCallback): Pro
 export async function onSync(): Promise<void> {
   const s = getGmailSkillState();
 
-  if (!oauth.getCredential() || s.syncStatus.syncInProgress) return;
+  if (!isGmailConnected() || s.syncStatus.syncInProgress) return;
 
   try {
     loadGmailProfile();

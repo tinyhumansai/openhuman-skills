@@ -138,33 +138,53 @@ export async function gmailFetch<T = unknown>(
     timeout?: number;
   } = {}
 ): Promise<GmailApiResponse<T>> {
-  let accessToken = await resolveAccessToken();
+  const cleanPath = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  const method = options.method || 'GET';
+  const timeout = options.timeout || 10;
 
-  if (!accessToken) {
-    console.log('[gmail] gmailFetch: no access token available');
+  // Determine whether to use direct API calls (with a resolved access token)
+  // or the OAuth proxy (for encrypted/managed credentials without a local token).
+  const accessToken = await resolveAccessToken();
+  const oauthCred = oauth.getCredential();
+  const useProxy = !accessToken && !!oauthCred;
+
+  if (!accessToken && !useProxy) {
+    console.log('[gmail] gmailFetch: no access token and no OAuth credential');
     return {
       success: false,
       error: { code: 401, message: 'Gmail not connected. Complete setup first.' },
     };
   }
 
-  // Build the full URL — endpoint may start with / or be relative
-  const cleanPath = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
-  const url = `${GMAIL_BASE_URL}${cleanPath}`;
-
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
-      console.log('[gmail] gmailFetch:', options.method || 'GET', url);
-      const response = await net.fetch(url, {
-        method: options.method || 'GET',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-          ...(options.headers || {}),
-        },
-        body: options.body,
-        timeout: options.timeout || 10,
-      });
+      let response: { status: number; headers: Record<string, string>; body: string };
+
+      if (useProxy) {
+        // Managed/encrypted OAuth: use the proxy which decrypts tokens server-side
+        const proxyPath = `/gmail/v1${cleanPath}`;
+        console.log('[gmail] gmailFetch (proxy):', method, proxyPath);
+        response = await oauth.fetch(proxyPath, {
+          method,
+          headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+          body: options.body,
+          timeout,
+        });
+      } else {
+        // Direct API call with resolved access token
+        const url = `${GMAIL_BASE_URL}${cleanPath}`;
+        console.log('[gmail] gmailFetch (direct):', method, url);
+        response = await net.fetch(url, {
+          method,
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+            ...(options.headers || {}),
+          },
+          body: options.body,
+          timeout,
+        });
+      }
       console.log('[gmail] gmailFetch response status:', response.status);
 
       const s = getGmailSkillState();
@@ -176,32 +196,27 @@ export async function gmailFetch<T = unknown>(
           ? parseInt(retryAfter, 10) * 1000
           : DEFAULT_BACKOFF_MS * (attempt + 1);
         console.log(
-          `[gmail] gmailFetch: 429 rate-limited path=${url} — retrying in ${waitMs}ms (attempt ${attempt + 1}/${MAX_RETRIES})`
+          `[gmail] gmailFetch: 429 rate-limited — retrying in ${waitMs}ms (attempt ${attempt + 1}/${MAX_RETRIES})`
         );
         await sleep(waitMs);
         continue;
       }
 
       // -- 401 Unauthorized: invalidate cached token and retry with fresh one -
-      if (response.status === 401 && attempt < MAX_RETRIES) {
+      if (!useProxy && response.status === 401 && attempt < MAX_RETRIES) {
         const bodyPreview = response.body ? response.body.slice(0, 200) : '(empty)';
-        console.log(`[gmail] gmailFetch: 401 Unauthorized url=${url} body=${bodyPreview}`);
-        // Invalidate cached token and re-resolve
+        console.log(`[gmail] gmailFetch: 401 Unauthorized body=${bodyPreview}`);
         cachedSelfHostedToken = null;
         const freshToken = await resolveAccessToken();
         if (freshToken && freshToken !== accessToken) {
-          accessToken = freshToken;
+          // Can't reassign accessToken in proxy branch, but this is the direct branch
           console.log('[gmail] gmailFetch: refreshed token, retrying');
           continue;
         }
-        // Token didn't change — no point retrying
-      } else if (response.status === 401) {
-        const bodyPreview = response.body ? response.body.slice(0, 200) : '(empty)';
-        console.log(`[gmail] gmailFetch: 401 Unauthorized (final) url=${url} body=${bodyPreview}`);
       } else if (response.status >= 400) {
         const bodyPreview = response.body ? response.body.slice(0, 200) : '(empty)';
         console.log(
-          `[gmail] gmailFetch: error url=${url} status=${response.status} body=${bodyPreview}`
+          `[gmail] gmailFetch: error status=${response.status} body=${bodyPreview}`
         );
       }
 
@@ -226,7 +241,7 @@ export async function gmailFetch<T = unknown>(
       }
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
-      console.error(`[gmail] gmailFetch error url=${url}: ${errorMsg}`);
+      console.error(`[gmail] gmailFetch error: ${errorMsg}`);
       const s = getGmailSkillState();
       s.lastApiError = errorMsg;
       return { success: false, error: { code: 500, message: errorMsg } };
