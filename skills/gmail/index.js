@@ -846,54 +846,65 @@ var __skill_bundle = (() => {
   cachedSelfHostedToken = null;
  }
  async function gmailFetch(endpoint, options = {}) {
-  let accessToken = await resolveAccessToken();
-  if (!accessToken) {
-   console.log("[gmail] gmailFetch: no access token available");
+  const cleanPath = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
+  const method = options.method || "GET";
+  const timeout = options.timeout || 10;
+  const accessToken = await resolveAccessToken();
+  const oauthCred = oauth.getCredential();
+  const useProxy = !accessToken && !!oauthCred;
+  if (!accessToken && !useProxy) {
+   console.log("[gmail] gmailFetch: no access token and no OAuth credential");
    return {
     success: false,
     error: { code: 401, message: "Gmail not connected. Complete setup first." }
    };
   }
-  const cleanPath = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
-  const url = `${GMAIL_BASE_URL}${cleanPath}`;
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
    try {
-    console.log("[gmail] gmailFetch:", options.method || "GET", url);
-    const response = await net.fetch(url, {
-     method: options.method || "GET",
-     headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
-      ...options.headers || {}
-     },
-     body: options.body,
-     timeout: options.timeout || 10
-    });
+    let response;
+    if (useProxy) {
+     console.log("[gmail] gmailFetch (proxy):", method, cleanPath);
+     response = await oauth.fetch(cleanPath, {
+      method,
+      headers: { "Content-Type": "application/json", ...options.headers || {} },
+      body: options.body,
+      timeout
+     });
+    } else {
+     const url = `${GMAIL_BASE_URL}${cleanPath}`;
+     console.log("[gmail] gmailFetch (direct):", method, url);
+     response = await net.fetch(url, {
+      method,
+      headers: {
+       Authorization: `Bearer ${accessToken}`,
+       "Content-Type": "application/json",
+       ...options.headers || {}
+      },
+      body: options.body,
+      timeout
+     });
+    }
     console.log("[gmail] gmailFetch response status:", response.status);
     const s2 = getGmailSkillState();
     if (response.status === 429 && attempt < MAX_RETRIES) {
      const retryAfter = response.headers["retry-after"];
      const waitMs = retryAfter ? parseInt(retryAfter, 10) * 1e3 : DEFAULT_BACKOFF_MS * (attempt + 1);
-     console.log(`[gmail] gmailFetch: 429 rate-limited path=${url} \u2014 retrying in ${waitMs}ms (attempt ${attempt + 1}/${MAX_RETRIES})`);
+     console.log(`[gmail] gmailFetch: 429 rate-limited \u2014 retrying in ${waitMs}ms (attempt ${attempt + 1}/${MAX_RETRIES})`);
      await sleep(waitMs);
      continue;
     }
-    if (response.status === 401 && attempt < MAX_RETRIES) {
+    if (!useProxy && response.status === 401 && attempt < MAX_RETRIES) {
      const bodyPreview = response.body ? response.body.slice(0, 200) : "(empty)";
-     console.log(`[gmail] gmailFetch: 401 Unauthorized url=${url} body=${bodyPreview}`);
+     console.log(`[gmail] gmailFetch: 401 Unauthorized body=${bodyPreview}`);
      cachedSelfHostedToken = null;
      const freshToken = await resolveAccessToken();
      if (freshToken && freshToken !== accessToken) {
-      accessToken = freshToken;
       console.log("[gmail] gmailFetch: refreshed token, retrying");
       continue;
      }
-    } else if (response.status === 401) {
-     const bodyPreview = response.body ? response.body.slice(0, 200) : "(empty)";
-     console.log(`[gmail] gmailFetch: 401 Unauthorized (final) url=${url} body=${bodyPreview}`);
     } else if (response.status >= 400) {
      const bodyPreview = response.body ? response.body.slice(0, 200) : "(empty)";
-     console.log(`[gmail] gmailFetch: error url=${url} status=${response.status} body=${bodyPreview}`);
+     console.log(`[gmail] gmailFetch: error status=${response.status} body=${bodyPreview}`);
     }
     if (response.headers["x-ratelimit-remaining"]) {
      s2.rateLimitRemaining = parseInt(response.headers["x-ratelimit-remaining"], 10);
@@ -912,7 +923,7 @@ var __skill_bundle = (() => {
     }
    } catch (err) {
     const errorMsg = err instanceof Error ? err.message : String(err);
-    console.error(`[gmail] gmailFetch error url=${url}: ${errorMsg}`);
+    console.error(`[gmail] gmailFetch error: ${errorMsg}`);
     const s2 = getGmailSkillState();
     s2.lastApiError = errorMsg;
     return { success: false, error: { code: 500, message: errorMsg } };
@@ -6463,11 +6474,16 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
    if (result.messages.length === 0)
     break;
    pageToken = result.nextPageToken;
-   for (const msgRef of result.messages) {
-    if (await syncMessage(msgRef.id))
-     newEmails++;
-    else
-     skipped++;
+   const CONCURRENCY = 5;
+   for (let i = 0; i < result.messages.length; i += CONCURRENCY) {
+    const batch = result.messages.slice(i, i + CONCURRENCY);
+    const results = await Promise.all(batch.map((msgRef) => syncMessage(msgRef.id)));
+    for (const wasNew of results) {
+     if (wasNew)
+      newEmails++;
+     else
+      skipped++;
+    }
    }
    log?.(`Page ${page}: ${newEmails} new, ${skipped} skipped`, Math.min(10 + page * 10, 90));
   } while (pageToken && page < maxPages);
@@ -6475,8 +6491,8 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
  }
  async function performInitialSync(onProgress) {
   const s2 = getGmailSkillState();
-  if (!oauth.getCredential()) {
-   console.log("[gmail-sync] No OAuth credential, skipping initial sync");
+  if (!isGmailConnected()) {
+   console.log("[gmail-sync] No credential, skipping initial sync");
    return;
   }
   if (s2.syncStatus.syncInProgress) {
@@ -6521,7 +6537,7 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
  }
  async function onSync() {
   const s2 = getGmailSkillState();
-  if (!oauth.getCredential() || s2.syncStatus.syncInProgress)
+  if (!isGmailConnected() || s2.syncStatus.syncInProgress)
    return;
   try {
    loadGmailProfile();
@@ -6977,14 +6993,21 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
      label_ids: args.label_ids || null
     });
    }
+   const CONCURRENCY = 5;
    const emails = [];
-   for (const msgRef of messageList.messages) {
-    const msgEndpoint = `/users/me/messages/${msgRef.id}?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=Date`;
-    const msgResponse = await gmailFetch(msgEndpoint);
-    if (msgResponse.success && msgResponse.data) {
-     const message = msgResponse.data;
-     emails.push(messageToEmailRow(message));
-     upsertEmail(message);
+   const refs = messageList.messages;
+   for (let i = 0; i < refs.length; i += CONCURRENCY) {
+    const batch = refs.slice(i, i + CONCURRENCY);
+    const results = await Promise.all(batch.map((msgRef) => {
+     const msgEndpoint = `/users/me/messages/${msgRef.id}?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Date`;
+     return gmailFetch(msgEndpoint);
+    }));
+    for (const msgResponse of results) {
+     if (msgResponse.success && msgResponse.data) {
+      const message = msgResponse.data;
+      emails.push(messageToEmailRow(message));
+      upsertEmail(message);
+     }
     }
    }
    const s2 = getGmailSkillState();
@@ -7320,12 +7343,13 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
       next_page_token: null
      });
     }
+    const CONCURRENCY = 5;
     const emails = [];
-    const batchSize = 10;
-    for (let i = 0; i < searchResults.messages.length; i += batchSize) {
-     const batch = searchResults.messages.slice(i, i + batchSize);
-     for (const msgRef of batch) {
-      const msgResponse = await gmailFetch(`/users/me/messages/${msgRef.id}?format=metadata`);
+    const refs = searchResults.messages;
+    for (let i = 0; i < refs.length; i += CONCURRENCY) {
+     const batch = refs.slice(i, i + CONCURRENCY);
+     const results = await Promise.all(batch.map((msgRef) => gmailFetch(`/users/me/messages/${msgRef.id}?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Date`)));
+     for (const msgResponse of results) {
       if (msgResponse.success && msgResponse.data) {
        const message = msgResponse.data;
        const headers = message.payload?.headers || [];
@@ -7357,8 +7381,6 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
        });
        upsertEmail(message);
       }
-     }
-     if (i + batchSize < searchResults.messages.length) {
      }
     }
     const s2 = getGmailSkillState();

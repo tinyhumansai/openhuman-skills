@@ -651,6 +651,30 @@ var __skill_bundle = (() => {
      errors: [{ field: "serverUrl", message: "URL must start with http:// or https://" }]
     };
    }
+   try {
+    const response = await net.fetch(url, { method: "GET", timeout: 1e4 });
+    if (response.status >= 500) {
+     return {
+      status: "error",
+      errors: [
+       {
+        field: "serverUrl",
+        message: `Server returned error ${response.status}. Verify the URL is correct.`
+       }
+      ]
+     };
+    }
+   } catch (e) {
+    return {
+     status: "error",
+     errors: [
+      {
+       field: "serverUrl",
+       message: `Could not reach server: ${String(e)}. Check the URL and try again.`
+      }
+     ]
+    };
+   }
    s.config.serverUrl = url;
    s.config.pingIntervalSec = parseInt(values.pingIntervalSec) || 10;
    return {
