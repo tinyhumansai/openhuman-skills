@@ -6,30 +6,28 @@
  * 1. Self-hosted (direct API token):
  *    NOTION_API_KEY=ntn_xxx yarn test src/core/notion/__tests__/test-notion-live.ts
  *
- * 2. Encrypted OAuth (managed mode via backend):
+ * 2. Encrypted OAuth (managed mode):
+ *    The clientKey is returned directly in the OAuth callback URL by the backend
+ *    (no separate fetch step). For testing, provide it as an env var:
+ *
  *    NOTION_INTEGRATION_ID=<24-char-hex> \
- *    JWT_TOKEN=<session-jwt> \
- *    BACKEND_URL=https://api.tinyhumans.ai \
+ *    CLIENT_KEY_SHARE=<base64-encoded-client-key> \
  *    yarn test src/core/notion/__tests__/test-notion-live.ts
  *
- * The encrypted OAuth flow:
- *   1. Fetches clientKeyShare from backend (POST /auth/integrations/:id/client-key)
- *   2. Starts the Notion skill in the runtime
- *   3. Injects OAuth credential + clientKeyShare via oauth/complete RPC
- *   4. The skill's oauth.fetch() routes through /proxy/encrypted/:id/ with X-Encryption-Key
- *   5. Backend XOR-combines client+server shares to decrypt tokens and proxy requests
- *   6. Verifies connection, exercises tools, triggers sync
+ * Flow:
+ *   1. Starts the Notion skill in the runtime
+ *   2. Injects OAuth credential + clientKeyShare via oauth/complete RPC
+ *   3. The skill's oauth.fetch() routes through /proxy/encrypted/:id/ with X-Encryption-Key
+ *   4. Backend XOR-combines client+server shares to decrypt tokens and proxy requests
+ *   5. Verifies connection, exercises tools, triggers sync
  */
 import {
   afterAll,
   assert,
-  assertContains,
   assertEqual,
   assertNotNull,
   authComplete,
-  beforeAll,
   callTool,
-  callToolRaw,
   describe,
   getSkillStatus,
   it,
@@ -50,19 +48,18 @@ const SKILL_ID = 'notion';
 // Self-hosted mode
 const NOTION_API_KEY = process.env.NOTION_API_KEY || '';
 
-// Encrypted OAuth mode
+// Encrypted OAuth mode — clientKey comes from the OAuth callback URL, not a separate fetch
 const INTEGRATION_ID = process.env.NOTION_INTEGRATION_ID || '';
-const JWT_TOKEN = process.env.JWT_TOKEN || '';
-const BACKEND_URL = process.env.BACKEND_URL || 'https://api.tinyhumans.ai';
+const CLIENT_KEY_SHARE = process.env.CLIENT_KEY_SHARE || '';
 
 const isSelfHosted = !!NOTION_API_KEY;
-const isEncryptedOAuth = !!INTEGRATION_ID && !!JWT_TOKEN;
+const isEncryptedOAuth = !!INTEGRATION_ID && !!CLIENT_KEY_SHARE;
 
 if (!isSelfHosted && !isEncryptedOAuth) {
   console.error(
     '\n  Missing credentials. Provide one of:\n' +
       '    - NOTION_API_KEY=ntn_xxx (self-hosted mode)\n' +
-      '    - NOTION_INTEGRATION_ID + JWT_TOKEN (encrypted OAuth mode)\n'
+      '    - NOTION_INTEGRATION_ID + CLIENT_KEY_SHARE (encrypted OAuth mode)\n'
   );
   process.exit(1);
 }
@@ -70,9 +67,8 @@ if (!isSelfHosted && !isEncryptedOAuth) {
 const mode = isSelfHosted ? 'self_hosted' : 'encrypted_oauth';
 console.log(`\n  Mode: ${mode}`);
 if (isEncryptedOAuth) {
-  console.log(`  Backend: ${BACKEND_URL}`);
   console.log(`  Integration ID: ${INTEGRATION_ID}`);
-  console.log(`  JWT: <redacted, ${JWT_TOKEN.length} bytes>`);
+  console.log(`  Client key: <redacted, ${CLIENT_KEY_SHARE.length} chars>`);
 }
 
 // ---------------------------------------------------------------------------
@@ -86,38 +82,6 @@ async function callToolSafe(toolName: string, args: Record<string, unknown> = {}
   } catch (e: any) {
     return { error: e.message };
   }
-}
-
-/**
- * Fetch clientKeyShare from backend for encrypted OAuth.
- * POST /auth/integrations/:id/client-key with Bearer JWT.
- */
-async function fetchClientKeyShare(): Promise<string> {
-  const url = `${BACKEND_URL}/auth/integrations/${INTEGRATION_ID}/client-key`;
-  console.log(`  Fetching client key share from ${url}`);
-
-  const resp = await fetch(url, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${JWT_TOKEN}`,
-      'Content-Type': 'application/json',
-    },
-  });
-
-  if (!resp.ok) {
-    const text = await resp.text();
-    throw new Error(`Failed to fetch client key share (${resp.status}): ${text}`);
-  }
-
-  const data = (await resp.json()) as { success?: boolean; data?: { clientKey?: string }; clientKey?: string };
-  // Backend may return { success, data: { clientKey } } or { clientKey }
-  const clientKey = data.data?.clientKey || data.clientKey;
-  if (!clientKey) {
-    throw new Error(`No clientKey in response: ${JSON.stringify(data)}`);
-  }
-
-  console.log(`  Client key share retrieved (${clientKey.length} chars)`);
-  return clientKey;
 }
 
 // ---------------------------------------------------------------------------
@@ -148,23 +112,12 @@ describe('Notion Live — Start & Auth', () => {
   }
 
   if (isEncryptedOAuth) {
-    it('should fetch client key share from backend', async () => {
-      const clientKey = await fetchClientKeyShare();
-      assertNotNull(clientKey);
-      assert(clientKey.length > 0, 'clientKey should not be empty');
-      // Store for use in next test
-      (globalThis as any).__testClientKey = clientKey;
-    });
-
-    it('should inject encrypted OAuth credential', async () => {
-      const clientKey = (globalThis as any).__testClientKey as string;
-      assertNotNull(clientKey, 'clientKey should have been fetched in previous test');
-
+    it('should inject encrypted OAuth credential with client key', async () => {
       const result = await oauthComplete(SKILL_ID, {
         credentialId: INTEGRATION_ID,
         provider: 'notion',
         grantedScopes: [],
-        clientKeyShare: clientKey,
+        clientKeyShare: CLIENT_KEY_SHARE,
       });
       console.log(`    OAuth complete result: ${JSON.stringify(result)}`);
     });
