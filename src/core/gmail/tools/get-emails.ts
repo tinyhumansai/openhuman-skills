@@ -148,16 +148,26 @@ export const getEmailsTool: ToolDefinition = {
       });
     }
 
+    // Fetch message metadata in parallel (max 5 concurrent) to avoid
+    // sequential proxy round-trips that cause timeouts.
+    const CONCURRENCY = 5;
     const emails: Record<string, unknown>[] = [];
+    const refs = messageList.messages;
 
-    for (const msgRef of messageList.messages) {
-      const msgEndpoint = `/users/me/messages/${msgRef.id}?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=Date`;
-      const msgResponse: GmailApiResponse<GmailMessage> = await gmailFetch(msgEndpoint);
-
-      if (msgResponse.success && msgResponse.data) {
-        const message = msgResponse.data as any;
-        emails.push(messageToEmailRow(message));
-        upsertEmail(message);
+    for (let i = 0; i < refs.length; i += CONCURRENCY) {
+      const batch = refs.slice(i, i + CONCURRENCY);
+      const results = await Promise.all(
+        batch.map(msgRef => {
+          const msgEndpoint = `/users/me/messages/${msgRef.id}?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Date`;
+          return gmailFetch<GmailMessage>(msgEndpoint);
+        })
+      );
+      for (const msgResponse of results) {
+        if (msgResponse.success && msgResponse.data) {
+          const message = msgResponse.data as any;
+          emails.push(messageToEmailRow(message));
+          upsertEmail(message);
+        }
       }
     }
 

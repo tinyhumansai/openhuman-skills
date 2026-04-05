@@ -161,10 +161,11 @@ export async function gmailFetch<T = unknown>(
       let response: { status: number; headers: Record<string, string>; body: string };
 
       if (useProxy) {
-        // Managed/encrypted OAuth: use the proxy which decrypts tokens server-side
-        const proxyPath = `/gmail/v1${cleanPath}`;
-        console.log('[gmail] gmailFetch (proxy):', method, proxyPath);
-        response = await oauth.fetch(proxyPath, {
+        // Managed/encrypted OAuth: use the proxy which decrypts tokens server-side.
+        // oauth.fetch path is relative to the manifest apiBaseUrl (gmail.googleapis.com/gmail/v1),
+        // so pass the endpoint path directly without the /gmail/v1 prefix.
+        console.log('[gmail] gmailFetch (proxy):', method, cleanPath);
+        response = await oauth.fetch(cleanPath, {
           method,
           headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
           body: options.body,

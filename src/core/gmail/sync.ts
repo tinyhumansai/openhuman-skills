@@ -133,9 +133,15 @@ async function runSyncPages(
 
     pageToken = result.nextPageToken;
 
-    for (const msgRef of result.messages) {
-      if (await syncMessage(msgRef.id)) newEmails++;
-      else skipped++;
+    // Sync messages in parallel (5 concurrent) to avoid sequential proxy round-trips
+    const CONCURRENCY = 5;
+    for (let i = 0; i < result.messages.length; i += CONCURRENCY) {
+      const batch = result.messages.slice(i, i + CONCURRENCY);
+      const results = await Promise.all(batch.map(msgRef => syncMessage(msgRef.id)));
+      for (const wasNew of results) {
+        if (wasNew) newEmails++;
+        else skipped++;
+      }
     }
 
     log?.(`Page ${page}: ${newEmails} new, ${skipped} skipped`, Math.min(10 + page * 10, 90));

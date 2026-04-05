@@ -21,7 +21,7 @@ import * as readline from 'readline';
 
 import {
   authComplete,
-  callTool,
+  callToolRaw,
   getSkillStatus,
   oauthComplete,
   setSetupComplete,
@@ -131,8 +131,13 @@ async function callToolSafe(
   args: Record<string, unknown> = {},
 ): Promise<{ data?: any; error?: string }> {
   try {
-    const data = await callTool(SKILL_ID, toolName, args);
-    return { data };
+    const result = await callToolRaw(SKILL_ID, toolName, args, 60_000);
+    if (result.is_error) {
+      return { error: result.content?.[0]?.text || 'unknown error' };
+    }
+    const text = result.content?.[0]?.text;
+    if (!text) return { data: null };
+    try { return { data: JSON.parse(text) }; } catch { return { data: text }; }
   } catch (e: any) {
     return { error: e.message };
   }

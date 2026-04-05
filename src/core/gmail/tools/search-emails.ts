@@ -80,29 +80,32 @@ export const searchEmailsTool: ToolDefinition = {
         });
       }
 
-      // Get detailed information for found emails
+      // Fetch message metadata in parallel (max 5 concurrent) to avoid
+      // sequential proxy round-trips that cause timeouts.
+      const CONCURRENCY = 5;
       const emails = [];
-      const batchSize = 10; // Process in batches to avoid rate limits
+      const refs = searchResults.messages;
 
-      for (let i = 0; i < searchResults.messages.length; i += batchSize) {
-        const batch = searchResults.messages.slice(i, i + batchSize);
+      for (let i = 0; i < refs.length; i += CONCURRENCY) {
+        const batch = refs.slice(i, i + CONCURRENCY);
+        const results = await Promise.all(
+          batch.map(msgRef =>
+            gmailFetch<GmailMessage>(
+              `/users/me/messages/${msgRef.id}?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Date`
+            )
+          )
+        );
 
-        for (const msgRef of batch) {
-          const msgResponse = await gmailFetch<GmailMessage>(
-            `/users/me/messages/${msgRef.id}?format=metadata`
-          );
-
+        for (const msgResponse of results) {
           if (msgResponse.success && msgResponse.data) {
             const message = msgResponse.data as GmailMessage;
             const headers = message.payload?.headers || [];
 
-            // Extract key headers
             const headerMap: Record<string, string> = {};
             headers.forEach((header: any) => {
               headerMap[header.name.toLowerCase()] = header.value;
             });
 
-            // Parse sender info
             const from = headerMap.from || '';
             const fromMatch = from.match(/(.+?)\s*<([^>]+)>/) || [null, from, from];
             const senderName = fromMatch[1]?.trim().replace(/^["']|["']$/g, '') || null;
@@ -129,15 +132,8 @@ export const searchEmailsTool: ToolDefinition = {
               relevance_score: calculateRelevanceScore(message, query),
             });
 
-            // Cache in local database
             upsertEmail(message);
           }
-        }
-
-        // Small delay between batches to respect rate limits
-        if (i + batchSize < searchResults.messages.length) {
-          // In a real implementation, we might want to add a small delay here
-          // but since we're in a synchronous environment, we'll continue
         }
       }
 
