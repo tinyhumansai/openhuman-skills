@@ -15,13 +15,13 @@
  * Usage:
  *   npx tsx src/core/notion/__tests__/test-notion-live.ts
  */
-import 'dotenv/config';
-import { exec } from 'child_process';
 import * as readline from 'readline';
+import { exec } from 'child_process';
+import 'dotenv/config';
 
 import {
   authComplete,
-  callTool,
+  callToolRaw,
   getSkillStatus,
   oauthComplete,
   setSetupComplete,
@@ -131,19 +131,37 @@ async function callToolSafe(
   args: Record<string, unknown> = {}
 ): Promise<{ data?: any; error?: string }> {
   try {
-    const data = await callTool(SKILL_ID, toolName, args);
-    return { data };
+    const result = await callToolRaw(SKILL_ID, toolName, args, 60_000);
+    if (result.is_error) {
+      return { error: result.content?.[0]?.text || 'unknown error' };
+    }
+    const text = result.content?.[0]?.text;
+    if (!text) return { data: null };
+    try {
+      return { data: JSON.parse(text) };
+    } catch {
+      return { data: text };
+    }
   } catch (e: any) {
     return { error: e.message };
   }
 }
 
 // ---------------------------------------------------------------------------
-// Config
+// Config from env
 // ---------------------------------------------------------------------------
 
 const JWT_TOKEN = process.env.JWT_TOKEN || '';
 const BACKEND_URL = (process.env.BACKEND_URL || 'https://api.tinyhumans.ai').replace(/\/+$/, '');
+
+// Pre-filled credentials from env — if all are set, skip interactive prompts.
+// AUTH_MODE: "oauth" (default) or "self_hosted"
+// For oauth:       NOTION_INTEGRATION_ID + NOTION_CLIENT_KEY_SHARE
+// For self_hosted: NOTION_API_KEY
+const ENV_AUTH_MODE = process.env.AUTH_MODE || '';
+const ENV_API_KEY = process.env.NOTION_API_KEY || '';
+const ENV_INTEGRATION_ID = process.env.NOTION_INTEGRATION_ID || '';
+const ENV_CLIENT_KEY = process.env.NOTION_CLIENT_KEY_SHARE || '';
 
 if (!JWT_TOKEN) {
   console.error(`\n${C.red}  JWT_TOKEN env var is required.${C.reset}`);
@@ -162,62 +180,97 @@ async function main() {
   info('Backend', BACKEND_URL);
   info('JWT', `<${JWT_TOKEN.length} chars>`);
 
-  // ── Choose auth mode ─────────────────────────────────────────────────────
+  // ── Resolve credentials (env or interactive) ─────────────────────────────
 
-  header('1. Authentication Mode');
-
-  const choice = await prompt('Auth mode — (1) Encrypted OAuth via browser  (2) API token', '1');
-
-  const mode = choice === '2' ? 'self_hosted' : 'encrypted_oauth';
+  let mode: 'self_hosted' | 'encrypted_oauth';
   let apiKey = '';
   let integrationId = '';
   let clientKeyShare = '';
 
-  if (mode === 'self_hosted') {
-    apiKey = await promptSecret('Notion integration token (ntn_...)');
+  const hasOAuthEnv = !!(ENV_INTEGRATION_ID && ENV_CLIENT_KEY);
+  const hasSelfHostedEnv = !!ENV_API_KEY;
+
+  if (hasOAuthEnv || (ENV_AUTH_MODE === 'oauth' && hasOAuthEnv)) {
+    // All OAuth credentials provided via env — skip prompts entirely
+    mode = 'encrypted_oauth';
+    integrationId = ENV_INTEGRATION_ID;
+    clientKeyShare = ENV_CLIENT_KEY;
+
+    header('1. Credentials (from env)');
+    info('Mode', 'encrypted_oauth');
+    info('Integration ID', integrationId);
+    info('Client key', `<${clientKeyShare.length} chars>`);
+  } else if (hasSelfHostedEnv || ENV_AUTH_MODE === 'self_hosted') {
+    // Self-hosted token provided via env
+    mode = 'self_hosted';
+    apiKey = ENV_API_KEY;
+
     if (!apiKey) {
-      fail('Token is required.');
-      process.exit(1);
+      // AUTH_MODE=self_hosted but no token — prompt for it
+      header('1. Credentials');
+      apiKey = await promptSecret('Notion integration token (ntn_...)');
+      if (!apiKey) {
+        fail('Token is required.');
+        process.exit(1);
+      }
+    } else {
+      header('1. Credentials (from env)');
     }
+    info('Mode', 'self_hosted');
+    info('Token', `${apiKey.slice(0, 8)}...<${apiKey.length} chars>`);
   } else {
-    // ── Initiate OAuth ───────────────────────────────────────────────────
+    // Nothing in env — interactive mode
+    header('1. Authentication Mode');
 
-    header('2. OAuth Flow');
+    const choice = await prompt('Auth mode — (1) Encrypted OAuth via browser  (2) API token', '1');
+    mode = choice === '2' ? 'self_hosted' : 'encrypted_oauth';
 
-    step('Requesting OAuth URL from backend...');
-    const connectUrl = `${BACKEND_URL}/auth/notion/connect?skillId=notion&responseType=json&encryptionMode=encrypted`;
-    const connectResp = await fetch(connectUrl, {
-      headers: { Authorization: `Bearer ${JWT_TOKEN}` },
-    });
-    if (!connectResp.ok) {
-      const text = await connectResp.text();
-      fail(`Backend returned ${connectResp.status}: ${text}`);
-      process.exit(1);
-    }
-    const connectData = (await connectResp.json()) as { oauthUrl?: string; success?: boolean };
-    const oauthUrl = connectData.oauthUrl;
-    if (!oauthUrl) {
-      fail(`No oauthUrl in response: ${JSON.stringify(connectData)}`);
-      process.exit(1);
-    }
-    ok();
+    if (mode === 'self_hosted') {
+      apiKey = await promptSecret('Notion integration token (ntn_...)');
+      if (!apiKey) {
+        fail('Token is required.');
+        process.exit(1);
+      }
+    } else {
+      // ── Initiate OAuth via browser ─────────────────────────────────────
 
-    console.log(`\n${C.yellow}  Opening Notion OAuth page in your browser...${C.reset}`);
-    console.log(`${C.dim}  If it doesn't open, visit this URL manually:${C.reset}`);
-    console.log(`${C.dim}  ${oauthUrl}${C.reset}\n`);
-    openUrl(oauthUrl);
+      header('2. OAuth Flow');
 
-    console.log(
-      `${C.yellow}  After authorizing, the backend will return a JSON response.${C.reset}`
-    );
-    console.log(`${C.yellow}  Copy the integrationId and clientKey from it.${C.reset}\n`);
+      step('Requesting OAuth URL from backend...');
+      const connectUrl = `${BACKEND_URL}/auth/notion/connect?skillId=notion&responseType=json&encryptionMode=encrypted`;
+      const connectResp = await fetch(connectUrl, {
+        headers: { Authorization: `Bearer ${JWT_TOKEN}` },
+      });
+      if (!connectResp.ok) {
+        const text = await connectResp.text();
+        fail(`Backend returned ${connectResp.status}: ${text}`);
+        process.exit(1);
+      }
+      const connectData = (await connectResp.json()) as { oauthUrl?: string; success?: boolean };
+      const oauthUrl = connectData.oauthUrl;
+      if (!oauthUrl) {
+        fail(`No oauthUrl in response: ${JSON.stringify(connectData)}`);
+        process.exit(1);
+      }
+      ok();
 
-    integrationId = await prompt('Integration ID (24-char hex from callback)');
-    clientKeyShare = await promptSecret('Client key share (base64 from callback)');
+      console.log(`\n${C.yellow}  Opening Notion OAuth page in your browser...${C.reset}`);
+      console.log(`${C.dim}  If it doesn't open, visit this URL manually:${C.reset}`);
+      console.log(`${C.dim}  ${oauthUrl}${C.reset}\n`);
+      openUrl(oauthUrl);
 
-    if (!integrationId || !clientKeyShare) {
-      fail('Both integration ID and client key share are required.');
-      process.exit(1);
+      console.log(
+        `${C.yellow}  After authorizing, the backend will return a JSON response.${C.reset}`
+      );
+      console.log(`${C.yellow}  Copy the integrationId and clientKey from it.${C.reset}\n`);
+
+      integrationId = await prompt('Integration ID (24-char hex from callback)');
+      clientKeyShare = await promptSecret('Client key share (base64 from callback)');
+
+      if (!integrationId || !clientKeyShare) {
+        fail('Both integration ID and client key share are required.');
+        process.exit(1);
+      }
     }
   }
 
@@ -309,11 +362,15 @@ async function main() {
 
   header('6. Exercise Tools');
 
-  step('get-current-user...');
+  step('list-users...');
   {
-    const { data, error } = await callToolSafe('get-current-user', {});
+    const { data, error } = await callToolSafe('list-users', {});
     if (error) fail(error);
-    else ok(String(data?.name || data?.id || JSON.stringify(data).slice(0, 80)));
+    else {
+      const users = data?.users || data?.results || [];
+      ok(`${users.length} users`);
+      for (const u of users.slice(0, 3)) info('user', u.name || u.id);
+    }
   }
 
   step('search (query="test")...');
