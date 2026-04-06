@@ -7,7 +7,7 @@ export const pingNowTool: ToolDefinition = {
   input_schema: { type: 'object', properties: {} },
   async execute(): Promise<string> {
     // doPing is exposed on globalThis by the main skill module
-    (globalThis as { doPing?: () => void }).doPing?.();
+    await (globalThis as { doPing?: () => Promise<void> }).doPing?.();
     const s = (globalThis as any).getSkillState();
     const latest = db.get(
       'SELECT timestamp, status, latency_ms, success, error FROM ping_log ORDER BY id DESC LIMIT 1',

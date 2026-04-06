@@ -105,7 +105,7 @@ describe('Setup flow', () => {
 
   it('onSetupSubmit step 1 should return next step', async () => {
     const result = (await setupSubmit(SKILL_ID, 'server-config', {
-      serverUrl: 'https://good.example.com',
+      serverUrl: 'http://localhost:7799',
       pingIntervalSec: '30',
     })) as any;
     assertEqual(result.status, 'next');
@@ -115,7 +115,7 @@ describe('Setup flow', () => {
   it('onSetupSubmit step 2 should complete', async () => {
     // Step 1
     await setupSubmit(SKILL_ID, 'server-config', {
-      serverUrl: 'https://complete.example.com',
+      serverUrl: 'http://localhost:7799',
       pingIntervalSec: '10',
     });
     // Step 2
@@ -184,8 +184,8 @@ describe('Tools', () => {
   });
 
   it('ping-now should trigger immediate ping', async () => {
-    // First set a valid URL
-    await callTool(SKILL_ID, 'update-server-url', { url: 'https://httpbin.org/status/200' });
+    // First set a valid URL (use the test runtime itself as a reachable target)
+    await callTool(SKILL_ID, 'update-server-url', { url: 'http://localhost:7799' });
     const result = (await callTool(SKILL_ID, 'ping-now')) as any;
     assertEqual(result.triggered, true);
     assertGreaterThan(result.pingNumber, 0, 'should have ping number');
