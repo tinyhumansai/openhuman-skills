@@ -13,7 +13,7 @@
  * Reads .env from the repo root automatically (JWT_TOKEN, BACKEND_URL, etc.).
  *
  * Usage:
- *   npx tsx src/core/notion/__tests__/test-notion-live.ts
+ *   npx tsx src/core/notion/live-test.ts
  */
 import * as readline from 'readline';
 import { exec } from 'child_process';
@@ -27,7 +27,7 @@ import {
   setSetupComplete,
   startSkill,
   stopSkill,
-} from '../../../../dev/test-harness';
+} from '../../../dev/test-harness';
 
 // ---------------------------------------------------------------------------
 // Formatting
@@ -166,7 +166,7 @@ const ENV_CLIENT_KEY = process.env.NOTION_CLIENT_KEY_SHARE || '';
 if (!JWT_TOKEN) {
   console.error(`\n${C.red}  JWT_TOKEN env var is required.${C.reset}`);
   console.error(
-    `${C.dim}  Usage: JWT_TOKEN=<jwt> npx tsx src/core/notion/__tests__/test-notion-live.ts${C.reset}\n`
+    `${C.dim}  Usage: JWT_TOKEN=<jwt> npx tsx src/core/notion/live-test.ts${C.reset}\n`
   );
   process.exit(1);
 }

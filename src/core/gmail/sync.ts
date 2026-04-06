@@ -4,7 +4,15 @@
 import { syncIntegrationMetadata } from '../../shared/integration-metadata';
 import { gmailFetch, isGmailConnected } from './api';
 import { loadGmailProfile } from './api/helpers';
-import { emailExists, getEmailCount, getEmails, upsertEmail } from './db/helpers';
+import {
+  emailExists,
+  getEmailCount,
+  getEmails,
+  getUnsubmittedEmails,
+  markEmailsSubmitted,
+  markSensitiveAsSubmitted,
+  upsertEmail,
+} from './db/helpers';
 import { getGmailSkillState, publishSkillState } from './state';
 import type { GmailMessage } from './types';
 
@@ -199,6 +207,9 @@ export async function performInitialSync(onProgress?: SyncProgressCallback): Pro
 
     log(`Initial sync complete: ${newEmails} new emails, ${skipped} skipped`, 100);
 
+    // Ingest newly synced emails into knowledge graph
+    ingestNewEmails();
+
     if (newEmails > 0 && s.config.notifyOnNewEmails) {
       platform.notify('Gmail Sync Complete', `Synchronized ${newEmails} new emails`);
     }
@@ -264,6 +275,9 @@ export async function onSync(): Promise<void> {
     emitSyncProgress(`Sync complete: ${newEmails} new, ${skipped} skipped`, 100);
     console.log(`[gmail-sync] Incremental sync done: ${newEmails} new, ${skipped} skipped`);
 
+    // Ingest newly synced emails into knowledge graph
+    ingestNewEmails();
+
     if (newEmails > 0 && s.config.notifyOnNewEmails) {
       platform.notify('New Gmail Emails', `${newEmails} new emails synced`);
     }
@@ -279,6 +293,73 @@ export async function onSync(): Promise<void> {
     syncGmailMetadataToBackend();
     const emails = getEmails();
     state.setPartial({ emails });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Ingest synced emails into knowledge graph via memory.insert()
+// ---------------------------------------------------------------------------
+
+/** Max emails to pull from DB per ingestion round. */
+const INGEST_QUERY_LIMIT = 500;
+
+/**
+ * Ingest un-submitted emails into the knowledge graph.
+ * Each email is sent via memory.insert() which routes through the Rust
+ * ingestion pipeline (upsert → GLiNER entity/relation extraction → graph).
+ * Sensitive emails are marked as submitted without being ingested.
+ */
+function ingestNewEmails(): void {
+  // Mark sensitive emails as submitted so they never enter the ingestion queue
+  markSensitiveAsSubmitted();
+
+  const emails = getUnsubmittedEmails(INGEST_QUERY_LIMIT);
+  if (emails.length === 0) return;
+
+  const submittedIds: string[] = [];
+  let ingested = 0;
+
+  for (const email of emails) {
+    const content = email.body_text || email.snippet || '';
+    if (content.length === 0) {
+      submittedIds.push(email.id);
+      continue;
+    }
+
+    try {
+      memory.insert({
+        title: email.subject || `Email ${email.id}`,
+        content,
+        sourceType: 'email',
+        documentId: `gmail-email-${email.id}`,
+        metadata: {
+          source: 'gmail',
+          type: 'email',
+          emailId: email.id,
+          threadId: email.thread_id,
+          senderEmail: email.sender_email,
+          senderName: email.sender_name,
+          recipientEmails: email.recipient_emails,
+          isRead: email.is_read === 1,
+          isImportant: email.is_important === 1,
+          isStarred: email.is_starred === 1,
+          hasAttachments: email.has_attachments === 1,
+          labels: email.labels,
+        },
+        createdAt: email.date ? email.date / 1000 : undefined,
+        updatedAt: email.updated_at ? email.updated_at / 1000 : undefined,
+      });
+      submittedIds.push(email.id);
+      ingested++;
+    } catch (e) {
+      console.error(`[gmail] Failed to ingest email ${email.id}: ${e}`);
+    }
+  }
+
+  if (submittedIds.length > 0) markEmailsSubmitted(submittedIds);
+
+  if (ingested > 0) {
+    console.log(`[gmail] Ingested ${ingested} email(s) into knowledge graph`);
   }
 }
 
