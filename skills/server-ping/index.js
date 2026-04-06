@@ -798,7 +798,7 @@ var __skill_bundle = (() => {
   description: "Trigger an immediate ping to the configured server and return the result.",
   input_schema: { type: "object", properties: {} },
   async execute() {
-   globalThis.doPing?.();
+   await globalThis.doPing?.();
    const s = globalThis.getSkillState();
    const latest = db.get("SELECT timestamp, status, latency_ms, success, error FROM ping_log ORDER BY id DESC LIMIT 1", []);
    return JSON.stringify({ triggered: true, pingNumber: s.pingCount, result: latest });

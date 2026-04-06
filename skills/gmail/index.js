@@ -6132,6 +6132,24 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
    emailId
   ]);
  }
+ function getUnsubmittedEmails(limit = 500) {
+  const cid = credId();
+  return db.all("SELECT * FROM emails WHERE credential_id = ? AND backend_submitted = 0 AND is_sensitive = 0 ORDER BY date ASC LIMIT ?", [cid, limit]);
+ }
+ function markSensitiveAsSubmitted() {
+  const cid = credId();
+  db.exec("UPDATE emails SET backend_submitted = 1 WHERE credential_id = ? AND is_sensitive = 1 AND backend_submitted = 0", [cid]);
+ }
+ function markEmailsSubmitted(ids) {
+  if (ids.length === 0)
+   return;
+  const cid = credId();
+  for (let i = 0; i < ids.length; i += 99) {
+   const batch = ids.slice(i, i + 99);
+   const placeholders = batch.map(() => "?").join(",");
+   db.exec(`UPDATE emails SET backend_submitted = 1 WHERE credential_id = ? AND id IN (${placeholders})`, [cid, ...batch]);
+  }
+ }
  var SENSITIVE_PATTERNS = [
   // Explicit password disclosures
   /(?:password|passwd|pwd)\s*[:=]\s*\S+/i,
@@ -6519,6 +6537,7 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
    s2.syncStatus.newEmailsCount = newEmails;
    s2.syncStatus.nextSyncTime = now + s2.config.syncIntervalMinutes * 60 * 1e3;
    log(`Initial sync complete: ${newEmails} new emails, ${skipped} skipped`, 100);
+   ingestNewEmails();
    if (newEmails > 0 && s2.config.notifyOnNewEmails) {
     platform.notify("Gmail Sync Complete", `Synchronized ${newEmails} new emails`);
    }
@@ -6566,6 +6585,7 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
    s2.syncStatus.nextSyncTime = now + s2.config.syncIntervalMinutes * 60 * 1e3;
    emitSyncProgress(`Sync complete: ${newEmails} new, ${skipped} skipped`, 100);
    console.log(`[gmail-sync] Incremental sync done: ${newEmails} new, ${skipped} skipped`);
+   ingestNewEmails();
    if (newEmails > 0 && s2.config.notifyOnNewEmails) {
     platform.notify("New Gmail Emails", `${newEmails} new emails synced`);
    }
@@ -6581,6 +6601,55 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
    syncGmailMetadataToBackend();
    const emails = getEmails();
    state.setPartial({ emails });
+  }
+ }
+ var INGEST_QUERY_LIMIT = 500;
+ function ingestNewEmails() {
+  markSensitiveAsSubmitted();
+  const emails = getUnsubmittedEmails(INGEST_QUERY_LIMIT);
+  if (emails.length === 0)
+   return;
+  const submittedIds = [];
+  let ingested = 0;
+  for (const email of emails) {
+   const content = email.body_text || email.snippet || "";
+   if (content.length === 0) {
+    submittedIds.push(email.id);
+    continue;
+   }
+   try {
+    memory.insert({
+     title: email.subject || `Email ${email.id}`,
+     content,
+     sourceType: "email",
+     documentId: `gmail-email-${email.id}`,
+     metadata: {
+      source: "gmail",
+      type: "email",
+      emailId: email.id,
+      threadId: email.thread_id,
+      senderEmail: email.sender_email,
+      senderName: email.sender_name,
+      recipientEmails: email.recipient_emails,
+      isRead: email.is_read === 1,
+      isImportant: email.is_important === 1,
+      isStarred: email.is_starred === 1,
+      hasAttachments: email.has_attachments === 1,
+      labels: email.labels
+     },
+     createdAt: email.date ? email.date / 1e3 : void 0,
+     updatedAt: email.updated_at ? email.updated_at / 1e3 : void 0
+    });
+    submittedIds.push(email.id);
+    ingested++;
+   } catch (e2) {
+    console.error(`[gmail] Failed to ingest email ${email.id}: ${e2}`);
+   }
+  }
+  if (submittedIds.length > 0)
+   markEmailsSubmitted(submittedIds);
+  if (ingested > 0) {
+   console.log(`[gmail] Ingested ${ingested} email(s) into knowledge graph`);
   }
  }
  function isSyncCompleted() {

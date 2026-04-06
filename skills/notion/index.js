@@ -1691,8 +1691,8 @@ var __skill_bundle = (() => {
      await syncContent(startTime, CONTENT_SYNC_TIME_BUDGET_MS);
     }
     console.log("[notion] Sync phase 4: sync summaries to server");
-    console.log("[notion] Sync phase 5: submit new data to backend");
-    await submitNewData();
+    console.log("[notion] Sync phase 5: ingest documents into knowledge graph");
+    ingestNewDocuments();
     const durationMs = Date.now() - startTime;
     const nowMs = Date.now();
     s.syncStatus.nextSyncTime = nowMs + s.config.syncIntervalMinutes * 60 * 1e3;
@@ -1993,151 +1993,88 @@ var __skill_bundle = (() => {
   }
   console.log(`[notion] Content sync: ${synced} pages updated${failed > 0 ? `, ${failed} failed` : ""}`);
  }
- var MAX_BATCH_BYTES = 100 * 1024;
- var SUBMIT_QUERY_LIMIT = 500;
- function parsePageEntities(page) {
-  if (!page.page_entities)
-   return void 0;
-  let raw;
-  try {
-   raw = JSON.parse(page.page_entities);
-  } catch {
-   return void 0;
-  }
-  if (!Array.isArray(raw) || raw.length === 0)
-   return void 0;
-  const cid = getNotionSkillState2().config.credentialId;
-  const entities = [];
-  const seen = /* @__PURE__ */ new Set();
-  for (const e of raw) {
-   if (seen.has(e.id))
-    continue;
-   seen.add(e.id);
-   let name = e.name;
-   if (!name && e.type === "person") {
-    const user = db.get("SELECT name FROM users WHERE credential_id = ? AND id = ?", [
-     cid,
-     e.id
-    ]);
-    if (user)
-     name = user.name;
-   }
-   entities.push({ name: name || e.id, identifier: e.id, kind: e.type || "person" });
-  }
-  return entities.length > 0 ? entities : void 0;
- }
- function pageToChunk(page) {
-  const content = page.content_text || "";
-  return {
-   title: page.title || void 0,
-   content,
-   entities: parsePageEntities(page),
-   metadata: {
-    pageId: page.id,
-    url: page.url,
-    parentType: page.parent_type,
-    parentId: page.parent_id,
-    createdTime: page.created_time,
-    lastEditedTime: page.last_edited_time
-   }
-  };
- }
- function rowToChunk(row) {
-  const content = row.properties_text || "";
-  return {
-   title: row.title || void 0,
-   content,
-   rawContent: row.properties_json || void 0,
-   metadata: {
-    rowId: row.id,
-    databaseId: row.database_id,
-    url: row.url,
-    createdTime: row.created_time,
-    lastEditedTime: row.last_edited_time
-   }
-  };
- }
- function estimateChunkSize(chunk) {
-  return (chunk.title?.length || 0) + chunk.content.length + (chunk.rawContent?.length || 0) + 256;
- }
- async function submitNewData() {
-  const pages = getUnsubmittedPages(SUBMIT_QUERY_LIMIT);
-  const rows = getUnsubmittedRows(SUBMIT_QUERY_LIMIT);
+ var INGEST_QUERY_LIMIT = 500;
+ function ingestNewDocuments() {
+  const pages = getUnsubmittedPages(INGEST_QUERY_LIMIT);
+  const rows = getUnsubmittedRows(INGEST_QUERY_LIMIT);
   if (pages.length === 0 && rows.length === 0)
    return;
-  const prepared = [];
   const emptyPageIds = [];
   const emptyRowIds = [];
+  const submittedPageIds = [];
+  const submittedRowIds = [];
+  let ingested = 0;
   for (const page of pages) {
-   const chunk = pageToChunk(page);
-   if (chunk.content.length > 0) {
-    prepared.push({ id: page.id, type: "page", chunk });
-   } else {
+   const content = page.content_text || "";
+   if (content.length === 0) {
     emptyPageIds.push(page.id);
+    continue;
+   }
+   try {
+    memory.insert({
+     title: page.title || `Notion page ${page.id}`,
+     content,
+     sourceType: "doc",
+     documentId: `notion-page-${page.id}`,
+     metadata: {
+      source: "notion",
+      type: "page",
+      pageId: page.id,
+      url: page.url,
+      parentType: page.parent_type,
+      parentId: page.parent_id,
+      createdTime: page.created_time,
+      lastEditedTime: page.last_edited_time
+     },
+     createdAt: page.created_time ? new Date(page.created_time).getTime() / 1e3 : void 0,
+     updatedAt: page.last_edited_time ? new Date(page.last_edited_time).getTime() / 1e3 : void 0
+    });
+    submittedPageIds.push(page.id);
+    ingested++;
+   } catch (e) {
+    console.error(`[notion] Failed to ingest page ${page.id}: ${e}`);
    }
   }
   for (const row of rows) {
-   const chunk = rowToChunk(row);
-   if (chunk.content.length > 0) {
-    prepared.push({ id: row.id, type: "row", chunk });
-   } else {
+   const content = row.properties_text || "";
+   if (content.length === 0) {
     emptyRowIds.push(row.id);
+    continue;
+   }
+   try {
+    memory.insert({
+     title: row.title || `Notion row ${row.id}`,
+     content,
+     sourceType: "doc",
+     documentId: `notion-row-${row.id}`,
+     metadata: {
+      source: "notion",
+      type: "database_row",
+      rowId: row.id,
+      databaseId: row.database_id,
+      url: row.url,
+      createdTime: row.created_time,
+      lastEditedTime: row.last_edited_time
+     },
+     createdAt: row.created_time ? new Date(row.created_time).getTime() / 1e3 : void 0,
+     updatedAt: row.last_edited_time ? new Date(row.last_edited_time).getTime() / 1e3 : void 0
+    });
+    submittedRowIds.push(row.id);
+    ingested++;
+   } catch (e) {
+    console.error(`[notion] Failed to ingest row ${row.id}: ${e}`);
    }
   }
   if (emptyPageIds.length > 0)
    markPagesSubmitted(emptyPageIds);
   if (emptyRowIds.length > 0)
    markRowsSubmitted(emptyRowIds);
-  if (prepared.length === 0)
-   return;
-  let batch = [];
-  let batchPageIds = [];
-  let batchRowIds = [];
-  let batchBytes = 0;
-  let totalSubmitted = 0;
-  const flushBatch = async () => {
-   if (batch.length === 0)
-    return true;
-   const pageIds = batchPageIds.slice();
-   const rowIds = batchRowIds.slice();
-   const batchLength = batch.length;
-   try {
-    if (pageIds.length > 0)
-     markPagesSubmitted(pageIds);
-    if (rowIds.length > 0)
-     markRowsSubmitted(rowIds);
-    totalSubmitted += batchLength;
-    return true;
-   } catch (error) {
-    console.error(`[notion] Failed to submit batch to backend: ${error}`);
-    return false;
-   } finally {
-    batch = [];
-    batchPageIds = [];
-    batchRowIds = [];
-    batchBytes = 0;
-   }
-  };
-  for (const { id, type, chunk } of prepared) {
-   const size = estimateChunkSize(chunk);
-   if (batch.length > 0 && batchBytes + size > MAX_BATCH_BYTES) {
-    if (!await flushBatch())
-     return;
-   }
-   batch.push(chunk);
-   if (type === "page")
-    batchPageIds.push(id);
-   else
-    batchRowIds.push(id);
-   batchBytes += size;
-   if (batch.length === 1 && batchBytes > MAX_BATCH_BYTES) {
-    if (!await flushBatch())
-     return;
-   }
-  }
-  await flushBatch();
-  if (totalSubmitted > 0) {
-   console.log(`[notion] Submitted ${totalSubmitted} item(s) to backend`);
+  if (submittedPageIds.length > 0)
+   markPagesSubmitted(submittedPageIds);
+  if (submittedRowIds.length > 0)
+   markRowsSubmitted(submittedRowIds);
+  if (ingested > 0) {
+   console.log(`[notion] Ingested ${ingested} document(s) into knowledge graph`);
   }
  }
  function publishSyncState() {
