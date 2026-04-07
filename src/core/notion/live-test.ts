@@ -132,7 +132,7 @@ async function callToolSafe(
   args: Record<string, unknown> = {}
 ): Promise<{ data?: any; error?: string }> {
   try {
-    const result = await callToolRaw(SKILL_ID, toolName, args, 60_000);
+    const result = await callToolRaw(SKILL_ID, toolName, args, 15_000);
     if (result.is_error) {
       return { error: result.content?.[0]?.text || 'unknown error' };
     }
@@ -185,6 +185,7 @@ async function main() {
   console.log(`\n${C.bold}  Notion Skill — Live Integration Script${C.reset}`);
   info('Backend', BACKEND_URL);
   info('JWT', `<${JWT_TOKEN.length} chars>`);
+  console.log(`${C.dim}    Tip: run the skills runtime with RUST_LOG=info to see skill logs${C.reset}`);
 
   // ── Resolve credentials (env or interactive) ─────────────────────────────
 
@@ -381,10 +382,10 @@ async function main() {
   }
 
   // Test API calls with shorter timeout — these go through oauth.fetch proxy
-  step('list-users (API via proxy, 120s timeout)...');
+  step('list-users (API via proxy, 15s timeout)...');
   {
     try {
-      const result = await callToolRaw(SKILL_ID, 'list-users', { page_size: 1 }, 120_000);
+      const result = await callToolRaw(SKILL_ID, 'list-users', { page_size: 1 }, 15_000);
       const text = result.content?.[0]?.text || '';
       if (result.is_error) {
         fail(`is_error: ${text}`);
@@ -399,10 +400,10 @@ async function main() {
     }
   }
 
-  step('search (API via proxy, 120s timeout)...');
+  step('search (API via proxy, 15s timeout)...');
   {
     try {
-      const result = await callToolRaw(SKILL_ID, 'search', { query: '', page_size: 1 }, 120_000);
+      const result = await callToolRaw(SKILL_ID, 'search', { query: '', page_size: 1 }, 15_000);
       const text = result.content?.[0]?.text || '';
       if (result.is_error) {
         fail(`is_error: ${text}`);
@@ -417,21 +418,17 @@ async function main() {
     }
   }
 
-  // ── Trigger sync first so local DB is populated ─────────────────────────
+  // ── Trigger sync ─────────────────────────────────────────────────────────
 
   header('6. Sync');
 
-  step('Triggering sync...');
+  step('Triggering sync (this may take a while)...');
   try {
-    await triggerSync(SKILL_ID);
-    ok();
+    const syncResult = await triggerSync(SKILL_ID);
+    ok(syncResult ? JSON.stringify(syncResult).slice(0, 120) : '');
   } catch (e: any) {
     fail(e.message);
   }
-
-  step('Waiting for sync to settle...');
-  await new Promise(r => setTimeout(r, 3000));
-  ok();
 
   step('Checking post-sync state...');
   try {
@@ -442,23 +439,30 @@ async function main() {
     info('pagesWithContent', s?.pagesWithContent ?? 'N/A');
     info('lastSyncTime', s?.lastSyncTime ?? 'N/A');
     info('syncInProgress', s?.syncInProgress ?? 'N/A');
-    ok();
+    if (s?.lastSyncError) {
+      fail(`lastSyncError: ${s.lastSyncError}`);
+    } else if (s?.lastSyncTime) {
+      ok();
+    } else {
+      fail('Sync did not complete (lastSyncTime not set)');
+    }
   } catch (e: any) {
     fail(e.message);
   }
 
-  // ── Exercise tools (after sync so local DB has data) ────────────────────
+  // ── Exercise tools ─────────────────────────────────────────────────────
 
   header('7. Exercise Tools');
 
-  step('list-users...');
+  step('list-users (auto-paginated)...');
   {
     const { data, error } = await callToolSafe('list-users', {});
     if (error) fail(error);
     else {
       const users = data?.users || data?.results || [];
       ok(`${users.length} users`);
-      for (const u of users.slice(0, 3)) info('user', u.name || u.id);
+      for (const u of users.slice(0, 5)) info('user', u.name || u.id);
+      if (users.length > 5) info('', `...and ${users.length - 5} more`);
     }
   }
 
@@ -469,9 +473,9 @@ async function main() {
     else ok(`${(data?.results || data?.pages || []).length} results`);
   }
 
-  step('list-all-pages...');
+  step('list-all-pages (from API)...');
   {
-    const { data, error } = await callToolSafe('list-all-pages', {});
+    const { data, error } = await callToolSafe('list-all-pages', { page_size: 20 });
     if (error) fail(error);
     else {
       const pages = data?.pages || data?.results || [];
@@ -481,7 +485,7 @@ async function main() {
     }
   }
 
-  step('list-all-databases...');
+  step('list-all-databases (from API)...');
   {
     const { data, error } = await callToolSafe('list-all-databases', {});
     if (error) fail(error);

@@ -244,9 +244,10 @@ export async function oauthComplete(
 
 /**
  * Trigger a sync on a running skill.
+ * Note: the Rust event loop matches on "skill/sync", not bare "sync".
  */
 export async function triggerSync(skillId: string): Promise<unknown> {
-  return skillRpc(skillId, 'sync', {});
+  return skillRpc(skillId, 'skill/sync', {});
 }
 
 /**
