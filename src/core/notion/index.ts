@@ -92,7 +92,7 @@ async function onCronTrigger(scheduleId: string): Promise<void> {
   console.log(`[notion] Cron triggered: ${scheduleId}`);
 
   if (scheduleId === 'notion-sync') {
-    performSync();
+    await performSync();
   }
 }
 
@@ -309,7 +309,7 @@ async function onSync(): Promise<void> {
 
   publishState();
 
-  performSync();
+  await performSync();
 }
 
 // ---------------------------------------------------------------------------

@@ -3,6 +3,7 @@
 // into local SQLite for fast local querying.
 import { syncIntegrationMetadata } from '../../shared/integration-metadata';
 import { notionApi } from './api/index';
+import { isNotionConnected } from './helpers';
 import {
   getDatabaseById, // getDatabaseRowById,
   getEntityCounts, // getLocalDatabases,
@@ -28,7 +29,7 @@ import { getNotionSkillState } from './state';
 // Main sync orchestrator
 // ---------------------------------------------------------------------------
 
-export function performSync(): void {
+export async function performSync(): Promise<void> {
   const s = getNotionSkillState();
 
   // Guard: skip if already syncing or no credential
@@ -37,7 +38,7 @@ export function performSync(): void {
     return;
   }
 
-  if (!oauth.getCredential()) {
+  if (!isNotionConnected()) {
     console.log('[notion] No credential, skipping sync');
     return;
   }
@@ -47,74 +48,72 @@ export function performSync(): void {
   s.syncStatus.lastSyncError = null;
   publishSyncState();
 
-  (async () => {
-    try {
-      // Phase 1: Sync users
-      console.log('[notion] Sync phase 1: users');
-      await syncUsers();
+  try {
+    // Phase 1: Sync users
+    console.log('[notion] Sync phase 1: users');
+    await syncUsers();
 
-      // Phase 2: Sync pages and databases via search
-      console.log('[notion] Sync phase 2: pages & databases');
-      await syncSearchItems();
+    // Phase 2: Sync pages and databases via search
+    console.log('[notion] Sync phase 2: pages & databases');
+    await syncSearchItems();
 
-      // Phase 2.5: Sync database rows (time-budgeted to avoid Rust async timeout)
-      // console.log('[notion] Sync phase 2.5: database rows');
-      // await syncDatabaseRows(startTime, CONTENT_SYNC_TIME_BUDGET_MS);
+    // Phase 2.5: Sync database rows (time-budgeted to avoid Rust async timeout)
+    // console.log('[notion] Sync phase 2.5: database rows');
+    // await syncDatabaseRows(startTime, CONTENT_SYNC_TIME_BUDGET_MS);
 
-      // Phase 3: Sync page content (block text, time-budgeted to avoid Rust async timeout)
-      if (s.config.contentSyncEnabled) {
-        console.log('[notion] Sync phase 3: page content');
-        await syncContent(startTime, CONTENT_SYNC_TIME_BUDGET_MS);
-      }
-
-      // Phase 4: Sync unsynced summaries to the server
-      console.log('[notion] Sync phase 4: sync summaries to server');
-      // syncSummariesToServer();
-
-      // Phase 5: Ingest synced documents into knowledge graph
-      console.log('[notion] Sync phase 5: ingest documents into knowledge graph');
-      ingestNewDocuments();
-
-      // Update sync state
-      const durationMs = Date.now() - startTime;
-      const nowMs = Date.now();
-      s.syncStatus.nextSyncTime = nowMs + s.config.syncIntervalMinutes * 60 * 1000;
-      s.syncStatus.lastSyncDurationMs = durationMs;
-
-      // Only advance lastSyncTime if we actually have items in the DB.
-      // This prevents the incremental sync from skipping everything on the
-      // next run if the first sync stored 0 items (e.g. due to errors).
-      const counts = getEntityCounts();
-      if (counts.pages > 0 || counts.databases > 0) {
-        s.syncStatus.lastSyncTime = nowMs;
-      }
-
-      // Update counts
-      s.syncStatus.totalPages = counts.pages;
-      s.syncStatus.totalDatabases = counts.databases;
-      s.syncStatus.pagesWithContent = counts.pagesWithContent;
-      s.syncStatus.pagesWithSummary = counts.pagesWithSummary;
-      s.syncStatus.summariesTotal = counts.summariesTotal;
-      s.syncStatus.summariesPending = counts.summariesPending;
-
-      s.syncStatus.totalDatabaseRows = counts.databaseRows;
-
-      // Persist sync snapshot into memory during the sync lifecycle itself.
-      insertNotionMemorySnapshot();
-
-      // console.log(
-      //   `[notion] Sync complete in ${durationMs}ms — ${counts.pages} pages, ${counts.databases} databases, ${counts.databaseRows} db rows`
-      // );
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error);
-      s.syncStatus.lastSyncError = errorMsg;
-      s.syncStatus.lastSyncDurationMs = Date.now() - startTime;
-      console.error(`[notion] Sync failed: ${errorMsg}`);
-    } finally {
-      s.syncStatus.syncInProgress = false;
-      publishSyncState();
+    // Phase 3: Sync page content (block text, time-budgeted to avoid Rust async timeout)
+    if (s.config.contentSyncEnabled) {
+      console.log('[notion] Sync phase 3: page content');
+      await syncContent(startTime, CONTENT_SYNC_TIME_BUDGET_MS);
     }
-  })();
+
+    // Phase 4: Sync unsynced summaries to the server
+    console.log('[notion] Sync phase 4: sync summaries to server');
+    // syncSummariesToServer();
+
+    // Phase 5: Ingest synced documents into knowledge graph
+    console.log('[notion] Sync phase 5: ingest documents into knowledge graph');
+    ingestNewDocuments();
+
+    // Update sync state
+    const durationMs = Date.now() - startTime;
+    const nowMs = Date.now();
+    s.syncStatus.nextSyncTime = nowMs + s.config.syncIntervalMinutes * 60 * 1000;
+    s.syncStatus.lastSyncDurationMs = durationMs;
+
+    // Only advance lastSyncTime if we actually have items in the DB.
+    // This prevents the incremental sync from skipping everything on the
+    // next run if the first sync stored 0 items (e.g. due to errors).
+    const counts = getEntityCounts();
+    if (counts.pages > 0 || counts.databases > 0) {
+      s.syncStatus.lastSyncTime = nowMs;
+    }
+
+    // Update counts
+    s.syncStatus.totalPages = counts.pages;
+    s.syncStatus.totalDatabases = counts.databases;
+    s.syncStatus.pagesWithContent = counts.pagesWithContent;
+    s.syncStatus.pagesWithSummary = counts.pagesWithSummary;
+    s.syncStatus.summariesTotal = counts.summariesTotal;
+    s.syncStatus.summariesPending = counts.summariesPending;
+
+    s.syncStatus.totalDatabaseRows = counts.databaseRows;
+
+    // Persist sync snapshot into memory during the sync lifecycle itself.
+    insertNotionMemorySnapshot();
+
+    // console.log(
+    //   `[notion] Sync complete in ${durationMs}ms — ${counts.pages} pages, ${counts.databases} databases, ${counts.databaseRows} db rows`
+    // );
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    s.syncStatus.lastSyncError = errorMsg;
+    s.syncStatus.lastSyncDurationMs = Date.now() - startTime;
+    console.error(`[notion] Sync failed: ${errorMsg}`);
+  } finally {
+    s.syncStatus.syncInProgress = false;
+    publishSyncState();
+  }
 }
 
 function insertNotionMemorySnapshot(): void {
@@ -782,7 +781,7 @@ function ingestNewDocuments(): void {
 
 function publishSyncState(): void {
   const s = getNotionSkillState();
-  const isConnected = !!oauth.getCredential();
+  const isConnected = isNotionConnected();
 
   state.setPartial({
     // Standard SkillHostConnectionState fields

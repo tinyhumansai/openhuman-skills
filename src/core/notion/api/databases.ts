@@ -127,11 +127,9 @@ export async function updateDatabase(
 export async function listAllDatabases(pageSize: number = 20): Promise<SearchResponse> {
   const apiVersion = await detectApiVersion();
 
-  // Use appropriate filter based on API version
-  const filter =
-    apiVersion === '2025-09-03'
-      ? { property: 'object', value: 'data_source' }
-      : { property: 'object', value: 'database' };
+  // The search endpoint always uses 'database' as the filter value,
+  // regardless of API version. 'data_source' is only used for query endpoints.
+  const filter = { property: 'object', value: 'database' };
 
   try {
     return await apiFetch<SearchResponse>('/search', {

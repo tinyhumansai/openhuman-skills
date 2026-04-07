@@ -22,8 +22,9 @@ const CLOUDFLARE_RETRYABLE = new Set([520, 521, 522, 523, 524, 525, 526, 527]);
 const LEGACY_API_VERSION = '2022-06-28';
 const CURRENT_API_VERSION = '2025-09-03';
 
-/** Cached API version preference to avoid repeated detection */
-let cachedApiVersion: string | null = null;
+/** Cached API version preference to avoid repeated detection.
+ *  Default to legacy to skip the slow detection probe via oauth.fetch. */
+let cachedApiVersion: string | null = LEGACY_API_VERSION;
 
 /** Async sleep for backoff waits. */
 function sleep(ms: number): Promise<void> {
@@ -97,10 +98,14 @@ export async function notionFetch<T>(
         timeout: 30,
       });
     } else {
-      // Server-side OAuth proxy (managed mode without accessToken)
+      // Server-side OAuth proxy — the proxy validates against an allowlist of
+      // full paths (e.g. /v1/users, /v1/search), so we must include the /v1 prefix.
       response = await oauth.fetch(`/v1${path}`, {
         method,
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Notion-Version': apiVersion,
+        },
         body: options.body ? JSON.stringify(options.body) : undefined,
         timeout: 30,
       });
@@ -130,16 +135,9 @@ export async function notionFetch<T>(
     }
 
     if (response.status >= 400) {
-      const errorBody = response.body;
-      let message = `Notion API error: ${response.status}`;
-      try {
-        const parsed = JSON.parse(errorBody);
-        if (parsed.message) {
-          message = parsed.message;
-        }
-      } catch {
-        // Use default message
-      }
+      const errorBody = response.body || '';
+      // Always include the raw body for debugging
+      let message = `Notion API error: ${response.status} — ${errorBody.slice(0, 300)}`;
       console.error('[notion][helpers] notionFetch error body:', errorBody);
       throw new Error(message);
     }

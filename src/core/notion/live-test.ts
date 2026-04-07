@@ -27,6 +27,7 @@ import {
   setSetupComplete,
   startSkill,
   stopSkill,
+  triggerSync,
 } from '../../../dev/test-harness';
 
 // ---------------------------------------------------------------------------
@@ -138,7 +139,12 @@ async function callToolSafe(
     const text = result.content?.[0]?.text;
     if (!text) return { data: null };
     try {
-      return { data: JSON.parse(text) };
+      const parsed = JSON.parse(text);
+      // Surface tool-level errors (tools catch exceptions and return {error: "..."})
+      if (parsed.error && typeof parsed.error === 'string') {
+        return { error: parsed.error };
+      }
+      return { data: parsed };
     } catch {
       return { data: text };
     }
@@ -158,10 +164,10 @@ const BACKEND_URL = (process.env.BACKEND_URL || 'https://api.tinyhumans.ai').rep
 // AUTH_MODE: "oauth" (default) or "self_hosted"
 // For oauth:       NOTION_INTEGRATION_ID + NOTION_CLIENT_KEY_SHARE
 // For self_hosted: NOTION_API_KEY
-const ENV_AUTH_MODE = process.env.AUTH_MODE || '';
-const ENV_API_KEY = process.env.NOTION_API_KEY || '';
-const ENV_INTEGRATION_ID = process.env.NOTION_INTEGRATION_ID || '';
-const ENV_CLIENT_KEY = process.env.NOTION_CLIENT_KEY_SHARE || '';
+const ENV_AUTH_MODE = (process.env.AUTH_MODE || '').trim();
+const ENV_API_KEY = (process.env.NOTION_API_KEY || '').trim();
+const ENV_INTEGRATION_ID = (process.env.NOTION_INTEGRATION_ID || '').trim();
+const ENV_CLIENT_KEY = (process.env.NOTION_CLIENT_KEY_SHARE || '').trim();
 
 if (!JWT_TOKEN) {
   console.error(`\n${C.red}  JWT_TOKEN env var is required.${C.reset}`);
@@ -358,9 +364,92 @@ async function main() {
     fail(e.message);
   }
 
-  // ── Exercise tools ───────────────────────────────────────────────────────
+  // ── Raw API verification ─────────────────────────────────────────────────
 
-  header('6. Exercise Tools');
+  header('5b. Raw API Verification');
+
+  // Use sync-status (local-only, no API call) to verify the skill is responsive
+  step('sync-status (no API call)...');
+  {
+    const { data, error } = await callToolSafe('sync-status', {});
+    if (error) fail(error);
+    else {
+      ok();
+      info('connected', data?.connected);
+      info('last_sync_error', data?.last_sync_error ?? '(none)');
+    }
+  }
+
+  // Test API calls with shorter timeout — these go through oauth.fetch proxy
+  step('list-users (API via proxy, 120s timeout)...');
+  {
+    try {
+      const result = await callToolRaw(SKILL_ID, 'list-users', { page_size: 1 }, 120_000);
+      const text = result.content?.[0]?.text || '';
+      if (result.is_error) {
+        fail(`is_error: ${text}`);
+      } else {
+        info('raw response', text.slice(0, 400));
+        const parsed = JSON.parse(text);
+        if (parsed.error) fail(`tool error: ${parsed.error}`);
+        else ok(`${parsed.count ?? 0} users`);
+      }
+    } catch (e: any) {
+      fail(e.message);
+    }
+  }
+
+  step('search (API via proxy, 120s timeout)...');
+  {
+    try {
+      const result = await callToolRaw(SKILL_ID, 'search', { query: '', page_size: 1 }, 120_000);
+      const text = result.content?.[0]?.text || '';
+      if (result.is_error) {
+        fail(`is_error: ${text}`);
+      } else {
+        info('raw response', text.slice(0, 400));
+        const parsed = JSON.parse(text);
+        if (parsed.error) fail(`tool error: ${parsed.error}`);
+        else ok(`${parsed.results?.length ?? 0} results`);
+      }
+    } catch (e: any) {
+      fail(e.message);
+    }
+  }
+
+  // ── Trigger sync first so local DB is populated ─────────────────────────
+
+  header('6. Sync');
+
+  step('Triggering sync...');
+  try {
+    await triggerSync(SKILL_ID);
+    ok();
+  } catch (e: any) {
+    fail(e.message);
+  }
+
+  step('Waiting for sync to settle...');
+  await new Promise(r => setTimeout(r, 3000));
+  ok();
+
+  step('Checking post-sync state...');
+  try {
+    const snap = await getSkillStatus(SKILL_ID);
+    const s = snap.state as Record<string, unknown> | undefined;
+    info('totalPages', s?.totalPages ?? 'N/A');
+    info('totalDatabases', s?.totalDatabases ?? 'N/A');
+    info('pagesWithContent', s?.pagesWithContent ?? 'N/A');
+    info('lastSyncTime', s?.lastSyncTime ?? 'N/A');
+    info('syncInProgress', s?.syncInProgress ?? 'N/A');
+    ok();
+  } catch (e: any) {
+    fail(e.message);
+  }
+
+  // ── Exercise tools (after sync so local DB has data) ────────────────────
+
+  header('7. Exercise Tools');
 
   step('list-users...');
   {
@@ -401,28 +490,6 @@ async function main() {
       ok(`${dbs.length} databases`);
       for (const d of dbs.slice(0, 5)) info('db', `${d.title || d.id}`);
     }
-  }
-
-  // ── Verify sync (auto-triggered by runtime after auth) ──────────────────
-
-  header('7. Verify Sync');
-
-  step('Waiting for auto-sync to complete...');
-  await new Promise(r => setTimeout(r, 5000));
-  ok();
-
-  step('Checking post-sync state...');
-  try {
-    const snap = await getSkillStatus(SKILL_ID);
-    const s = snap.state as Record<string, unknown> | undefined;
-    info('totalPages', s?.totalPages ?? 'N/A');
-    info('totalDatabases', s?.totalDatabases ?? 'N/A');
-    info('pagesWithContent', s?.pagesWithContent ?? 'N/A');
-    info('lastSyncTime', s?.lastSyncTime ?? 'N/A');
-    info('syncInProgress', s?.syncInProgress ?? 'N/A');
-    ok();
-  } catch (e: any) {
-    fail(e.message);
   }
 
   // ── Cleanup ──────────────────────────────────────────────────────────────
