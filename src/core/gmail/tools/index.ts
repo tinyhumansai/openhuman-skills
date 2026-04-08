@@ -17,7 +17,17 @@ function withLogging(tool: ToolDefinition): ToolDefinition {
     ...tool,
     execute(args: Record<string, unknown>): string {
       const argKeys = Object.keys(args || {});
-      const SENSITIVE_KEYS = ['to', 'cc', 'bcc', 'recipients', 'body', 'subject', 'query', 'search', 'content'];
+      const SENSITIVE_KEYS = [
+        'to',
+        'cc',
+        'bcc',
+        'recipients',
+        'body',
+        'subject',
+        'query',
+        'search',
+        'content',
+      ];
       const argSummary =
         argKeys.length > 0
           ? argKeys

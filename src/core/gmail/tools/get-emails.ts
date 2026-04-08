@@ -17,7 +17,16 @@ function buildListParams(args: Record<string, unknown>): string[] {
     });
   }
   const maxResults = Math.min(
-    parseInt(String((args.max_results !== null && args.max_results !== undefined) ? args.max_results : ((args.maxResults !== null && args.maxResults !== undefined) ? args.maxResults : 20)), 10) || 20,
+    parseInt(
+      String(
+        args.max_results !== null && args.max_results !== undefined
+          ? args.max_results
+          : args.maxResults !== null && args.maxResults !== undefined
+            ? args.maxResults
+            : 20
+      ),
+      10
+    ) || 20,
     100
   );
   params.push(`maxResults=${maxResults}`);
@@ -34,7 +43,8 @@ function hasAttachments(message: any): boolean {
   if (message.payload && message.payload.body && message.payload.body.attachmentId) return true;
   if (message.payload && message.payload.parts) {
     return message.payload.parts.some(
-      (part: any) => (part.body && part.body.attachmentId) || (part.filename && part.filename.length > 0)
+      (part: any) =>
+        (part.body && part.body.attachmentId) || (part.filename && part.filename.length > 0)
     );
   }
   return false;
@@ -43,7 +53,9 @@ function hasAttachments(message: any): boolean {
 function messageToEmailRow(message: any): Record<string, unknown> {
   const headers = (message.payload && message.payload.headers) || [];
   const getHeader = (name: string) => {
-    const found = headers.find((h: { name: string }) => h.name.toLowerCase() === name.toLowerCase());
+    const found = headers.find(
+      (h: { name: string }) => h.name.toLowerCase() === name.toLowerCase()
+    );
     return (found ? found.value : '') || '';
   };
   const subject = getHeader('Subject');
@@ -51,8 +63,9 @@ function messageToEmailRow(message: any): Record<string, unknown> {
   const to = getHeader('To');
   const date = getHeader('Date');
   const fromMatch = from.match(/(.+?)\s*<([^>]+)>/) || [null, from, from];
-  const senderName = (fromMatch[1] ? fromMatch[1].trim().replace(/^["']|["']$/g, '') : null) as string || null;
-  const senderEmail = (fromMatch[2] ? fromMatch[2].trim() : null) as string || from;
+  const senderName =
+    ((fromMatch[1] ? fromMatch[1].trim().replace(/^["']|["']$/g, '') : null) as string) || null;
+  const senderEmail = ((fromMatch[2] ? fromMatch[2].trim() : null) as string) || from;
 
   return {
     id: message.id,
@@ -129,7 +142,8 @@ export const getEmailsTool: ToolDefinition = {
     if (!listResponse.success) {
       return JSON.stringify({
         success: false,
-        error: (listResponse.error ? listResponse.error.message : null) || 'Failed to fetch email list',
+        error:
+          (listResponse.error ? listResponse.error.message : null) || 'Failed to fetch email list',
       });
     }
 
@@ -143,7 +157,10 @@ export const getEmailsTool: ToolDefinition = {
       return JSON.stringify({
         success: true,
         emails: [],
-        total_count: (messageList.resultSizeEstimate !== null && messageList.resultSizeEstimate !== undefined) ? messageList.resultSizeEstimate : 0,
+        total_count:
+          messageList.resultSizeEstimate !== null && messageList.resultSizeEstimate !== undefined
+            ? messageList.resultSizeEstimate
+            : 0,
         next_page_token: messageList.nextPageToken || null,
         query: args.query || null,
         label_ids: args.label_ids || null,
@@ -172,7 +189,10 @@ export const getEmailsTool: ToolDefinition = {
     }
 
     const s = getGmailSkillState();
-    const showSensitive = (s.config.showSensitiveMessages !== null && s.config.showSensitiveMessages !== undefined) ? s.config.showSensitiveMessages : false;
+    const showSensitive =
+      s.config.showSensitiveMessages !== null && s.config.showSensitiveMessages !== undefined
+        ? s.config.showSensitiveMessages
+        : false;
     const filteredEmails = showSensitive
       ? emails
       : emails.filter(
@@ -183,7 +203,10 @@ export const getEmailsTool: ToolDefinition = {
     return JSON.stringify({
       success: true,
       emails: filteredEmails,
-      total_count: (messageList.resultSizeEstimate !== null && messageList.resultSizeEstimate !== undefined) ? messageList.resultSizeEstimate : 0,
+      total_count:
+        messageList.resultSizeEstimate !== null && messageList.resultSizeEstimate !== undefined
+          ? messageList.resultSizeEstimate
+          : 0,
       next_page_token: messageList.nextPageToken || null,
       query: args.query || null,
       label_ids: args.label_ids || null,

@@ -106,7 +106,8 @@ export const searchEmailsTool: ToolDefinition = {
 
             const from = headerMap.from || '';
             const fromMatch = from.match(/(.+?)\s*<([^>]+)>/) || [null, from, from];
-            const senderName = (fromMatch[1] ? fromMatch[1].trim().replace(/^["']|["']$/g, '') : null) || null;
+            const senderName =
+              (fromMatch[1] ? fromMatch[1].trim().replace(/^["']|["']$/g, '') : null) || null;
             const senderEmail = (fromMatch[2] ? fromMatch[2].trim() : null) || from;
 
             emails.push({
@@ -137,7 +138,10 @@ export const searchEmailsTool: ToolDefinition = {
 
       // Filter out sensitive emails unless user opted in to show them
       const s = getGmailSkillState();
-      const showSensitive = (s.config.showSensitiveMessages !== null && s.config.showSensitiveMessages !== undefined) ? s.config.showSensitiveMessages : false;
+      const showSensitive =
+        s.config.showSensitiveMessages !== null && s.config.showSensitiveMessages !== undefined
+          ? s.config.showSensitiveMessages
+          : false;
       const filteredEmails = showSensitive
         ? emails
         : emails.filter(
@@ -173,7 +177,8 @@ function hasAttachments(message: any): boolean {
   if (message.payload && message.payload.body && message.payload.body.attachmentId) return true;
   if (message.payload && message.payload.parts) {
     return message.payload.parts.some(
-      (part: any) => (part.body && part.body.attachmentId) || (part.filename && part.filename.length > 0)
+      (part: any) =>
+        (part.body && part.body.attachmentId) || (part.filename && part.filename.length > 0)
     );
   }
   return false;

@@ -285,7 +285,9 @@ export function formatUserSummary(user: Record<string, unknown>): Record<string,
     const bot = user.bot as Record<string, unknown> | undefined;
     const owner = (bot ? bot.owner : undefined) as Record<string, unknown> | undefined;
     const ownerUser = (owner ? owner.user : undefined) as Record<string, unknown> | undefined;
-    const ownerPerson = (ownerUser ? ownerUser.person : undefined) as Record<string, unknown> | undefined;
+    const ownerPerson = (ownerUser ? ownerUser.person : undefined) as
+      | Record<string, unknown>
+      | undefined;
 
     if (ownerUser) {
       id = (ownerUser.id as string) || id;
@@ -303,10 +305,10 @@ export function formatUserSummary(user: Record<string, unknown>): Record<string,
 
   return {
     id,
-    name: (name !== null && name !== undefined) ? name : null,
-    email: (email !== null && email !== undefined) ? email : null,
-    type: (userType !== null && userType !== undefined) ? userType : null,
-    avatar_url: (avatarUrl !== null && avatarUrl !== undefined) ? avatarUrl : null,
+    name: name !== null && name !== undefined ? name : null,
+    email: email !== null && email !== undefined ? email : null,
+    type: userType !== null && userType !== undefined ? userType : null,
+    avatar_url: avatarUrl !== null && avatarUrl !== undefined ? avatarUrl : null,
   };
 }
 

@@ -318,18 +318,19 @@ function runSyncPages(
     }
 
     totalFetched += result.messages.length;
-    if (log) log(
-      'Page ' +
-        page +
-        ': ' +
-        newIds.length +
-        ' new, ' +
-        skipped +
-        ' skipped (total: ' +
-        totalFetched +
-        ')',
-      Math.min(10 + page * 8, 70)
-    );
+    if (log)
+      log(
+        'Page ' +
+          page +
+          ': ' +
+          newIds.length +
+          ' new, ' +
+          skipped +
+          ' skipped (total: ' +
+          totalFetched +
+          ')',
+        Math.min(10 + page * 8, 70)
+      );
 
     // Batch-fetch new messages in chunks, upsert + ingest each immediately
     for (let i = 0; i < newIds.length; i += BATCH_SIZE) {
@@ -347,10 +348,11 @@ function runSyncPages(
       publishSkillState();
     }
 
-    if (log) log(
-      'Page ' + page + ' done: ' + newEmails + ' synced, ' + skipped + ' skipped',
-      Math.min(40 + page * 6, 85)
-    );
+    if (log)
+      log(
+        'Page ' + page + ' done: ' + newEmails + ' synced, ' + skipped + ' skipped',
+        Math.min(40 + page * 6, 85)
+      );
 
     // Hard cap
     if (totalFetched >= MAX_EMAILS) {

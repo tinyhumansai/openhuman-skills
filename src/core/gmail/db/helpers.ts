@@ -69,7 +69,10 @@ export function upsertEmail(message: GmailMessage, redactSensitive = false): voi
   const senderName = senderNameRaw !== null && senderNameRaw !== undefined ? senderNameRaw : null;
   const senderEmail = (fromMatch[2] ? fromMatch[2].trim() : '') || from;
 
-  const internalDate = (message.internalDate !== null && message.internalDate !== undefined) ? message.internalDate : '0';
+  const internalDate =
+    message.internalDate !== null && message.internalDate !== undefined
+      ? message.internalDate
+      : '0';
   const date = dateHeader ? new Date(dateHeader).getTime() : parseInt(internalDate, 10);
   const labelIds = Array.isArray(message.labelIds) ? message.labelIds : [];
   const isRead = !labelIds.includes('UNREAD');
@@ -125,8 +128,8 @@ export function upsertEmail(message: GmailMessage, redactSensitive = false): voi
       bcc,
       Number.isFinite(date) ? date : 0,
       message.snippet || '',
-      (bodyText !== null && bodyText !== undefined) ? bodyText : null,
-      (bodyHtml !== null && bodyHtml !== undefined) ? bodyHtml : null,
+      bodyText !== null && bodyText !== undefined ? bodyText : null,
+      bodyHtml !== null && bodyHtml !== undefined ? bodyHtml : null,
       isRead ? 1 : 0,
       isImportant ? 1 : 0,
       isStarred ? 1 : 0,
@@ -326,7 +329,7 @@ export function getEmailCount(): number {
   const row = db.get('SELECT COUNT(*) as count FROM emails WHERE credential_id = ?', [cid]) as {
     count: number;
   } | null;
-  return (row && row.count !== null && row.count !== undefined) ? row.count : 0;
+  return row && row.count !== null && row.count !== undefined ? row.count : 0;
 }
 
 /** Returns true if an email with the given ID exists in the local DB (no row data fetched). */
@@ -602,7 +605,7 @@ function insertEmailAttachments(message: GmailMessage): void {
       attachmentId: p.body.attachmentId,
       filename: p.filename,
       mimeType: p.mimeType || '',
-      size: (p.body.size !== null && p.body.size !== undefined) ? p.body.size : 0,
+      size: p.body.size !== null && p.body.size !== undefined ? p.body.size : 0,
       partId: p.partId || '',
     });
   }
@@ -615,7 +618,7 @@ function insertEmailAttachments(message: GmailMessage): void {
           attachmentId: part.body.attachmentId,
           filename: part.filename,
           mimeType: part.mimeType || '',
-          size: (part.body.size !== null && part.body.size !== undefined) ? part.body.size : 0,
+          size: part.body.size !== null && part.body.size !== undefined ? part.body.size : 0,
           partId: part.partId || '',
         });
       }

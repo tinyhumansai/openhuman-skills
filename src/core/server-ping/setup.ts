@@ -132,7 +132,8 @@ async function onSetupSubmit(args: {
 
   if (stepId === 'notification-config') {
     s.config.notifyOnDown = values.notifyOnDown != null ? (values.notifyOnDown as boolean) : true;
-    s.config.notifyOnRecover = values.notifyOnRecover != null ? (values.notifyOnRecover as boolean) : true;
+    s.config.notifyOnRecover =
+      values.notifyOnRecover != null ? (values.notifyOnRecover as boolean) : true;
 
     state.set('config', s.config);
     data.write('config.json', JSON.stringify(s.config, null, 2));

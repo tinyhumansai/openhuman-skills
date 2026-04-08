@@ -28,8 +28,12 @@ function init(): void {
     s.config.syncEnabled = saved.syncEnabled != null ? saved.syncEnabled : s.config.syncEnabled;
     s.config.syncIntervalMinutes = saved.syncIntervalMinutes || s.config.syncIntervalMinutes;
     s.config.maxEmailsPerSync = saved.maxEmailsPerSync || s.config.maxEmailsPerSync;
-    s.config.notifyOnNewEmails = saved.notifyOnNewEmails != null ? saved.notifyOnNewEmails : s.config.notifyOnNewEmails;
-    s.config.showSensitiveMessages = saved.showSensitiveMessages != null ? saved.showSensitiveMessages : s.config.showSensitiveMessages;
+    s.config.notifyOnNewEmails =
+      saved.notifyOnNewEmails != null ? saved.notifyOnNewEmails : s.config.notifyOnNewEmails;
+    s.config.showSensitiveMessages =
+      saved.showSensitiveMessages != null
+        ? saved.showSensitiveMessages
+        : s.config.showSensitiveMessages;
   }
 
   // Load sync status from persistent state

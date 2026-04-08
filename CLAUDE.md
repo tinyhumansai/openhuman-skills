@@ -892,8 +892,14 @@ function publishState(): void {
   state.setPartial({
     connection_status: s.isRunning ? 'connected' : 'disconnected',
     is_initialized: true,
-    lastSync: (() => { const row = db.get("SELECT value FROM sync_state WHERE key = 'last_sync'", []); return row ? row.value : null; })(),
-    itemCount: (() => { const row = db.get('SELECT COUNT(*) as count FROM items', []) as { count: number } | null; return row ? row.count : 0; })(),
+    lastSync: (() => {
+      const row = db.get("SELECT value FROM sync_state WHERE key = 'last_sync'", []);
+      return row ? row.value : null;
+    })(),
+    itemCount: (() => {
+      const row = db.get('SELECT COUNT(*) as count FROM items', []) as { count: number } | null;
+      return row ? row.count : 0;
+    })(),
   });
 }
 ```

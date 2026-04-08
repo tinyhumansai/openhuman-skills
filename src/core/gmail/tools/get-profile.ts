@@ -8,11 +8,7 @@ export const getProfileTool: ToolDefinition = {
   name: 'get-profile',
   description:
     'Get Gmail user profile information including email address, total message counts, and account details. Optional accessToken for frontend calls.',
-  input_schema: {
-    type: 'object',
-    properties: {},
-    required: [],
-  },
+  input_schema: { type: 'object', properties: {}, required: [] },
   execute(_args: Record<string, unknown>): string {
     try {
       const response = gmailFetch<GmailProfile>('/users/me/profile');

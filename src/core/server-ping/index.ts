@@ -32,10 +32,13 @@ async function init(): Promise<void> {
   const saved = state.get('config') as Partial<SkillConfig> | null;
   if (saved) {
     s.config.serverUrl = saved.serverUrl != null ? saved.serverUrl : s.config.serverUrl;
-    s.config.pingIntervalSec = saved.pingIntervalSec != null ? saved.pingIntervalSec : s.config.pingIntervalSec;
+    s.config.pingIntervalSec =
+      saved.pingIntervalSec != null ? saved.pingIntervalSec : s.config.pingIntervalSec;
     s.config.notifyOnDown = saved.notifyOnDown != null ? saved.notifyOnDown : s.config.notifyOnDown;
-    s.config.notifyOnRecover = saved.notifyOnRecover != null ? saved.notifyOnRecover : s.config.notifyOnRecover;
-    s.config.verboseLogging = saved.verboseLogging != null ? saved.verboseLogging : s.config.verboseLogging;
+    s.config.notifyOnRecover =
+      saved.notifyOnRecover != null ? saved.notifyOnRecover : s.config.notifyOnRecover;
+    s.config.verboseLogging =
+      saved.verboseLogging != null ? saved.verboseLogging : s.config.verboseLogging;
   }
 
   // Fall back to the host's backend URL if no server URL is configured yet

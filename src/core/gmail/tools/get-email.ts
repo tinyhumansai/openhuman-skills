@@ -134,9 +134,13 @@ export const getEmailTool: ToolDefinition = {
       // If sensitive and user has not opted in to show sensitive, return redacted response.
       // Consistent with search-emails: only check subject and snippet (not full body).
       const s = getGmailSkillState();
-      const showSensitive = (s.config.showSensitiveMessages !== null && s.config.showSensitiveMessages !== undefined) ? s.config.showSensitiveMessages : false;
+      const showSensitive =
+        s.config.showSensitiveMessages !== null && s.config.showSensitiveMessages !== undefined
+          ? s.config.showSensitiveMessages
+          : false;
       if (!showSensitive) {
-        const textToCheck = ((result.headers && result.headers.subject) || '') + ' ' + (result.snippet || '');
+        const textToCheck =
+          ((result.headers && result.headers.subject) || '') + ' ' + (result.snippet || '');
         if (isSensitiveText(textToCheck)) {
           return JSON.stringify({
             success: true,
