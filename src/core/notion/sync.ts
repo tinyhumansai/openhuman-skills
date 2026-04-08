@@ -29,7 +29,7 @@ const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
  * Very short strings may tokenize to zero tokens and crash the ONNX/CoreML
  * embedding model (shape {0} is not supported). Skip anything shorter.
  */
-const MIN_CONTENT_LENGTH = 10;
+const MIN_CONTENT_LENGTH = 50;
 
 // ---------------------------------------------------------------------------
 // Progress helper
@@ -425,8 +425,8 @@ function syncDataSources(): void {
             dbRowCount++;
 
             // Build text content from properties for ingestion
-            const content = buildRowContent(rowRec);
-            const rowTitle = extractRowTitle(rowRec);
+            const content = buildRowContent(rowRec).trim();
+            const rowTitle = extractRowTitle(rowRec).trim();
 
             if (content.length >= MIN_CONTENT_LENGTH) {
               try {
