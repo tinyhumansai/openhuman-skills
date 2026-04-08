@@ -34,8 +34,8 @@ function sleep(ms: number): void {
  * or the legacy OAuth bridge.
  *
  * Returns:
- * - `{ type: 'token', token: string }` — direct API token (self_hosted or accessToken)
- * - `{ type: 'proxy' }` — use oauth.fetch() server-side proxy
+ * - `{ type: 'token', token: string }` — direct API token (self_hosted / advanced auth only)
+ * - `{ type: 'proxy' }` — managed OAuth: all requests via `oauth.fetch()` (same as Gmail skill)
  * - `null` — not connected
  */
 export function getNotionAuth(): { type: 'token'; token: string } | { type: 'proxy' } | null {
@@ -49,12 +49,10 @@ export function getNotionAuth(): { type: 'token'; token: string } | { type: 'pro
     }
   }
 
-  // Check OAuth bridge (managed mode or legacy)
+  // Managed OAuth: always use backend proxy — do not call api.notion.com with a bearer token
+  // from the skill (matches Gmail `gmailFetch` → `oauth.fetch` only).
   const oauthCred = oauth.getCredential();
   if (oauthCred) {
-    if (oauthCred.accessToken) {
-      return { type: 'token', token: oauthCred.accessToken as string };
-    }
     return { type: 'proxy' };
   }
 
@@ -66,6 +64,15 @@ export function isNotionConnected(): boolean {
   return getNotionAuth() !== null;
 }
 
+/**
+ * Call the Notion API: direct `api.notion.com` with a bearer token (self-hosted) or
+ * `oauth.fetch` when using managed OAuth. Retries 429 and transient Cloudflare codes.
+ *
+ * @param endpoint - Path under `/v1` (leading `/` optional)
+ * @param options - Optional HTTP method and JSON body
+ * @returns Parsed JSON response body
+ * @throws Error on HTTP error responses or when retries are exhausted
+ */
 export function notionFetch<T>(
   endpoint: string,
   options: { method?: string; body?: unknown } = {}
@@ -83,7 +90,7 @@ export function notionFetch<T>(
     const t0 = Date.now();
 
     if (notionAuth.type === 'token') {
-      // Direct Notion API call with token (self_hosted API token or OAuth accessToken)
+      // Direct Notion API call with integration token (self_hosted only)
       const url = `https://api.notion.com/v1${path}`;
       console.log(`[notion][fetch] ${method} ${url} (direct, attempt ${attempt})`);
       response = net.fetch(url, {
@@ -97,10 +104,9 @@ export function notionFetch<T>(
         timeout: 30,
       });
     } else {
-      // Server-side OAuth proxy — the proxy validates against an allowlist of
-      // full paths (e.g. /v1/users, /v1/search), so we must include the /v1 prefix.
-      console.log(`[notion][fetch] ${method} /v1${path} (proxy, attempt ${attempt})`);
-      response = oauth.fetch(`/v1${path}`, {
+      // Path is relative to manifest `apiBaseUrl` (https://api.notion.com/v1), same as Gmail.
+      console.log(`[notion][fetch] ${method} ${path} (oauth.fetch proxy, attempt ${attempt})`);
+      response = oauth.fetch(path, {
         method,
         headers: { 'Content-Type': 'application/json', 'Notion-Version': apiVersion },
         body: options.body ? JSON.stringify(options.body) : undefined,
@@ -140,7 +146,7 @@ export function notionFetch<T>(
     if (response.status >= 400) {
       const errorBody = response.body || '';
       // Always include the raw body for debugging
-      let message = `Notion API error: ${response.status} — ${errorBody.slice(0, 300)}`;
+      const message = `Notion API error: ${response.status} — ${errorBody.slice(0, 300)}`;
       console.error('[notion][helpers] notionFetch error body:', errorBody);
       throw new Error(message);
     }
@@ -155,6 +161,9 @@ export function notionFetch<T>(
   );
 }
 
+/**
+ * Turn a thrown error or status string into a short, user-facing Notion message.
+ */
 export function formatApiError(error: unknown): string {
   const message = String(error);
 
@@ -196,6 +205,7 @@ export function formatApiError(error: unknown): string {
 // Formatting helpers
 // ---------------------------------------------------------------------------
 
+/** Concatenate plain_text segments from a Notion rich_text array. */
 export function formatRichText(richText: unknown[]): string {
   if (!Array.isArray(richText)) return '';
   return richText
@@ -206,6 +216,7 @@ export function formatRichText(richText: unknown[]): string {
     .join('');
 }
 
+/** Resolve a page’s display title from its `properties` title field, else its id. */
 export function formatPageTitle(page: Record<string, unknown>): string {
   const props = page.properties as Record<string, unknown>;
   if (!props) return page.id as string;
@@ -221,6 +232,7 @@ export function formatPageTitle(page: Record<string, unknown>): string {
   return page.id as string;
 }
 
+/** Compact page metadata for tools and UI (no full body). */
 export function formatPageSummary(page: Record<string, unknown>): Record<string, unknown> {
   return {
     id: page.id,
@@ -233,6 +245,7 @@ export function formatPageSummary(page: Record<string, unknown>): Record<string,
   };
 }
 
+/** Compact database metadata including property count. */
 export function formatDatabaseSummary(db: Record<string, unknown>): Record<string, unknown> {
   const title = Array.isArray(db.title) ? formatRichText(db.title) : '';
   return {
@@ -245,6 +258,7 @@ export function formatDatabaseSummary(db: Record<string, unknown>): Record<strin
   };
 }
 
+/** Extract human-readable text from a block’s primary rich_text (or a placeholder). */
 export function formatBlockContent(block: Record<string, unknown>): string {
   const type = block.type as string;
   const content = block[type] as Record<string, unknown> | undefined;
@@ -263,6 +277,7 @@ export function formatBlockContent(block: Record<string, unknown>): string {
   return `[${type}]`;
 }
 
+/** Id, type, children flag, and short content preview for a block. */
 export function formatBlockSummary(block: Record<string, unknown>): Record<string, unknown> {
   return {
     id: block.id,
@@ -272,6 +287,7 @@ export function formatBlockSummary(block: Record<string, unknown>): Record<strin
   };
 }
 
+/** Normalize Notion user objects (including bot owner drill-down) for display. */
 export function formatUserSummary(user: Record<string, unknown>): Record<string, unknown> {
   // Default to top-level user fields
   let id = user.id as string;

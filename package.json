@@ -27,6 +27,7 @@
     "prepare": "husky",
     "core:build": "cargo build --manifest-path openhuman/Cargo.toml --bin openhuman-core",
     "dev:runtime": "(cd openhuman && cargo build) && node scripts/dev-runtime.mjs",
+    "serve:core": "node scripts/serve-core.mjs",
     "core:run": "cargo run --manifest-path openhuman/Cargo.toml --bin openhuman-core -- skills run --skills-dir ./skills",
     "core:list": "cargo run --manifest-path openhuman/Cargo.toml --bin openhuman-core -- skills list --skills-dir ./skills",
     "core:test": "cargo run --manifest-path openhuman/Cargo.toml --bin openhuman-core -- skills test --skills-dir ./skills",

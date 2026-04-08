@@ -417,6 +417,8 @@ export function performInitialSync(onProgress?: SyncProgressCallback): void {
 
     log(`Initial sync complete: ${newEmails} new emails, ${skipped} skipped`, 100);
 
+    s.lastApiError = null;
+
     // Ingest newly synced emails into knowledge graph
     ingestNewEmails();
 
@@ -495,6 +497,8 @@ export function onSync(): void {
 
     emitSyncProgress(`Sync complete: ${newEmails} new, ${skipped} skipped`, 100);
     console.log(`[gmail-sync] Incremental sync done: ${newEmails} new, ${skipped} skipped`);
+
+    s.lastApiError = null;
 
     // Ingest newly synced emails into knowledge graph
     ingestNewEmails();

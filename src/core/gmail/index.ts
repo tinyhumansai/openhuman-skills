@@ -1,7 +1,7 @@
 // Gmail skill main entry point
 // Gmail integration with OAuth bridge; sync sends list API response (id + threadId) to frontend.
 import { loadGmailProfile } from './api/helpers';
-import { isGmailConnected, resetTokenCache } from './api/index';
+import { isGmailConnected } from './api/index';
 import { getEmailCount } from './db/helpers';
 import { initializeGmailSchema } from './db/schema';
 import { getGmailSkillState } from './state';
@@ -160,9 +160,6 @@ function onAuthComplete(args: { mode: string; credentials: Record<string, unknow
   if (args.mode === 'managed') {
     return { status: 'complete' };
   }
-
-  // Reset any cached tokens from a previous credential
-  resetTokenCache();
 
   if (args.mode === 'self_hosted') {
     const clientId = args.credentials.client_id as string | undefined;
@@ -335,7 +332,6 @@ function onAuthRevoked(args: { mode?: string }): void {
   s.profile = null;
   state.delete('config');
   cron.unregister('gmail-sync');
-  resetTokenCache();
   publishSkillState();
 }
 

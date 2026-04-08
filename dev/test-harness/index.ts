@@ -25,7 +25,7 @@
 // RPC Client
 // ---------------------------------------------------------------------------
 
-const RUNTIME_URL = process.env.SKILLS_RUNTIME_URL || 'http://127.0.0.1:7799';
+const RUNTIME_URL = process.env.SKILLS_RUNTIME_URL || 'http://127.0.0.1:7788';
 
 let rpcId = 0;
 
