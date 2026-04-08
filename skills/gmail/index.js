@@ -137,12 +137,12 @@ var __skill_bundle = (() => {
      if (typeof data === "bigint" || data && typeof data === "object" && typeof data.toJSNumber === "function") {
       let bigVal = typeof data === "bigint" ? data : data.value;
       if (typeof bigVal !== "bigint") bigVal = BigInt(data.valueOf());
-      const isNegative = bigVal < 0n;
+      const isNegative = bigVal < /* @__PURE__ */ BigInt("0");
       if (isNegative) bigVal = -bigVal;
       const bytes = [];
-      while (bigVal > 0n) {
-       bytes.push(Number(bigVal & 0xffn));
-       bigVal >>= 8n;
+      while (bigVal > /* @__PURE__ */ BigInt("0")) {
+       bytes.push(Number(bigVal & /* @__PURE__ */ BigInt("0xff")));
+       bigVal >>= /* @__PURE__ */ BigInt("8");
       }
       if (bytes.length === 0) bytes.push(0);
       if (isNegative) {
@@ -383,22 +383,22 @@ var __skill_bundle = (() => {
     readBigInt64LE(offset = 0) {
      const lo = this.readUInt32LE(offset);
      const hi = this.readInt32LE(offset + 4);
-     return BigInt(lo) | BigInt(hi) << 32n;
+     return BigInt(lo) | BigInt(hi) << /* @__PURE__ */ BigInt("32");
     }
     readBigInt64BE(offset = 0) {
      const hi = this.readInt32BE(offset);
      const lo = this.readUInt32BE(offset + 4);
-     return BigInt(lo) | BigInt(hi) << 32n;
+     return BigInt(lo) | BigInt(hi) << /* @__PURE__ */ BigInt("32");
     }
     readBigUInt64LE(offset = 0) {
      const lo = this.readUInt32LE(offset);
      const hi = this.readUInt32LE(offset + 4);
-     return BigInt(lo) | BigInt(hi) << 32n;
+     return BigInt(lo) | BigInt(hi) << /* @__PURE__ */ BigInt("32");
     }
     readBigUInt64BE(offset = 0) {
      const hi = this.readUInt32BE(offset);
      const lo = this.readUInt32BE(offset + 4);
-     return BigInt(lo) | BigInt(hi) << 32n;
+     return BigInt(lo) | BigInt(hi) << /* @__PURE__ */ BigInt("32");
     }
     readFloatLE(offset = 0) {
      const view = new DataView(this.buffer, this.byteOffset + offset, 4);
@@ -475,29 +475,29 @@ var __skill_bundle = (() => {
      return offset + 4;
     }
     writeBigInt64LE(value, offset = 0) {
-     const lo = Number(value & 0xffffffffn);
-     const hi = Number(value >> 32n & 0xffffffffn);
+     const lo = Number(value & /* @__PURE__ */ BigInt("0xffffffff"));
+     const hi = Number(value >> /* @__PURE__ */ BigInt("32") & /* @__PURE__ */ BigInt("0xffffffff"));
      this.writeUInt32LE(lo, offset);
      this.writeInt32LE(hi, offset + 4);
      return offset + 8;
     }
     writeBigInt64BE(value, offset = 0) {
-     const lo = Number(value & 0xffffffffn);
-     const hi = Number(value >> 32n & 0xffffffffn);
+     const lo = Number(value & /* @__PURE__ */ BigInt("0xffffffff"));
+     const hi = Number(value >> /* @__PURE__ */ BigInt("32") & /* @__PURE__ */ BigInt("0xffffffff"));
      this.writeInt32BE(hi, offset);
      this.writeUInt32BE(lo, offset + 4);
      return offset + 8;
     }
     writeBigUInt64LE(value, offset = 0) {
-     const lo = Number(value & 0xffffffffn);
-     const hi = Number(value >> 32n & 0xffffffffn);
+     const lo = Number(value & /* @__PURE__ */ BigInt("0xffffffff"));
+     const hi = Number(value >> /* @__PURE__ */ BigInt("32") & /* @__PURE__ */ BigInt("0xffffffff"));
      this.writeUInt32LE(lo, offset);
      this.writeUInt32LE(hi, offset + 4);
      return offset + 8;
     }
     writeBigUInt64BE(value, offset = 0) {
-     const lo = Number(value & 0xffffffffn);
-     const hi = Number(value >> 32n & 0xffffffffn);
+     const lo = Number(value & /* @__PURE__ */ BigInt("0xffffffff"));
+     const hi = Number(value >> /* @__PURE__ */ BigInt("32") & /* @__PURE__ */ BigInt("0xffffffff"));
      this.writeUInt32BE(hi, offset);
      this.writeUInt32BE(lo, offset + 4);
      return offset + 8;
@@ -775,6 +775,7 @@ var __skill_bundle = (() => {
  var GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
  var cachedSelfHostedToken = null;
  async function resolveAccessToken() {
+  var _a2;
   const authCred = auth.getCredential();
   if (authCred && authCred.mode === "self_hosted") {
    const creds = authCred.credentials;
@@ -812,7 +813,7 @@ var __skill_bundle = (() => {
    }
   }
   if (authCred && authCred.mode === "text") {
-   const content = authCred.credentials.content ?? "";
+   const content = (_a2 = authCred.credentials.content) != null ? _a2 : "";
    try {
     const parsed = JSON.parse(content);
     if (parsed.access_token) {
@@ -830,7 +831,7 @@ var __skill_bundle = (() => {
    return null;
   }
   const oauthCred = oauth.getCredential();
-  if (oauthCred?.accessToken) {
+  if (oauthCred == null ? void 0 : oauthCred.accessToken) {
    return oauthCred.accessToken;
   }
   return null;
@@ -934,9 +935,10 @@ var __skill_bundle = (() => {
 
  // skills-ts-out/core/gmail/api/helpers.js
  async function loadGmailProfile() {
+  var _a2;
   const response = await gmailFetch("/users/me/profile", { timeout: 10 });
   if (!response.success) {
-   throw new Error(response.error?.message || "unknown error");
+   throw new Error(((_a2 = response.error) == null ? void 0 : _a2.message) || "unknown error");
   }
   if (response.success) {
    const s2 = getGmailSkillState();
@@ -968,6 +970,20 @@ var __skill_bundle = (() => {
  init_buffer_inject();
 
  // node_modules/domelementtype/lib/esm/index.js
+ var esm_exports = {};
+ __export(esm_exports, {
+  CDATA: () => CDATA,
+  Comment: () => Comment,
+  Directive: () => Directive,
+  Doctype: () => Doctype,
+  ElementType: () => ElementType,
+  Root: () => Root,
+  Script: () => Script,
+  Style: () => Style,
+  Tag: () => Tag,
+  Text: () => Text,
+  isTag: () => isTag
+ });
  init_buffer_inject();
  var ElementType;
  (function(ElementType2) {
@@ -1194,6 +1210,9 @@ var __skill_bundle = (() => {
  }
  function isDocument(node) {
   return node.type === ElementType.Root;
+ }
+ function hasChildren(node) {
+  return Object.prototype.hasOwnProperty.call(node, "children");
  }
  function cloneNode(node, recursive = false) {
   let result;
@@ -1478,7 +1497,7 @@ var __skill_bundle = (() => {
      position++;
     }
    } else {
-    onEnd?.(data, i);
+    onEnd == null ? void 0 : onEnd(data, i);
    }
    return value === void 0 ? { matched: false } : {
     matched: true,
@@ -4017,6 +4036,51 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
  };
 
  // node_modules/domutils/lib/esm/index.js
+ var esm_exports2 = {};
+ __export(esm_exports2, {
+  DocumentPosition: () => DocumentPosition,
+  append: () => append,
+  appendChild: () => appendChild,
+  compareDocumentPosition: () => compareDocumentPosition,
+  existsOne: () => existsOne,
+  filter: () => filter,
+  find: () => find,
+  findAll: () => findAll,
+  findOne: () => findOne,
+  findOneChild: () => findOneChild,
+  getAttributeValue: () => getAttributeValue,
+  getChildren: () => getChildren,
+  getElementById: () => getElementById,
+  getElements: () => getElements,
+  getElementsByClassName: () => getElementsByClassName,
+  getElementsByTagName: () => getElementsByTagName,
+  getElementsByTagType: () => getElementsByTagType,
+  getFeed: () => getFeed,
+  getInnerHTML: () => getInnerHTML,
+  getName: () => getName,
+  getOuterHTML: () => getOuterHTML,
+  getParent: () => getParent,
+  getSiblings: () => getSiblings,
+  getText: () => getText,
+  hasAttrib: () => hasAttrib,
+  hasChildren: () => hasChildren,
+  innerText: () => innerText,
+  isCDATA: () => isCDATA,
+  isComment: () => isComment,
+  isDocument: () => isDocument,
+  isTag: () => isTag2,
+  isText: () => isText,
+  nextElementSibling: () => nextElementSibling,
+  prepend: () => prepend,
+  prependChild: () => prependChild,
+  prevElementSibling: () => prevElementSibling,
+  removeElement: () => removeElement,
+  removeSubsets: () => removeSubsets,
+  replaceElement: () => replaceElement,
+  testElement: () => testElement,
+  textContent: () => textContent,
+  uniqueSort: () => uniqueSort
+ });
  init_buffer_inject();
 
  // node_modules/domutils/lib/esm/stringify.js
@@ -4282,6 +4346,7 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
   }
   return output;
  }
+ var esm_default = render;
  function renderNode(node, options) {
   switch (node.type) {
    case Root:
@@ -4369,20 +4434,340 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
   return `<!--${elem.data}-->`;
  }
 
+ // node_modules/domutils/lib/esm/stringify.js
+ function getOuterHTML(node, options) {
+  return esm_default(node, options);
+ }
+ function getInnerHTML(node, options) {
+  return hasChildren(node) ? node.children.map((node2) => getOuterHTML(node2, options)).join("") : "";
+ }
+ function getText(node) {
+  if (Array.isArray(node))
+   return node.map(getText).join("");
+  if (isTag2(node))
+   return node.name === "br" ? "\n" : getText(node.children);
+  if (isCDATA(node))
+   return getText(node.children);
+  if (isText(node))
+   return node.data;
+  return "";
+ }
+ function textContent(node) {
+  if (Array.isArray(node))
+   return node.map(textContent).join("");
+  if (hasChildren(node) && !isComment(node)) {
+   return textContent(node.children);
+  }
+  if (isText(node))
+   return node.data;
+  return "";
+ }
+ function innerText(node) {
+  if (Array.isArray(node))
+   return node.map(innerText).join("");
+  if (hasChildren(node) && (node.type === ElementType.Tag || isCDATA(node))) {
+   return innerText(node.children);
+  }
+  if (isText(node))
+   return node.data;
+  return "";
+ }
+
  // node_modules/domutils/lib/esm/traversal.js
  init_buffer_inject();
+ function getChildren(elem) {
+  return hasChildren(elem) ? elem.children : [];
+ }
+ function getParent(elem) {
+  return elem.parent || null;
+ }
+ function getSiblings(elem) {
+  const parent = getParent(elem);
+  if (parent != null)
+   return getChildren(parent);
+  const siblings = [elem];
+  let { prev, next } = elem;
+  while (prev != null) {
+   siblings.unshift(prev);
+   ({ prev } = prev);
+  }
+  while (next != null) {
+   siblings.push(next);
+   ({ next } = next);
+  }
+  return siblings;
+ }
+ function getAttributeValue(elem, name2) {
+  var _a2;
+  return (_a2 = elem.attribs) === null || _a2 === void 0 ? void 0 : _a2[name2];
+ }
+ function hasAttrib(elem, name2) {
+  return elem.attribs != null && Object.prototype.hasOwnProperty.call(elem.attribs, name2) && elem.attribs[name2] != null;
+ }
+ function getName(elem) {
+  return elem.name;
+ }
+ function nextElementSibling(elem) {
+  let { next } = elem;
+  while (next !== null && !isTag2(next))
+   ({ next } = next);
+  return next;
+ }
+ function prevElementSibling(elem) {
+  let { prev } = elem;
+  while (prev !== null && !isTag2(prev))
+   ({ prev } = prev);
+  return prev;
+ }
 
  // node_modules/domutils/lib/esm/manipulation.js
  init_buffer_inject();
+ function removeElement(elem) {
+  if (elem.prev)
+   elem.prev.next = elem.next;
+  if (elem.next)
+   elem.next.prev = elem.prev;
+  if (elem.parent) {
+   const childs = elem.parent.children;
+   const childsIndex = childs.lastIndexOf(elem);
+   if (childsIndex >= 0) {
+    childs.splice(childsIndex, 1);
+   }
+  }
+  elem.next = null;
+  elem.prev = null;
+  elem.parent = null;
+ }
+ function replaceElement(elem, replacement) {
+  const prev = replacement.prev = elem.prev;
+  if (prev) {
+   prev.next = replacement;
+  }
+  const next = replacement.next = elem.next;
+  if (next) {
+   next.prev = replacement;
+  }
+  const parent = replacement.parent = elem.parent;
+  if (parent) {
+   const childs = parent.children;
+   childs[childs.lastIndexOf(elem)] = replacement;
+   elem.parent = null;
+  }
+ }
+ function appendChild(parent, child) {
+  removeElement(child);
+  child.next = null;
+  child.parent = parent;
+  if (parent.children.push(child) > 1) {
+   const sibling = parent.children[parent.children.length - 2];
+   sibling.next = child;
+   child.prev = sibling;
+  } else {
+   child.prev = null;
+  }
+ }
+ function append(elem, next) {
+  removeElement(next);
+  const { parent } = elem;
+  const currNext = elem.next;
+  next.next = currNext;
+  next.prev = elem;
+  elem.next = next;
+  next.parent = parent;
+  if (currNext) {
+   currNext.prev = next;
+   if (parent) {
+    const childs = parent.children;
+    childs.splice(childs.lastIndexOf(currNext), 0, next);
+   }
+  } else if (parent) {
+   parent.children.push(next);
+  }
+ }
+ function prependChild(parent, child) {
+  removeElement(child);
+  child.parent = parent;
+  child.prev = null;
+  if (parent.children.unshift(child) !== 1) {
+   const sibling = parent.children[1];
+   sibling.prev = child;
+   child.next = sibling;
+  } else {
+   child.next = null;
+  }
+ }
+ function prepend(elem, prev) {
+  removeElement(prev);
+  const { parent } = elem;
+  if (parent) {
+   const childs = parent.children;
+   childs.splice(childs.indexOf(elem), 0, prev);
+  }
+  if (elem.prev) {
+   elem.prev.next = prev;
+  }
+  prev.parent = parent;
+  prev.prev = elem.prev;
+  prev.next = elem;
+  elem.prev = prev;
+ }
 
  // node_modules/domutils/lib/esm/querying.js
  init_buffer_inject();
+ function filter(test, node, recurse = true, limit = Infinity) {
+  return find(test, Array.isArray(node) ? node : [node], recurse, limit);
+ }
+ function find(test, nodes, recurse, limit) {
+  const result = [];
+  const nodeStack = [Array.isArray(nodes) ? nodes : [nodes]];
+  const indexStack = [0];
+  for (; ; ) {
+   if (indexStack[0] >= nodeStack[0].length) {
+    if (indexStack.length === 1) {
+     return result;
+    }
+    nodeStack.shift();
+    indexStack.shift();
+    continue;
+   }
+   const elem = nodeStack[0][indexStack[0]++];
+   if (test(elem)) {
+    result.push(elem);
+    if (--limit <= 0)
+     return result;
+   }
+   if (recurse && hasChildren(elem) && elem.children.length > 0) {
+    indexStack.unshift(0);
+    nodeStack.unshift(elem.children);
+   }
+  }
+ }
+ function findOneChild(test, nodes) {
+  return nodes.find(test);
+ }
+ function findOne(test, nodes, recurse = true) {
+  const searchedNodes = Array.isArray(nodes) ? nodes : [nodes];
+  for (let i = 0; i < searchedNodes.length; i++) {
+   const node = searchedNodes[i];
+   if (isTag2(node) && test(node)) {
+    return node;
+   }
+   if (recurse && hasChildren(node) && node.children.length > 0) {
+    const found = findOne(test, node.children, true);
+    if (found)
+     return found;
+   }
+  }
+  return null;
+ }
+ function existsOne(test, nodes) {
+  return (Array.isArray(nodes) ? nodes : [nodes]).some((node) => isTag2(node) && test(node) || hasChildren(node) && existsOne(test, node.children));
+ }
+ function findAll(test, nodes) {
+  const result = [];
+  const nodeStack = [Array.isArray(nodes) ? nodes : [nodes]];
+  const indexStack = [0];
+  for (; ; ) {
+   if (indexStack[0] >= nodeStack[0].length) {
+    if (nodeStack.length === 1) {
+     return result;
+    }
+    nodeStack.shift();
+    indexStack.shift();
+    continue;
+   }
+   const elem = nodeStack[0][indexStack[0]++];
+   if (isTag2(elem) && test(elem))
+    result.push(elem);
+   if (hasChildren(elem) && elem.children.length > 0) {
+    indexStack.unshift(0);
+    nodeStack.unshift(elem.children);
+   }
+  }
+ }
 
  // node_modules/domutils/lib/esm/legacy.js
  init_buffer_inject();
+ var Checks = {
+  tag_name(name2) {
+   if (typeof name2 === "function") {
+    return (elem) => isTag2(elem) && name2(elem.name);
+   } else if (name2 === "*") {
+    return isTag2;
+   }
+   return (elem) => isTag2(elem) && elem.name === name2;
+  },
+  tag_type(type) {
+   if (typeof type === "function") {
+    return (elem) => type(elem.type);
+   }
+   return (elem) => elem.type === type;
+  },
+  tag_contains(data) {
+   if (typeof data === "function") {
+    return (elem) => isText(elem) && data(elem.data);
+   }
+   return (elem) => isText(elem) && elem.data === data;
+  }
+ };
+ function getAttribCheck(attrib, value) {
+  if (typeof value === "function") {
+   return (elem) => isTag2(elem) && value(elem.attribs[attrib]);
+  }
+  return (elem) => isTag2(elem) && elem.attribs[attrib] === value;
+ }
+ function combineFuncs(a, b) {
+  return (elem) => a(elem) || b(elem);
+ }
+ function compileTest(options) {
+  const funcs = Object.keys(options).map((key) => {
+   const value = options[key];
+   return Object.prototype.hasOwnProperty.call(Checks, key) ? Checks[key](value) : getAttribCheck(key, value);
+  });
+  return funcs.length === 0 ? null : funcs.reduce(combineFuncs);
+ }
+ function testElement(options, node) {
+  const test = compileTest(options);
+  return test ? test(node) : true;
+ }
+ function getElements(options, nodes, recurse, limit = Infinity) {
+  const test = compileTest(options);
+  return test ? filter(test, nodes, recurse, limit) : [];
+ }
+ function getElementById(id, nodes, recurse = true) {
+  if (!Array.isArray(nodes))
+   nodes = [nodes];
+  return findOne(getAttribCheck("id", id), nodes, recurse);
+ }
+ function getElementsByTagName(tagName, nodes, recurse = true, limit = Infinity) {
+  return filter(Checks["tag_name"](tagName), nodes, recurse, limit);
+ }
+ function getElementsByClassName(className, nodes, recurse = true, limit = Infinity) {
+  return filter(getAttribCheck("class", className), nodes, recurse, limit);
+ }
+ function getElementsByTagType(type, nodes, recurse = true, limit = Infinity) {
+  return filter(Checks["tag_type"](type), nodes, recurse, limit);
+ }
 
  // node_modules/domutils/lib/esm/helpers.js
  init_buffer_inject();
+ function removeSubsets(nodes) {
+  let idx = nodes.length;
+  while (--idx >= 0) {
+   const node = nodes[idx];
+   if (idx > 0 && nodes.lastIndexOf(node, idx - 1) >= 0) {
+    nodes.splice(idx, 1);
+    continue;
+   }
+   for (let ancestor = node.parent; ancestor; ancestor = ancestor.parent) {
+    if (nodes.includes(ancestor)) {
+     nodes.splice(idx, 1);
+     break;
+    }
+   }
+  }
+  return nodes;
+ }
  var DocumentPosition;
  (function(DocumentPosition2) {
   DocumentPosition2[DocumentPosition2["DISCONNECTED"] = 1] = "DISCONNECTED";
@@ -4391,9 +4776,182 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
   DocumentPosition2[DocumentPosition2["CONTAINS"] = 8] = "CONTAINS";
   DocumentPosition2[DocumentPosition2["CONTAINED_BY"] = 16] = "CONTAINED_BY";
  })(DocumentPosition || (DocumentPosition = {}));
+ function compareDocumentPosition(nodeA, nodeB) {
+  const aParents = [];
+  const bParents = [];
+  if (nodeA === nodeB) {
+   return 0;
+  }
+  let current = hasChildren(nodeA) ? nodeA : nodeA.parent;
+  while (current) {
+   aParents.unshift(current);
+   current = current.parent;
+  }
+  current = hasChildren(nodeB) ? nodeB : nodeB.parent;
+  while (current) {
+   bParents.unshift(current);
+   current = current.parent;
+  }
+  const maxIdx = Math.min(aParents.length, bParents.length);
+  let idx = 0;
+  while (idx < maxIdx && aParents[idx] === bParents[idx]) {
+   idx++;
+  }
+  if (idx === 0) {
+   return DocumentPosition.DISCONNECTED;
+  }
+  const sharedParent = aParents[idx - 1];
+  const siblings = sharedParent.children;
+  const aSibling = aParents[idx];
+  const bSibling = bParents[idx];
+  if (siblings.indexOf(aSibling) > siblings.indexOf(bSibling)) {
+   if (sharedParent === nodeB) {
+    return DocumentPosition.FOLLOWING | DocumentPosition.CONTAINED_BY;
+   }
+   return DocumentPosition.FOLLOWING;
+  }
+  if (sharedParent === nodeA) {
+   return DocumentPosition.PRECEDING | DocumentPosition.CONTAINS;
+  }
+  return DocumentPosition.PRECEDING;
+ }
+ function uniqueSort(nodes) {
+  nodes = nodes.filter((node, i, arr) => !arr.includes(node, i + 1));
+  nodes.sort((a, b) => {
+   const relative = compareDocumentPosition(a, b);
+   if (relative & DocumentPosition.PRECEDING) {
+    return -1;
+   } else if (relative & DocumentPosition.FOLLOWING) {
+    return 1;
+   }
+   return 0;
+  });
+  return nodes;
+ }
 
  // node_modules/domutils/lib/esm/feeds.js
  init_buffer_inject();
+ function getFeed(doc) {
+  const feedRoot = getOneElement(isValidFeed, doc);
+  return !feedRoot ? null : feedRoot.name === "feed" ? getAtomFeed(feedRoot) : getRssFeed(feedRoot);
+ }
+ function getAtomFeed(feedRoot) {
+  var _a2;
+  const childs = feedRoot.children;
+  const feed = {
+   type: "atom",
+   items: getElementsByTagName("entry", childs).map((item) => {
+    var _a3;
+    const { children } = item;
+    const entry = { media: getMediaElements(children) };
+    addConditionally(entry, "id", "id", children);
+    addConditionally(entry, "title", "title", children);
+    const href2 = (_a3 = getOneElement("link", children)) === null || _a3 === void 0 ? void 0 : _a3.attribs["href"];
+    if (href2) {
+     entry.link = href2;
+    }
+    const description = fetch("summary", children) || fetch("content", children);
+    if (description) {
+     entry.description = description;
+    }
+    const pubDate = fetch("updated", children);
+    if (pubDate) {
+     entry.pubDate = new Date(pubDate);
+    }
+    return entry;
+   })
+  };
+  addConditionally(feed, "id", "id", childs);
+  addConditionally(feed, "title", "title", childs);
+  const href = (_a2 = getOneElement("link", childs)) === null || _a2 === void 0 ? void 0 : _a2.attribs["href"];
+  if (href) {
+   feed.link = href;
+  }
+  addConditionally(feed, "description", "subtitle", childs);
+  const updated = fetch("updated", childs);
+  if (updated) {
+   feed.updated = new Date(updated);
+  }
+  addConditionally(feed, "author", "email", childs, true);
+  return feed;
+ }
+ function getRssFeed(feedRoot) {
+  var _a2, _b;
+  const childs = (_b = (_a2 = getOneElement("channel", feedRoot.children)) === null || _a2 === void 0 ? void 0 : _a2.children) !== null && _b !== void 0 ? _b : [];
+  const feed = {
+   type: feedRoot.name.substr(0, 3),
+   id: "",
+   items: getElementsByTagName("item", feedRoot.children).map((item) => {
+    const { children } = item;
+    const entry = { media: getMediaElements(children) };
+    addConditionally(entry, "id", "guid", children);
+    addConditionally(entry, "title", "title", children);
+    addConditionally(entry, "link", "link", children);
+    addConditionally(entry, "description", "description", children);
+    const pubDate = fetch("pubDate", children) || fetch("dc:date", children);
+    if (pubDate)
+     entry.pubDate = new Date(pubDate);
+    return entry;
+   })
+  };
+  addConditionally(feed, "title", "title", childs);
+  addConditionally(feed, "link", "link", childs);
+  addConditionally(feed, "description", "description", childs);
+  const updated = fetch("lastBuildDate", childs);
+  if (updated) {
+   feed.updated = new Date(updated);
+  }
+  addConditionally(feed, "author", "managingEditor", childs, true);
+  return feed;
+ }
+ var MEDIA_KEYS_STRING = ["url", "type", "lang"];
+ var MEDIA_KEYS_INT = [
+  "fileSize",
+  "bitrate",
+  "framerate",
+  "samplingrate",
+  "channels",
+  "duration",
+  "height",
+  "width"
+ ];
+ function getMediaElements(where) {
+  return getElementsByTagName("media:content", where).map((elem) => {
+   const { attribs } = elem;
+   const media = {
+    medium: attribs["medium"],
+    isDefault: !!attribs["isDefault"]
+   };
+   for (const attrib of MEDIA_KEYS_STRING) {
+    if (attribs[attrib]) {
+     media[attrib] = attribs[attrib];
+    }
+   }
+   for (const attrib of MEDIA_KEYS_INT) {
+    if (attribs[attrib]) {
+     media[attrib] = parseInt(attribs[attrib], 10);
+    }
+   }
+   if (attribs["expression"]) {
+    media.expression = attribs["expression"];
+   }
+   return media;
+  });
+ }
+ function getOneElement(tagName, node) {
+  return getElementsByTagName(tagName, node, true, 1)[0];
+ }
+ function fetch(tagName, where, recurse = false) {
+  return textContent(getElementsByTagName(tagName, where, recurse, 1)).trim();
+ }
+ function addConditionally(obj, prop, tagName, where, recurse = false) {
+  const val = fetch(tagName, where, recurse);
+  if (val)
+   obj[prop] = val;
+ }
+ function isValidFeed(value) {
+  return value === "rss" || value === "feed" || value === "rdf:RDF";
+ }
 
  // node_modules/htmlparser2/lib/esm/index.js
  function parseDocument(data, options) {
@@ -5065,7 +5623,7 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
   */
   closeBlock({ trailingLineBreaks = 1, blockTransform = void 0 } = {}) {
    const block = this._popStackItem();
-   const blockText = blockTransform ? blockTransform(getText(block)) : getText(block);
+   const blockText = blockTransform ? blockTransform(getText2(block)) : getText2(block);
    addText(this._stackItem, blockText, block.leadingLineBreaks, Math.max(block.stashedLineBreaks, trailingLineBreaks));
   }
   /**
@@ -5128,7 +5686,7 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
    const prefixLength = Math.max(listItem.prefix.length, list.maxPrefixLength);
    const spacing = "\n" + " ".repeat(prefixLength);
    const prefix = list.prefixAlign === "right" ? listItem.prefix.padStart(prefixLength) : listItem.prefix.padEnd(prefixLength);
-   const text = prefix + getText(listItem).replace(/\n/g, spacing);
+   const text = prefix + getText2(listItem).replace(/\n/g, spacing);
    addText(
     list,
     text,
@@ -5147,7 +5705,7 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
   */
   closeList({ trailingLineBreaks = 2 } = {}) {
    const list = this._popStackItem();
-   const text = getText(list);
+   const text = getText2(list);
    if (text) {
     addText(this._stackItem, text, list.leadingLineBreaks, trailingLineBreaks);
    }
@@ -5193,7 +5751,7 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
   */
   closeTableCell({ colspan = 1, rowspan = 1 } = {}) {
    const cell = this._popStackItem();
-   const text = trimCharacter(getText(cell), "\n");
+   const text = trimCharacter(getText2(cell), "\n");
    cell.next.cells.push({ colspan, rowspan, text });
   }
   /**
@@ -5231,10 +5789,10 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
   * @returns { string }
   */
   toString() {
-   return getText(this._stackItem.getRoot());
+   return getText2(this._stackItem.getRoot());
   }
  };
- function getText(stackItem) {
+ function getText2(stackItem) {
   if (!(stackItem instanceof BlockStackItem || stackItem instanceof ListItemStackItem || stackItem instanceof TableCellStackItem)) {
    throw new Error("Only blocks, list items and table cells can be requested for text contents.");
   }
@@ -5244,7 +5802,7 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
   if (!(stackItem instanceof BlockStackItem || stackItem instanceof ListItemStackItem || stackItem instanceof TableCellStackItem)) {
    throw new Error("Only blocks, list items and table cells can contain text.");
   }
-  const parentText = getText(stackItem);
+  const parentText = getText2(stackItem);
   const lineBreaks = Math.max(stackItem.stashedLineBreaks, leadingLineBreaks);
   stackItem.inlineTextBuilder.clear();
   if (parentText) {
@@ -5742,7 +6300,10 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
   builder.openTable();
   elem.children.forEach(walkTable);
   builder.closeTable({
-   tableToString: (rows) => tableToString(rows, formatOptions.rowSpacing ?? 0, formatOptions.colSpacing ?? 3),
+   tableToString: (rows) => {
+    var _a2, _b;
+    return tableToString(rows, (_a2 = formatOptions.rowSpacing) != null ? _a2 : 0, (_b = formatOptions.colSpacing) != null ? _b : 3);
+   },
    leadingLineBreaks: formatOptions.leadingLineBreaks,
    trailingLineBreaks: formatOptions.trailingLineBreaks
   });
@@ -5966,7 +6527,7 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
 
  // skills-ts-out/core/gmail/db/helpers.js
  function getMessageHeaders(message) {
-  const p = message?.payload;
+  const p = message == null ? void 0 : message.payload;
   if (!p)
    return null;
   if (Array.isArray(p.headers) && p.headers.length > 0)
@@ -5981,26 +6542,27 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
   return getGmailSkillState().config.credentialId;
  }
  function upsertEmail(message, redactSensitive = false) {
+  var _a2, _b, _c, _d, _e, _f, _g2, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s;
   const cid = credId();
   const now = Date.now();
   const headers = getMessageHeaders(message);
   if (!headers) {
    console.warn("[gmail] upsertEmail: no headers found (payload or first part)", {
-    id: message?.id,
-    hasPayload: !!message?.payload
+    id: message == null ? void 0 : message.id,
+    hasPayload: !!(message == null ? void 0 : message.payload)
    });
    return;
   }
-  const subject = headers.find((h) => h.name.toLowerCase() === "subject")?.value ?? "";
-  const from = headers.find((h) => h.name.toLowerCase() === "from")?.value ?? "";
-  const to = headers.find((h) => h.name.toLowerCase() === "to")?.value ?? "";
-  const cc = headers.find((h) => h.name.toLowerCase() === "cc")?.value ?? null;
-  const bcc = headers.find((h) => h.name.toLowerCase() === "bcc")?.value ?? null;
-  const dateHeader = headers.find((h) => h.name.toLowerCase() === "date")?.value;
+  const subject = (_b = (_a2 = headers.find((h) => h.name.toLowerCase() === "subject")) == null ? void 0 : _a2.value) != null ? _b : "";
+  const from = (_d = (_c = headers.find((h) => h.name.toLowerCase() === "from")) == null ? void 0 : _c.value) != null ? _d : "";
+  const to = (_f = (_e = headers.find((h) => h.name.toLowerCase() === "to")) == null ? void 0 : _e.value) != null ? _f : "";
+  const cc = (_h = (_g2 = headers.find((h) => h.name.toLowerCase() === "cc")) == null ? void 0 : _g2.value) != null ? _h : null;
+  const bcc = (_j = (_i = headers.find((h) => h.name.toLowerCase() === "bcc")) == null ? void 0 : _i.value) != null ? _j : null;
+  const dateHeader = (_k = headers.find((h) => h.name.toLowerCase() === "date")) == null ? void 0 : _k.value;
   const fromMatch = from.match(/(.+?)\s*<([^>]+)>/) || [null, from, from];
-  const senderName = fromMatch[1]?.trim().replace(/^["']|["']$/g, "") ?? null;
-  const senderEmail = fromMatch[2]?.trim() || from;
-  const internalDate = message.internalDate ?? "0";
+  const senderName = (_m = (_l = fromMatch[1]) == null ? void 0 : _l.trim().replace(/^["']|["']$/g, "")) != null ? _m : null;
+  const senderEmail = ((_n = fromMatch[2]) == null ? void 0 : _n.trim()) || from;
+  const internalDate = (_o = message.internalDate) != null ? _o : "0";
   const date = dateHeader ? new Date(dateHeader).getTime() : parseInt(internalDate, 10);
   const labelIds = Array.isArray(message.labelIds) ? message.labelIds : [];
   const isRead = !labelIds.includes("UNREAD");
@@ -6034,8 +6596,8 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
    size_estimate, history_id, internal_date, updated_at
   ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
    cid,
-   message.id ?? "",
-   message.threadId ?? "",
+   (_p = message.id) != null ? _p : "",
+   (_q = message.threadId) != null ? _q : "",
    subject,
    senderEmail,
    senderName,
@@ -6043,9 +6605,9 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
    cc,
    bcc,
    Number.isFinite(date) ? date : 0,
-   message.snippet ?? "",
-   bodyText ?? null,
-   bodyHtml ?? null,
+   (_r = message.snippet) != null ? _r : "",
+   bodyText != null ? bodyText : null,
+   bodyHtml != null ? bodyHtml : null,
    isRead ? 1 : 0,
    isImportant ? 1 : 0,
    isStarred ? 1 : 0,
@@ -6053,7 +6615,7 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
    sensitive ? 1 : 0,
    JSON.stringify(labelIds),
    typeof message.sizeEstimate === "number" ? message.sizeEstimate : 0,
-   message.historyId ?? "",
+   (_s = message.historyId) != null ? _s : "",
    internalDate,
    now
   ]);
@@ -6062,6 +6624,7 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
   }
  }
  function upsertLabel(label) {
+  var _a2, _b;
   const cid = credId();
   const now = Date.now();
   db.exec(`INSERT OR REPLACE INTO labels (
@@ -6079,8 +6642,8 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
    label.messagesUnread || 0,
    label.threadsTotal || 0,
    label.threadsUnread || 0,
-   label.color?.textColor || null,
-   label.color?.backgroundColor || null,
+   ((_a2 = label.color) == null ? void 0 : _a2.textColor) || null,
+   ((_b = label.color) == null ? void 0 : _b.backgroundColor) || null,
    now
   ]);
  }
@@ -6108,9 +6671,10 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
   return db.all(sql, params);
  }
  function getEmailCount() {
+  var _a2;
   const cid = credId();
   const row = db.get("SELECT COUNT(*) as count FROM emails WHERE credential_id = ?", [cid]);
-  return row?.count ?? 0;
+  return (_a2 = row == null ? void 0 : row.count) != null ? _a2 : 0;
  }
  function emailExists(id) {
   const cid = credId();
@@ -6183,20 +6747,25 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
   return false;
  }
  function hasEmailAttachments(message) {
-  const p = message?.payload;
+  var _a2;
+  const p = message == null ? void 0 : message.payload;
   if (!p)
    return false;
-  if (p.body?.attachmentId)
+  if ((_a2 = p.body) == null ? void 0 : _a2.attachmentId)
    return true;
   if (Array.isArray(p.parts)) {
-   return p.parts.some((part) => part.body?.attachmentId || part.filename && part.filename.length > 0);
+   return p.parts.some((part) => {
+    var _a3;
+    return ((_a3 = part.body) == null ? void 0 : _a3.attachmentId) || part.filename && part.filename.length > 0;
+   });
   }
   return checkPart(p);
  }
  function checkPart(part) {
+  var _a2;
   if (!part)
    return false;
-  if (part.body?.attachmentId)
+  if ((_a2 = part.body) == null ? void 0 : _a2.attachmentId)
    return true;
   if (part.filename && part.filename.length > 0)
    return true;
@@ -6205,10 +6774,11 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
   return false;
  }
  function extractTextBody(message) {
-  const p = message?.payload;
+  var _a2, _b;
+  const p = message == null ? void 0 : message.payload;
   if (!p)
    return null;
-  if (p.mimeType === "text/plain" && p.body?.data) {
+  if (p.mimeType === "text/plain" && ((_a2 = p.body) == null ? void 0 : _a2.data)) {
    try {
     return atob(p.body.data);
    } catch {
@@ -6217,7 +6787,7 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
   }
   if (Array.isArray(p.parts)) {
    for (const part of p.parts) {
-    if (part.mimeType === "text/plain" && part.body?.data) {
+    if (part.mimeType === "text/plain" && ((_b = part.body) == null ? void 0 : _b.data)) {
      try {
       return atob(part.body.data);
      } catch {
@@ -6229,10 +6799,11 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
   return null;
  }
  function extractHtmlBody(message) {
-  const p = message?.payload;
+  var _a2, _b;
+  const p = message == null ? void 0 : message.payload;
   if (!p)
    return null;
-  if (p.mimeType === "text/html" && p.body?.data) {
+  if (p.mimeType === "text/html" && ((_a2 = p.body) == null ? void 0 : _a2.data)) {
    try {
     return atob(p.body.data);
    } catch {
@@ -6241,7 +6812,7 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
   }
   if (Array.isArray(p.parts)) {
    for (const part of p.parts) {
-    if (part.mimeType === "text/html" && part.body?.data) {
+    if (part.mimeType === "text/html" && ((_b = part.body) == null ? void 0 : _b.data)) {
      try {
       return atob(part.body.data);
      } catch {
@@ -6253,29 +6824,31 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
   return null;
  }
  function insertEmailAttachments(message) {
+  var _a2, _b, _c, _d;
   const cid = credId();
-  const p = message?.payload;
+  const p = message == null ? void 0 : message.payload;
   if (!p)
    return;
   const attachments = [];
-  if (p.body?.attachmentId && p.filename) {
+  if (((_a2 = p.body) == null ? void 0 : _a2.attachmentId) && p.filename) {
    attachments.push({
     attachmentId: p.body.attachmentId,
     filename: p.filename,
-    mimeType: p.mimeType ?? "",
-    size: p.body.size ?? 0,
-    partId: p.partId ?? ""
+    mimeType: (_b = p.mimeType) != null ? _b : "",
+    size: (_c = p.body.size) != null ? _c : 0,
+    partId: (_d = p.partId) != null ? _d : ""
    });
   }
   if (Array.isArray(p.parts)) {
    p.parts.forEach((part) => {
-    if (part.body?.attachmentId && part.filename) {
+    var _a3, _b2, _c2, _d2;
+    if (((_a3 = part.body) == null ? void 0 : _a3.attachmentId) && part.filename) {
      attachments.push({
       attachmentId: part.body.attachmentId,
       filename: part.filename,
-      mimeType: part.mimeType ?? "",
-      size: part.body.size ?? 0,
-      partId: part.partId ?? ""
+      mimeType: (_b2 = part.mimeType) != null ? _b2 : "",
+      size: (_c2 = part.body.size) != null ? _c2 : 0,
+      partId: (_d2 = part.partId) != null ? _d2 : ""
      });
     }
    });
@@ -6415,7 +6988,7 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
  function syncIntegrationMetadata(params) {
   try {
    const memoryBridge = globalThis.memory;
-   if (typeof memoryBridge?.insert !== "function")
+   if (typeof (memoryBridge == null ? void 0 : memoryBridge.insert) !== "function")
     return;
    memoryBridge.insert(params);
   } catch (error) {
@@ -6456,11 +7029,12 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
   return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")}`;
  }
  async function fetchMessagePage(query, pageToken) {
+  var _a2;
   const params = [`maxResults=${PAGE_SIZE}`, `q=${encodeURIComponent(query)}`];
   if (pageToken)
    params.push(`pageToken=${encodeURIComponent(pageToken)}`);
   const response = await gmailFetch(`/users/me/messages?${params.join("&")}`);
-  if (!response.success || !response.data?.messages) {
+  if (!response.success || !((_a2 = response.data) == null ? void 0 : _a2.messages)) {
    if (response.error)
     console.error(`[gmail-sync] List error: ${response.error.message}`);
    return { messages: [] };
@@ -6487,7 +7061,7 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
   let page = 0;
   do {
    page++;
-   log?.(`Fetching page ${page}...`, Math.min(5 + page * 8, 80));
+   log == null ? void 0 : log(`Fetching page ${page}...`, Math.min(5 + page * 8, 80));
    const result = await fetchMessagePage(query, pageToken);
    if (result.messages.length === 0)
     break;
@@ -6503,7 +7077,7 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
       skipped++;
     }
    }
-   log?.(`Page ${page}: ${newEmails} new, ${skipped} skipped`, Math.min(10 + page * 10, 90));
+   log == null ? void 0 : log(`Page ${page}: ${newEmails} new, ${skipped} skipped`, Math.min(10 + page * 10, 90));
   } while (pageToken && page < maxPages);
   return { newEmails, skipped };
  }
@@ -6520,7 +7094,7 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
   const log = (msg, pct) => {
    console.log(`[gmail-sync] [${pct}%] ${msg}`);
    emitSyncProgress(msg, pct);
-   onProgress?.(msg, pct);
+   onProgress == null ? void 0 : onProgress(msg, pct);
   };
   s2.syncStatus.syncInProgress = true;
   s2.syncStatus.newEmailsCount = 0;
@@ -6777,6 +7351,7 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
    required: ["message_id"]
   },
   async execute(args) {
+   var _a2, _b, _c, _d, _e, _f, _g2, _h, _i, _j, _k, _l, _m;
    try {
     const messageId = args.message_id;
     if (!messageId) {
@@ -6791,11 +7366,11 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
     if (!response.success) {
      return JSON.stringify({
       success: false,
-      error: response.error?.message || "Failed to fetch email"
+      error: ((_a2 = response.error) == null ? void 0 : _a2.message) || "Failed to fetch email"
      });
     }
     const message = response.data;
-    const headers = message.payload?.headers || [];
+    const headers = ((_b = message.payload) == null ? void 0 : _b.headers) || [];
     const result = {
      id: message.id,
      thread_id: message.threadId,
@@ -6823,8 +7398,8 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
     const from = result.headers.from;
     const fromMatch = from.match(/(.+?)\s*<([^>]+)>/) || [null, from, from];
     result.sender = {
-     name: fromMatch[1]?.trim().replace(/^["']|["']$/g, "") || null,
-     email: fromMatch[2]?.trim() || from
+     name: ((_c = fromMatch[1]) == null ? void 0 : _c.trim().replace(/^["']|["']$/g, "")) || null,
+     email: ((_d = fromMatch[2]) == null ? void 0 : _d.trim()) || from
     };
     result.recipients = {
      to: parseEmailAddresses(result.headers.to),
@@ -6832,13 +7407,13 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
      bcc: parseEmailAddresses(result.headers.bcc)
     };
     result.status = {
-     is_read: !message.labelIds?.includes("UNREAD"),
-     is_important: message.labelIds?.includes("IMPORTANT"),
-     is_starred: message.labelIds?.includes("STARRED"),
-     is_draft: message.labelIds?.includes("DRAFT"),
-     is_sent: message.labelIds?.includes("SENT"),
-     is_spam: message.labelIds?.includes("SPAM"),
-     is_trash: message.labelIds?.includes("TRASH")
+     is_read: !((_e = message.labelIds) == null ? void 0 : _e.includes("UNREAD")),
+     is_important: (_f = message.labelIds) == null ? void 0 : _f.includes("IMPORTANT"),
+     is_starred: (_g2 = message.labelIds) == null ? void 0 : _g2.includes("STARRED"),
+     is_draft: (_h = message.labelIds) == null ? void 0 : _h.includes("DRAFT"),
+     is_sent: (_i = message.labelIds) == null ? void 0 : _i.includes("SENT"),
+     is_spam: (_j = message.labelIds) == null ? void 0 : _j.includes("SPAM"),
+     is_trash: (_k = message.labelIds) == null ? void 0 : _k.includes("TRASH")
     };
     if (includeBody && format === "full") {
      const bodyContent = extractEmailBodies(message.payload);
@@ -6855,9 +7430,9 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
      };
     }
     const s2 = getGmailSkillState();
-    const showSensitive = s2.config.showSensitiveMessages ?? false;
+    const showSensitive = (_l = s2.config.showSensitiveMessages) != null ? _l : false;
     if (!showSensitive) {
-     const textToCheck = (result.headers?.subject || "") + " " + (result.snippet || "");
+     const textToCheck = (((_m = result.headers) == null ? void 0 : _m.subject) || "") + " " + (result.snippet || "");
      if (isSensitiveText2(textToCheck)) {
       return JSON.stringify({
        success: true,
@@ -6886,19 +7461,21 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
   const addresses = [];
   const parts = headerValue.split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/);
   parts.forEach((part) => {
+   var _a2, _b;
    const trimmed = part.trim();
    if (!trimmed)
     return;
    const match = trimmed.match(/(.+?)\s*<([^>]+)>/) || [null, trimmed, trimmed];
-   const name2 = match[1]?.trim().replace(/^["']|["']$/g, "") || void 0;
-   const email = match[2]?.trim() || trimmed;
+   const name2 = ((_a2 = match[1]) == null ? void 0 : _a2.trim().replace(/^["']|["']$/g, "")) || void 0;
+   const email = ((_b = match[2]) == null ? void 0 : _b.trim()) || trimmed;
    addresses.push({ email, name: name2 !== email ? name2 : void 0 });
   });
   return addresses;
  }
  function extractEmailBodies(payload) {
+  var _a2, _b;
   const result = {};
-  if (payload.body?.data) {
+  if ((_a2 = payload.body) == null ? void 0 : _a2.data) {
    if (payload.mimeType === "text/plain") {
     result.text = atob(payload.body.data);
    } else if (payload.mimeType === "text/html") {
@@ -6907,7 +7484,7 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
   }
   if (payload.parts) {
    for (const part of payload.parts) {
-    if (part.body?.data) {
+    if ((_b = part.body) == null ? void 0 : _b.data) {
      if (part.mimeType === "text/plain" && !result.text) {
       result.text = atob(part.body.data);
      } else if (part.mimeType === "text/html" && !result.html) {
@@ -6928,12 +7505,13 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
  function extractAttachmentInfo(payload) {
   const attachments = [];
   function processPayload(part) {
+   var _a2, _b;
    if (part.filename && part.filename.length > 0) {
     attachments.push({
-     attachment_id: part.body?.attachmentId,
+     attachment_id: (_a2 = part.body) == null ? void 0 : _a2.attachmentId,
      filename: part.filename,
      mime_type: part.mimeType,
-     size: part.body?.size || 0,
+     size: ((_b = part.body) == null ? void 0 : _b.size) || 0,
      part_id: part.partId
     });
    }
@@ -6948,6 +7526,7 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
  // skills-ts-out/core/gmail/tools/get-emails.js
  init_buffer_inject();
  function buildListParams(args) {
+  var _a2, _b;
   const params = [];
   if (args.query) {
    params.push(`q=${encodeURIComponent(args.query)}`);
@@ -6957,7 +7536,7 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
     params.push(`labelIds=${encodeURIComponent(labelId)}`);
    });
   }
-  const maxResults = Math.min(parseInt(String(args.max_results ?? args.maxResults ?? 20), 10) || 20, 100);
+  const maxResults = Math.min(parseInt(String((_b = (_a2 = args.max_results) != null ? _a2 : args.maxResults) != null ? _b : 20), 10) || 20, 100);
   params.push(`maxResults=${maxResults}`);
   if (args.include_spam_trash) {
    params.push("includeSpamTrash=true");
@@ -6968,23 +7547,31 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
   return params;
  }
  function hasAttachments(message) {
-  if (message.payload?.body?.attachmentId)
+  var _a2, _b, _c;
+  if ((_b = (_a2 = message.payload) == null ? void 0 : _a2.body) == null ? void 0 : _b.attachmentId)
    return true;
-  if (message.payload?.parts) {
-   return message.payload.parts.some((part) => part.body?.attachmentId || part.filename && part.filename.length > 0);
+  if ((_c = message.payload) == null ? void 0 : _c.parts) {
+   return message.payload.parts.some((part) => {
+    var _a3;
+    return ((_a3 = part.body) == null ? void 0 : _a3.attachmentId) || part.filename && part.filename.length > 0;
+   });
   }
   return false;
  }
  function messageToEmailRow(message) {
-  const headers = message.payload?.headers || [];
-  const getHeader = (name2) => headers.find((h) => h.name.toLowerCase() === name2.toLowerCase())?.value || "";
+  var _a2, _b, _c, _d, _e, _f, _g2;
+  const headers = ((_a2 = message.payload) == null ? void 0 : _a2.headers) || [];
+  const getHeader = (name2) => {
+   var _a3;
+   return ((_a3 = headers.find((h) => h.name.toLowerCase() === name2.toLowerCase())) == null ? void 0 : _a3.value) || "";
+  };
   const subject = getHeader("Subject");
   const from = getHeader("From");
   const to = getHeader("To");
   const date = getHeader("Date");
   const fromMatch = from.match(/(.+?)\s*<([^>]+)>/) || [null, from, from];
-  const senderName = fromMatch[1]?.trim()?.replace(/^["']|["']$/g, "") || null;
-  const senderEmail = fromMatch[2]?.trim() || from;
+  const senderName = ((_c = (_b = fromMatch[1]) == null ? void 0 : _b.trim()) == null ? void 0 : _c.replace(/^["']|["']$/g, "")) || null;
+  const senderEmail = ((_d = fromMatch[2]) == null ? void 0 : _d.trim()) || from;
   return {
    id: message.id,
    thread_id: message.threadId,
@@ -6994,9 +7581,9 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
    date: date ? new Date(date).toISOString() : new Date(parseInt(message.internalDate, 10)).toISOString(),
    snippet: message.snippet,
    label_ids: message.labelIds || [],
-   is_read: !message.labelIds?.includes("UNREAD"),
-   is_important: message.labelIds?.includes("IMPORTANT"),
-   is_starred: message.labelIds?.includes("STARRED"),
+   is_read: !((_e = message.labelIds) == null ? void 0 : _e.includes("UNREAD")),
+   is_important: (_f = message.labelIds) == null ? void 0 : _f.includes("IMPORTANT"),
+   is_starred: (_g2 = message.labelIds) == null ? void 0 : _g2.includes("STARRED"),
    has_attachments: hasAttachments(message),
    size_estimate: message.sizeEstimate || 0
   };
@@ -7042,13 +7629,14 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
    required: []
   },
   async execute(args) {
+   var _a2, _b, _c, _d;
    const params = buildListParams(args);
    const listEndpoint = `/users/me/messages?${params.join("&")}`;
    const listResponse = await gmailFetch(listEndpoint);
    if (!listResponse.success) {
     return JSON.stringify({
      success: false,
-     error: listResponse.error?.message || "Failed to fetch email list"
+     error: ((_a2 = listResponse.error) == null ? void 0 : _a2.message) || "Failed to fetch email list"
     });
    }
    const messageList = listResponse.data;
@@ -7056,7 +7644,7 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
     return JSON.stringify({
      success: true,
      emails: [],
-     total_count: messageList.resultSizeEstimate ?? 0,
+     total_count: (_b = messageList.resultSizeEstimate) != null ? _b : 0,
      next_page_token: messageList.nextPageToken || null,
      query: args.query || null,
      label_ids: args.label_ids || null
@@ -7080,12 +7668,12 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
     }
    }
    const s2 = getGmailSkillState();
-   const showSensitive = s2.config.showSensitiveMessages ?? false;
+   const showSensitive = (_c = s2.config.showSensitiveMessages) != null ? _c : false;
    const filteredEmails = showSensitive ? emails : emails.filter((e2) => !isSensitiveText2((e2.subject || "") + " " + (e2.snippet || "")));
    return JSON.stringify({
     success: true,
     emails: filteredEmails,
-    total_count: messageList.resultSizeEstimate ?? 0,
+    total_count: (_d = messageList.resultSizeEstimate) != null ? _d : 0,
     next_page_token: messageList.nextPageToken || null,
     query: args.query || null,
     label_ids: args.label_ids || null
@@ -7111,6 +7699,7 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
    required: []
   },
   async execute(args) {
+   var _a2;
    try {
     const typeFilter = args.type || "all";
     const includeHidden = args.include_hidden === true;
@@ -7118,7 +7707,7 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
     if (!response.success) {
      return JSON.stringify({
       success: false,
-      error: response.error?.message || "Failed to fetch labels"
+      error: ((_a2 = response.error) == null ? void 0 : _a2.message) || "Failed to fetch labels"
      });
     }
     const labelsData = response.data;
@@ -7183,12 +7772,13 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
    required: []
   },
   async execute(_args) {
+   var _a2;
    try {
     const response = await gmailFetch("/users/me/profile");
     if (!response.success) {
      return JSON.stringify({
       success: false,
-      error: response.error?.message || "Failed to fetch profile"
+      error: ((_a2 = response.error) == null ? void 0 : _a2.message) || "Failed to fetch profile"
      });
     }
     const profile = response.data;
@@ -7257,6 +7847,7 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
    required: ["message_ids", "action"]
   },
   async execute(args) {
+   var _a2;
    try {
     const messageIds = args.message_ids;
     const action = args.action;
@@ -7290,7 +7881,7 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
        results.push({
         message_id: messageId,
         success: false,
-        error: response.error?.message || "Failed to update message"
+        error: ((_a2 = response.error) == null ? void 0 : _a2.message) || "Failed to update message"
        });
        errors.push(messageId);
       }
@@ -7380,6 +7971,7 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
    required: ["query"]
   },
   async execute(args) {
+   var _a2, _b, _c, _d, _e, _f, _g2, _h;
    try {
     const query = args.query;
     if (!query) {
@@ -7399,7 +7991,7 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
     if (!searchResponse.success || !searchResponse.data) {
      return JSON.stringify({
       success: false,
-      error: searchResponse.error?.message || "Search failed"
+      error: ((_a2 = searchResponse.error) == null ? void 0 : _a2.message) || "Search failed"
      });
     }
     const searchResults = searchResponse.data;
@@ -7421,15 +8013,15 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
      for (const msgResponse of results) {
       if (msgResponse.success && msgResponse.data) {
        const message = msgResponse.data;
-       const headers = message.payload?.headers || [];
+       const headers = ((_b = message.payload) == null ? void 0 : _b.headers) || [];
        const headerMap = {};
        headers.forEach((header) => {
         headerMap[header.name.toLowerCase()] = header.value;
        });
        const from = headerMap.from || "";
        const fromMatch = from.match(/(.+?)\s*<([^>]+)>/) || [null, from, from];
-       const senderName = fromMatch[1]?.trim().replace(/^["']|["']$/g, "") || null;
-       const senderEmail = fromMatch[2]?.trim() || from;
+       const senderName = ((_c = fromMatch[1]) == null ? void 0 : _c.trim().replace(/^["']|["']$/g, "")) || null;
+       const senderEmail = ((_d = fromMatch[2]) == null ? void 0 : _d.trim()) || from;
        emails.push({
         id: message.id,
         thread_id: message.threadId,
@@ -7441,9 +8033,9 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
         label_ids: message.labelIds || [],
         size_estimate: message.sizeEstimate || 0,
         status: {
-         is_read: !message.labelIds?.includes("UNREAD"),
-         is_important: message.labelIds?.includes("IMPORTANT"),
-         is_starred: message.labelIds?.includes("STARRED"),
+         is_read: !((_e = message.labelIds) == null ? void 0 : _e.includes("UNREAD")),
+         is_important: (_f = message.labelIds) == null ? void 0 : _f.includes("IMPORTANT"),
+         is_starred: (_g2 = message.labelIds) == null ? void 0 : _g2.includes("STARRED"),
          has_attachments: hasAttachments2(message)
         },
         relevance_score: calculateRelevanceScore(message, query)
@@ -7453,7 +8045,7 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
      }
     }
     const s2 = getGmailSkillState();
-    const showSensitive = s2.config.showSensitiveMessages ?? false;
+    const showSensitive = (_h = s2.config.showSensitiveMessages) != null ? _h : false;
     const filteredEmails = showSensitive ? emails : emails.filter((e2) => !isSensitiveText2((e2.subject || "") + " " + (e2.snippet || "")));
     filteredEmails.sort((a, b) => b.relevance_score - a.relevance_score);
     return JSON.stringify({
@@ -7474,27 +8066,32 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
   }
  };
  function hasAttachments2(message) {
-  if (message.payload?.body?.attachmentId)
+  var _a2, _b, _c;
+  if ((_b = (_a2 = message.payload) == null ? void 0 : _a2.body) == null ? void 0 : _b.attachmentId)
    return true;
-  if (message.payload?.parts) {
-   return message.payload.parts.some((part) => part.body?.attachmentId || part.filename && part.filename.length > 0);
+  if ((_c = message.payload) == null ? void 0 : _c.parts) {
+   return message.payload.parts.some((part) => {
+    var _a3;
+    return ((_a3 = part.body) == null ? void 0 : _a3.attachmentId) || part.filename && part.filename.length > 0;
+   });
   }
   return false;
  }
  function calculateRelevanceScore(message, query) {
+  var _a2, _b, _c, _d, _e, _f;
   let score = 0;
   const queryLower = query.toLowerCase();
-  const subject = message.payload?.headers?.find((h) => h.name.toLowerCase() === "subject")?.value || "";
+  const subject = ((_c = (_b = (_a2 = message.payload) == null ? void 0 : _a2.headers) == null ? void 0 : _b.find((h) => h.name.toLowerCase() === "subject")) == null ? void 0 : _c.value) || "";
   if (subject.toLowerCase().includes(queryLower)) {
    score += 10;
   }
-  if (message.snippet?.toLowerCase().includes(queryLower)) {
+  if ((_d = message.snippet) == null ? void 0 : _d.toLowerCase().includes(queryLower)) {
    score += 5;
   }
-  if (message.labelIds?.includes("UNREAD")) {
+  if ((_e = message.labelIds) == null ? void 0 : _e.includes("UNREAD")) {
    score += 3;
   }
-  if (message.labelIds?.includes("IMPORTANT")) {
+  if ((_f = message.labelIds) == null ? void 0 : _f.includes("IMPORTANT")) {
    score += 5;
   }
   const messageDate = new Date(parseInt(message.internalDate));
@@ -7590,6 +8187,7 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
    required: ["to", "subject"]
   },
   async execute(args) {
+   var _a2, _b, _c, _d, _e;
    try {
     const to = args.to;
     const subject = args.subject;
@@ -7608,7 +8206,7 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
      });
     }
     const s2 = getGmailSkillState();
-    const fromEmail = s2.config.userEmail || s2.profile?.emailAddress;
+    const fromEmail = s2.config.userEmail || ((_a2 = s2.profile) == null ? void 0 : _a2.emailAddress);
     if (!fromEmail) {
      return JSON.stringify({
       success: false,
@@ -7712,7 +8310,7 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
     if (!response.success) {
      return JSON.stringify({
       success: false,
-      error: response.error?.message || "Failed to send email"
+      error: ((_b = response.error) == null ? void 0 : _b.message) || "Failed to send email"
      });
     }
     const sentMessage = response.data;
@@ -7724,12 +8322,12 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
     }
     return JSON.stringify({
      success: true,
-     message_id: sentMessage?.id ?? null,
-     thread_id: sentMessage?.threadId ?? null,
-     label_ids: sentMessage?.labelIds ?? [],
+     message_id: (_c = sentMessage == null ? void 0 : sentMessage.id) != null ? _c : null,
+     thread_id: (_d = sentMessage == null ? void 0 : sentMessage.threadId) != null ? _d : null,
+     label_ids: (_e = sentMessage == null ? void 0 : sentMessage.labelIds) != null ? _e : [],
      to: formatEmailAddresses(to),
      subject,
-     size_estimate: sentMessage?.sizeEstimate || 0
+     size_estimate: (sentMessage == null ? void 0 : sentMessage.sizeEstimate) || 0
     });
    } catch (error) {
     return JSON.stringify({
@@ -7761,6 +8359,7 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
 
  // skills-ts-out/core/gmail/index.js
  async function init() {
+  var _a2, _b, _c;
   console.log(`[gmail] Initializing on ${platform.os()}`);
   const s2 = getGmailSkillState();
   initializeGmailSchema();
@@ -7768,11 +8367,11 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
   if (saved) {
    s2.config.credentialId = saved.credentialId || s2.config.credentialId;
    s2.config.userEmail = saved.userEmail || s2.config.userEmail;
-   s2.config.syncEnabled = saved.syncEnabled ?? s2.config.syncEnabled;
+   s2.config.syncEnabled = (_a2 = saved.syncEnabled) != null ? _a2 : s2.config.syncEnabled;
    s2.config.syncIntervalMinutes = saved.syncIntervalMinutes || s2.config.syncIntervalMinutes;
    s2.config.maxEmailsPerSync = saved.maxEmailsPerSync || s2.config.maxEmailsPerSync;
-   s2.config.notifyOnNewEmails = saved.notifyOnNewEmails ?? s2.config.notifyOnNewEmails;
-   s2.config.showSensitiveMessages = saved.showSensitiveMessages ?? s2.config.showSensitiveMessages;
+   s2.config.notifyOnNewEmails = (_b = saved.notifyOnNewEmails) != null ? _b : s2.config.notifyOnNewEmails;
+   s2.config.showSensitiveMessages = (_c = saved.showSensitiveMessages) != null ? _c : s2.config.showSensitiveMessages;
   }
   const lastSync = state.get("lastSyncTime");
   const lastHistoryId = state.get("lastHistoryId");
@@ -7859,6 +8458,7 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
   console.log("[gmail] Disconnected and cleaned up");
  }
  async function onAuthComplete(args) {
+  var _a2;
   console.log(`[gmail] onAuthComplete \u2014 mode: ${args.mode}`);
   const s2 = getGmailSkillState();
   if (args.mode === "managed") {
@@ -7928,7 +8528,7 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
    }
   }
   if (args.mode === "text") {
-   const content = args.credentials.content ?? "";
+   const content = (_a2 = args.credentials.content) != null ? _a2 : "";
    if (!content.trim()) {
     return {
      status: "error",
@@ -8024,6 +8624,7 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
   return { status: "complete" };
  }
  async function onListOptions() {
+  var _a2;
   const s2 = getGmailSkillState();
   return {
    options: [
@@ -8067,7 +8668,7 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
      name: "showSensitiveMessages",
      type: "boolean",
      label: "Show Sensitive Messages",
-     value: s2.config.showSensitiveMessages ?? false
+     value: (_a2 = s2.config.showSensitiveMessages) != null ? _a2 : false
     }
    ]
   };

@@ -123,12 +123,12 @@ var __skill_bundle = (() => {
    if (typeof data2 === "bigint" || data2 && typeof data2 === "object" && typeof data2.toJSNumber === "function") {
     let bigVal = typeof data2 === "bigint" ? data2 : data2.value;
     if (typeof bigVal !== "bigint") bigVal = BigInt(data2.valueOf());
-    const isNegative = bigVal < 0n;
+    const isNegative = bigVal < /* @__PURE__ */ BigInt("0");
     if (isNegative) bigVal = -bigVal;
     const bytes = [];
-    while (bigVal > 0n) {
-     bytes.push(Number(bigVal & 0xffn));
-     bigVal >>= 8n;
+    while (bigVal > /* @__PURE__ */ BigInt("0")) {
+     bytes.push(Number(bigVal & /* @__PURE__ */ BigInt("0xff")));
+     bigVal >>= /* @__PURE__ */ BigInt("8");
     }
     if (bytes.length === 0) bytes.push(0);
     if (isNegative) {
@@ -369,22 +369,22 @@ var __skill_bundle = (() => {
   readBigInt64LE(offset = 0) {
    const lo = this.readUInt32LE(offset);
    const hi = this.readInt32LE(offset + 4);
-   return BigInt(lo) | BigInt(hi) << 32n;
+   return BigInt(lo) | BigInt(hi) << /* @__PURE__ */ BigInt("32");
   }
   readBigInt64BE(offset = 0) {
    const hi = this.readInt32BE(offset);
    const lo = this.readUInt32BE(offset + 4);
-   return BigInt(lo) | BigInt(hi) << 32n;
+   return BigInt(lo) | BigInt(hi) << /* @__PURE__ */ BigInt("32");
   }
   readBigUInt64LE(offset = 0) {
    const lo = this.readUInt32LE(offset);
    const hi = this.readUInt32LE(offset + 4);
-   return BigInt(lo) | BigInt(hi) << 32n;
+   return BigInt(lo) | BigInt(hi) << /* @__PURE__ */ BigInt("32");
   }
   readBigUInt64BE(offset = 0) {
    const hi = this.readUInt32BE(offset);
    const lo = this.readUInt32BE(offset + 4);
-   return BigInt(lo) | BigInt(hi) << 32n;
+   return BigInt(lo) | BigInt(hi) << /* @__PURE__ */ BigInt("32");
   }
   readFloatLE(offset = 0) {
    const view = new DataView(this.buffer, this.byteOffset + offset, 4);
@@ -461,29 +461,29 @@ var __skill_bundle = (() => {
    return offset + 4;
   }
   writeBigInt64LE(value, offset = 0) {
-   const lo = Number(value & 0xffffffffn);
-   const hi = Number(value >> 32n & 0xffffffffn);
+   const lo = Number(value & /* @__PURE__ */ BigInt("0xffffffff"));
+   const hi = Number(value >> /* @__PURE__ */ BigInt("32") & /* @__PURE__ */ BigInt("0xffffffff"));
    this.writeUInt32LE(lo, offset);
    this.writeInt32LE(hi, offset + 4);
    return offset + 8;
   }
   writeBigInt64BE(value, offset = 0) {
-   const lo = Number(value & 0xffffffffn);
-   const hi = Number(value >> 32n & 0xffffffffn);
+   const lo = Number(value & /* @__PURE__ */ BigInt("0xffffffff"));
+   const hi = Number(value >> /* @__PURE__ */ BigInt("32") & /* @__PURE__ */ BigInt("0xffffffff"));
    this.writeInt32BE(hi, offset);
    this.writeUInt32BE(lo, offset + 4);
    return offset + 8;
   }
   writeBigUInt64LE(value, offset = 0) {
-   const lo = Number(value & 0xffffffffn);
-   const hi = Number(value >> 32n & 0xffffffffn);
+   const lo = Number(value & /* @__PURE__ */ BigInt("0xffffffff"));
+   const hi = Number(value >> /* @__PURE__ */ BigInt("32") & /* @__PURE__ */ BigInt("0xffffffff"));
    this.writeUInt32LE(lo, offset);
    this.writeUInt32LE(hi, offset + 4);
    return offset + 8;
   }
   writeBigUInt64BE(value, offset = 0) {
-   const lo = Number(value & 0xffffffffn);
-   const hi = Number(value >> 32n & 0xffffffffn);
+   const lo = Number(value & /* @__PURE__ */ BigInt("0xffffffff"));
+   const hi = Number(value >> /* @__PURE__ */ BigInt("32") & /* @__PURE__ */ BigInt("0xffffffff"));
    this.writeUInt32BE(hi, offset);
    this.writeUInt32BE(lo, offset + 4);
    return offset + 8;
@@ -635,10 +635,11 @@ var __skill_bundle = (() => {
   };
  }
  async function onSetupSubmit(args) {
+  var _a, _b, _c;
   const { stepId, values } = args;
   const s = globalThis.getSkillState();
   if (stepId === "server-config") {
-   const url = (values.serverUrl ?? "").trim();
+   const url = ((_a = values.serverUrl) != null ? _a : "").trim();
    if (!url) {
     return {
      status: "error",
@@ -705,8 +706,8 @@ var __skill_bundle = (() => {
    };
   }
   if (stepId === "notification-config") {
-   s.config.notifyOnDown = values.notifyOnDown ?? true;
-   s.config.notifyOnRecover = values.notifyOnRecover ?? true;
+   s.config.notifyOnDown = (_b = values.notifyOnDown) != null ? _b : true;
+   s.config.notifyOnRecover = (_c = values.notifyOnRecover) != null ? _c : true;
    state.set("config", s.config);
    data.write("config.json", JSON.stringify(s.config, null, 2));
    console.log(`[server-ping] Setup complete \u2014 monitoring ${s.config.serverUrl}`);
@@ -766,7 +767,7 @@ var __skill_bundle = (() => {
     consecutiveFailures: s.consecutiveFails,
     uptimePercent: uptimePct,
     lastPing: latest ? { latencyMs: latest.latency_ms, status: latest.status, at: latest.timestamp } : null,
-    avgLatencyMs: avgLatency?.avg_ms ? Math.round(avgLatency.avg_ms) : null,
+    avgLatencyMs: (avgLatency == null ? void 0 : avgLatency.avg_ms) ? Math.round(avgLatency.avg_ms) : null,
     platform: platform.os()
    });
   }
@@ -798,7 +799,8 @@ var __skill_bundle = (() => {
   description: "Trigger an immediate ping to the configured server and return the result.",
   input_schema: { type: "object", properties: {} },
   async execute() {
-   await globalThis.doPing?.();
+   var _a;
+   await ((_a = globalThis.doPing) == null ? void 0 : _a.call(globalThis));
    const s = globalThis.getSkillState();
    const latest = db.get("SELECT timestamp, status, latency_ms, success, error FROM ping_log ORDER BY id DESC LIMIT 1", []);
    return JSON.stringify({ triggered: true, pingNumber: s.pingCount, result: latest });
@@ -830,7 +832,8 @@ var __skill_bundle = (() => {
    required: ["url"]
   },
   async execute(args) {
-   const url = (args.url ?? "").trim();
+   var _a, _b;
+   const url = ((_a = args.url) != null ? _a : "").trim();
    if (!url || !url.startsWith("http")) {
     return JSON.stringify({ error: "Invalid URL \u2014 must start with http:// or https://" });
    }
@@ -839,7 +842,7 @@ var __skill_bundle = (() => {
    s.config.serverUrl = url;
    state.set("config", s.config);
    console.log(`[server-ping] Server URL changed: ${oldUrl} -> ${url}`);
-   globalThis.publishState?.();
+   (_b = globalThis.publishState) == null ? void 0 : _b.call(globalThis);
    return JSON.stringify({ success: true, oldUrl, newUrl: url });
   }
  };
@@ -852,7 +855,7 @@ var __skill_bundle = (() => {
   async execute() {
    try {
     const raw = data.read("config.json");
-    return raw ?? JSON.stringify({ error: "No config file found" });
+    return raw != null ? raw : JSON.stringify({ error: "No config file found" });
    } catch (e) {
     return JSON.stringify({ error: `Failed to read config: ${e}` });
    }
@@ -864,16 +867,17 @@ var __skill_bundle = (() => {
   return globalThis.getSkillState();
  }
  async function init() {
+  var _a, _b, _c, _d, _e, _f, _g3;
   console.log(`[server-ping] Initializing on ${platform.os()}`);
   globalThis.initializeServerPingSchema();
   const s = getSkillState2();
   const saved = state.get("config");
   if (saved) {
-   s.config.serverUrl = saved.serverUrl ?? s.config.serverUrl;
-   s.config.pingIntervalSec = saved.pingIntervalSec ?? s.config.pingIntervalSec;
-   s.config.notifyOnDown = saved.notifyOnDown ?? s.config.notifyOnDown;
-   s.config.notifyOnRecover = saved.notifyOnRecover ?? s.config.notifyOnRecover;
-   s.config.verboseLogging = saved.verboseLogging ?? s.config.verboseLogging;
+   s.config.serverUrl = (_a = saved.serverUrl) != null ? _a : s.config.serverUrl;
+   s.config.pingIntervalSec = (_b = saved.pingIntervalSec) != null ? _b : s.config.pingIntervalSec;
+   s.config.notifyOnDown = (_c = saved.notifyOnDown) != null ? _c : s.config.notifyOnDown;
+   s.config.notifyOnRecover = (_d = saved.notifyOnRecover) != null ? _d : s.config.notifyOnRecover;
+   s.config.verboseLogging = (_e = saved.verboseLogging) != null ? _e : s.config.verboseLogging;
   }
   if (!s.config.serverUrl) {
    const envUrl = platform.env("BACKEND_URL") || platform.env("BACKEND_URL");
@@ -884,8 +888,8 @@ var __skill_bundle = (() => {
   }
   const counters = state.get("counters");
   if (counters) {
-   s.pingCount = counters.pingCount ?? 0;
-   s.failCount = counters.failCount ?? 0;
+   s.pingCount = (_f = counters.pingCount) != null ? _f : 0;
+   s.failCount = (_g3 = counters.failCount) != null ? _g3 : 0;
   }
   console.log(`[server-ping] Config loaded \u2014 target: ${s.config.serverUrl}`);
  }
