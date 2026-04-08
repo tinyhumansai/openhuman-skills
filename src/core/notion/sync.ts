@@ -498,7 +498,7 @@ function extractRowTitle(rowRec: Record<string, unknown>): string {
       const prop = props[key] as Record<string, unknown>;
       if (prop.type === 'title' && Array.isArray(prop.title)) {
         const texts = prop.title as Array<Record<string, unknown>>;
-        const t = texts.map((rt) => (rt.plain_text as string) || '').join('');
+        const t = texts.map(rt => (rt.plain_text as string) || '').join('');
         if (t) return t;
       }
     }
@@ -519,7 +519,9 @@ function buildRowContent(rowRec: Record<string, unknown>): string {
     if (propType === 'title' || propType === 'rich_text') {
       const arr = prop[propType];
       if (Array.isArray(arr)) {
-        const t = arr.map((rt: Record<string, unknown>) => (rt.plain_text as string) || '').join('');
+        const t = arr
+          .map((rt: Record<string, unknown>) => (rt.plain_text as string) || '')
+          .join('');
         if (t) parts.push(key + ': ' + t);
       }
     } else if (propType === 'number' && prop.number != null) {
@@ -529,7 +531,7 @@ function buildRowContent(rowRec: Record<string, unknown>): string {
       if (sel && sel.name) parts.push(key + ': ' + (sel.name as string));
     } else if (propType === 'multi_select' && Array.isArray(prop.multi_select)) {
       const names = (prop.multi_select as Array<Record<string, unknown>>)
-        .map((ms) => ms.name as string)
+        .map(ms => ms.name as string)
         .filter(Boolean);
       if (names.length) parts.push(key + ': ' + names.join(', '));
     } else if (propType === 'date') {
@@ -548,7 +550,7 @@ function buildRowContent(rowRec: Record<string, unknown>): string {
       if (st && st.name) parts.push(key + ': ' + (st.name as string));
     } else if (propType === 'people' && Array.isArray(prop.people)) {
       const names = (prop.people as Array<Record<string, unknown>>)
-        .map((p) => (p.name as string) || '')
+        .map(p => (p.name as string) || '')
         .filter(Boolean);
       if (names.length) parts.push(key + ': ' + names.join(', '));
     }
