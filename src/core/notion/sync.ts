@@ -241,7 +241,7 @@ function syncPipeline(): void {
                   title: pageTitle || `Notion page ${rec.id}`,
                   content: trimmed,
                   sourceType: 'doc',
-                  documentId: `notion-page-${rec.id}`,
+                  documentId: `${rec.last_edited_time ? new Date(rec.last_edited_time as string).getTime() : Date.now()}-notion-page-${rec.id}`,
                   metadata: {
                     source: 'notion',
                     type: 'page',
@@ -434,7 +434,7 @@ function syncDataSources(): void {
                   title: rowTitle + ' (' + dbTitle + ')',
                   content,
                   sourceType: 'doc',
-                  documentId: 'notion-dbrow-' + (rowRec.id as string),
+                  documentId: (rowRec.last_edited_time ? new Date(rowRec.last_edited_time as string).getTime() : Date.now()) + '-notion-dbrow-' + (rowRec.id as string),
                   metadata: {
                     source: 'notion',
                     type: 'database_row',
