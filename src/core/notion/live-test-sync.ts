@@ -4,7 +4,7 @@
  * Notion sync live test.
  *
  * Tests the full sync pipeline: page discovery, content extraction, and memory ingestion.
- * Exercises the sync via skill RPC and monitors progress.
+ * Exercises the sync via skill RPC and monitors progress with verbose state logging.
  *
  * Env vars (required):
  *   JWT_TOKEN                — session JWT
@@ -40,6 +40,7 @@ const C = {
   yellow: '\x1b[33m',
   cyan: '\x1b[36m',
   blue: '\x1b[34m',
+  magenta: '\x1b[35m',
 };
 
 function header(text: string) {
@@ -62,6 +63,10 @@ function fail(detail: string) {
 
 function info(label: string, value: unknown) {
   console.log(`${C.dim}    ${label}: ${C.reset}${value}`);
+}
+
+function ts(): string {
+  return new Date().toISOString().slice(11, 19);
 }
 
 // ---------------------------------------------------------------------------
@@ -95,6 +100,40 @@ async function callTool(
   }
 }
 
+/** Dump full skill state with labels */
+async function dumpState(label: string): Promise<Record<string, unknown> | null> {
+  try {
+    const snap = await getSkillStatus(SKILL_ID);
+    const s = snap.state as Record<string, unknown> | undefined;
+    if (!s) {
+      console.log(`${C.yellow}    [${ts()}] ${label}: state is null/undefined${C.reset}`);
+      return null;
+    }
+
+    const syncKeys = [
+      'syncInProgress', 'syncPhase', 'syncProgress', 'syncMessage',
+      'totalPages', 'totalDatabases', 'totalDatabaseRows',
+      'pagesWithContent', 'pagesWithSummary',
+      'lastSyncTime', 'lastSyncDurationMs', 'lastSyncError',
+      'connection_status', 'auth_status', 'is_initialized',
+    ];
+
+    const parts: string[] = [];
+    for (const k of syncKeys) {
+      const v = s[k];
+      if (v !== null && v !== undefined && v !== '' && v !== 0 && v !== false) {
+        parts.push(`${k}=${typeof v === 'string' && v.length > 60 ? v.slice(0, 60) + '...' : v}`);
+      }
+    }
+
+    console.log(`${C.magenta}    [${ts()}] ${label}: ${parts.join(' | ') || '(all empty)'}${C.reset}`);
+    return s;
+  } catch (e: any) {
+    console.log(`${C.red}    [${ts()}] ${label}: ERROR ${e.message}${C.reset}`);
+    return null;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Config
 // ---------------------------------------------------------------------------
@@ -116,31 +155,34 @@ if (!JWT_TOKEN || !INTEGRATION_ID || !CLIENT_KEY) {
 
 async function main() {
   console.log(`\n${C.bold}  Notion Sync — Live Test${C.reset}`);
-  console.log(
-    `${C.dim}    Tip: run the skills runtime with RUST_LOG=info to see skill logs${C.reset}`
-  );
+  console.log(`${C.dim}    Tip: run the skills runtime with RUST_LOG=info to see skill logs${C.reset}`);
 
   // ── Setup ──────────────────────────────────────────────────────────────
 
   header('1. Setup');
 
+  let t0 = Date.now();
   step('Stopping any existing instance...');
   try {
     await stopSkill(SKILL_ID);
-    ok();
+    ok(`${Date.now() - t0}ms`);
   } catch {
-    ok('(was not running)');
+    ok(`(was not running) ${Date.now() - t0}ms`);
   }
 
+  t0 = Date.now();
   step('Starting notion skill...');
   try {
     const snap = await startSkill(SKILL_ID);
-    ok(`status=${snap.status}, tools=${snap.tools.length}`);
+    ok(`status=${snap.status}, tools=${snap.tools.length} (${Date.now() - t0}ms)`);
   } catch (e: any) {
-    fail(e.message);
+    fail(`${e.message} (${Date.now() - t0}ms)`);
     process.exit(1);
   }
 
+  await dumpState('after start');
+
+  t0 = Date.now();
   step('Authenticating (oauth/complete)...');
   try {
     await oauthComplete(SKILL_ID, {
@@ -149,116 +191,155 @@ async function main() {
       grantedScopes: [],
       clientKeyShare: CLIENT_KEY,
     });
-    ok();
+    ok(`${Date.now() - t0}ms`);
   } catch (e: any) {
-    fail(e.message);
+    fail(`${e.message} (${Date.now() - t0}ms)`);
     process.exit(1);
   }
 
+  await dumpState('after oauth');
+
+  t0 = Date.now();
   step('Marking setup complete...');
   try {
     await setSetupComplete(SKILL_ID, true);
-    ok();
+    ok(`${Date.now() - t0}ms`);
   } catch (e: any) {
-    fail(e.message);
+    fail(`${e.message} (${Date.now() - t0}ms)`);
   }
 
   // Wait for init to settle
-  await new Promise(r => setTimeout(r, 3000));
+  console.log(`${C.dim}    Waiting 2s for init to settle...${C.reset}`);
+  await new Promise(r => setTimeout(r, 2000));
+  await dumpState('after settle');
 
   // ── Pre-sync verification ─────────────────────────────────────────────
 
   header('2. Pre-Sync Verification');
 
+  t0 = Date.now();
   step('Testing API connectivity (list-users)...');
   {
     const { data, error, elapsedMs } = await callTool('list-users', { page_size: 100 }, 30_000);
     if (error) {
       fail(`${error} (${elapsedMs}ms)`);
+      await dumpState('after list-users FAIL');
       process.exit(1);
     }
     ok(`${data.count} user(s) (${elapsedMs}ms)`);
   }
 
-  step('Checking sync-status...');
+  step('Checking sync-status tool...');
   {
-    const { data, error } = await callTool('sync-status');
-    if (error) fail(error);
-    else {
+    const { data, error, elapsedMs } = await callTool('sync-status');
+    if (error) {
+      fail(`${error} (${elapsedMs}ms)`);
+    } else {
       info('connected', data.connected);
       info('pages', data.totals ? data.totals.pages : 0);
       info('databases', data.totals ? data.totals.databases : 0);
       info('last_sync_time', data.last_sync_time || 'never');
-      ok();
+      ok(`${elapsedMs}ms`);
     }
   }
 
   // ── Trigger sync ──────────────────────────────────────────────────────
 
-  header('3. Trigger Sync (fire-and-forget)');
+  header('3. Trigger Sync');
 
+  await dumpState('before sync trigger');
+
+  t0 = Date.now();
   step('Triggering sync (skill/sync RPC)...');
   try {
     const result = (await skillRpc(SKILL_ID, 'skill/sync', {})) as any;
-    ok(result && result.message ? result.message : JSON.stringify(result));
+    ok(`${result && result.message ? result.message : JSON.stringify(result)} (${Date.now() - t0}ms)`);
   } catch (e: any) {
-    fail(e.message);
+    fail(`${e.message} (${Date.now() - t0}ms)`);
   }
+
+  await dumpState('after sync trigger');
 
   // ── Poll sync progress ────────────────────────────────────────────────
 
   header('4. Sync Progress');
 
   const syncStartedAt = Date.now();
-  let lastPagesCount = 0;
+  let lastMessage = '';
+  let lastPhase = '';
+  let pollCount = 0;
+  let staleCount = 0;
 
   // Poll until sync completes or 10 minutes
   while (Date.now() - syncStartedAt < 10 * 60 * 1000) {
-    await new Promise(r => setTimeout(r, 3000));
+    await new Promise(r => setTimeout(r, 2000));
+    pollCount++;
 
     try {
       const snap = await getSkillStatus(SKILL_ID);
       const s = snap.state as Record<string, unknown> | undefined;
-      if (!s) continue;
+
+      if (!s) {
+        console.log(`${C.yellow}    [${ts()}] poll #${pollCount}: state is null${C.reset}`);
+        continue;
+      }
 
       const inProgress = s.syncInProgress;
       const pages = (s.totalPages as number) || 0;
       const dbs = (s.totalDatabases as number) || 0;
+      const dbRows = (s.totalDatabaseRows as number) || 0;
       const withContent = (s.pagesWithContent as number) || 0;
-      const phase = (s.syncPhase as string) || '';
+      const withSummary = (s.pagesWithSummary as number) || 0;
+      const phase = (s.syncPhase as string) || '(none)';
       const progress = (s.syncProgress as number) || 0;
       const message = (s.syncMessage as string) || '';
+      const syncError = s.lastSyncError as string | null;
       const elapsed = ((Date.now() - syncStartedAt) / 1000).toFixed(0);
+      const connStatus = s.connection_status || '?';
 
-      if (pages !== lastPagesCount || !inProgress || message) {
-        const bar = progress > 0 ? ` [${progress}%]` : '';
-        console.log(
-          `${C.dim}    [${elapsed}s]${bar} ${message || `pages=${pages} dbs=${dbs} content=${withContent}`}${C.reset}`
-        );
-        lastPagesCount = pages;
+      // Detect stale state (same message 5+ polls = something stuck)
+      if (message === lastMessage && phase === lastPhase) {
+        staleCount++;
+      } else {
+        staleCount = 0;
+      }
+      lastMessage = message;
+      lastPhase = phase;
+
+      // Always log every poll for visibility
+      const bar = progress > 0 ? `[${progress}%]` : '[0%]';
+      const staleTag = staleCount >= 5 ? ` ${C.yellow}(STALE x${staleCount})${C.reset}` : '';
+      console.log(
+        `    [${C.dim}${elapsed}s${C.reset}] ${C.cyan}${bar}${C.reset} ` +
+        `${C.bold}${phase}${C.reset} — ${message || '(no message)'}` +
+        ` | pages=${pages} dbs=${dbs} rows=${dbRows} content=${withContent} summaries=${withSummary}` +
+        ` | conn=${connStatus} inProgress=${inProgress}` +
+        staleTag
+      );
+
+      if (syncError) {
+        console.log(`    ${C.red}  ⚠ syncError: ${syncError}${C.reset}`);
       }
 
-      if (!inProgress && pages > 0) {
-        const syncError = s.lastSyncError as string | null;
+      // Sync completed
+      if (!inProgress && (pages > 0 || phase === '(none)') && pollCount > 2) {
         if (syncError) {
           fail(`Sync error: ${syncError}`);
         } else {
           ok(`Sync completed in ${elapsed}s`);
         }
+        await dumpState('sync complete');
         break;
       }
 
-      if (!inProgress && pages === 0) {
-        // Sync finished but found nothing — check for errors
-        const syncError = s.lastSyncError as string | null;
-        if (syncError) {
-          fail(`Sync error: ${syncError}`);
-          break;
-        }
-        // Still waiting for sync to actually start
+      // Stale for 20+ polls = likely stuck
+      if (staleCount >= 20) {
+        fail(`Sync appears stuck — same state for ${staleCount} polls (${elapsed}s)`);
+        await dumpState('sync stuck');
+        break;
       }
-    } catch {
-      // Status check failed, keep polling
+    } catch (e: any) {
+      console.log(`${C.red}    [${ts()}] poll #${pollCount}: ERROR ${e.message}${C.reset}`);
     }
   }
 
@@ -266,43 +347,52 @@ async function main() {
 
   header('5. Post-Sync State');
 
-  step('Checking skill state...');
-  try {
-    const snap = await getSkillStatus(SKILL_ID);
-    const s = snap.state as Record<string, unknown> | undefined;
-    info('totalPages', s ? s.totalPages : 'N/A');
-    info('totalDatabases', s ? s.totalDatabases : 'N/A');
-    info('totalDatabaseRows', s ? s.totalDatabaseRows : 'N/A');
-    info('pagesWithContent', s ? s.pagesWithContent : 'N/A');
-    info('lastSyncTime', s ? s.lastSyncTime : 'N/A');
-    info('lastSyncDurationMs', s ? s.lastSyncDurationMs : 'N/A');
-    info('lastSyncError', s && s.lastSyncError ? s.lastSyncError : '(none)');
+  step('Full state dump...');
+  const postState = await dumpState('post-sync');
+  if (postState) {
+    info('totalPages', postState.totalPages);
+    info('totalDatabases', postState.totalDatabases);
+    info('totalDatabaseRows', postState.totalDatabaseRows);
+    info('pagesWithContent', postState.pagesWithContent);
+    info('pagesWithSummary', postState.pagesWithSummary);
+    info('lastSyncTime', postState.lastSyncTime);
+    info('lastSyncDurationMs', postState.lastSyncDurationMs);
+    info('lastSyncError', postState.lastSyncError || '(none)');
+    info('syncPhase', postState.syncPhase || '(idle)');
+    info('syncProgress', postState.syncProgress);
+    info('syncMessage', postState.syncMessage || '(none)');
+    info('connection_status', postState.connection_status);
+    info('auth_status', postState.auth_status);
 
-    if (s && s.lastSyncError) {
-      fail(`Sync error: ${s.lastSyncError}`);
-    } else if (s && s.lastSyncTime) {
+    if (postState.lastSyncError) {
+      fail(`Sync error: ${postState.lastSyncError}`);
+    } else if (postState.lastSyncTime) {
       ok();
     } else {
       fail('Sync did not complete (lastSyncTime not set)');
     }
-  } catch (e: any) {
-    fail(e.message);
+  } else {
+    fail('Could not read state');
   }
 
   step('Checking sync-status tool...');
   {
-    const { data, error } = await callTool('sync-status');
-    if (error) fail(error);
+    const { data, error, elapsedMs } = await callTool('sync-status');
+    if (error) fail(`${error} (${elapsedMs}ms)`);
     else {
       const t = data.totals || {};
       info('pages', t.pages);
       info('databases', t.databases);
+      info('database_rows', t.database_rows);
       info('pages_with_content', t.pages_with_content);
+      info('pages_with_summary', t.pages_with_summary);
       info('sync_phase', data.sync_phase || '(idle)');
       info('sync_progress', data.sync_progress);
       info('sync_message', data.sync_message || '(none)');
       info('last_sync_error', data.last_sync_error || '(none)');
-      ok();
+      info('last_sync_time', data.last_sync_time || 'never');
+      info('last_sync_duration_ms', data.last_sync_duration_ms);
+      ok(`${elapsedMs}ms`);
     }
   }
 
@@ -316,7 +406,7 @@ async function main() {
       page_size: 5,
       tryCache: true,
     });
-    if (error) fail(error);
+    if (error) fail(`${error} (${elapsedMs}ms)`);
     else {
       ok(`${data.count} pages (${elapsedMs}ms, source=${data.source})`);
       const pages = data.pages || [];
@@ -330,7 +420,7 @@ async function main() {
       page_size: 5,
       tryCache: true,
     });
-    if (error) fail(error);
+    if (error) fail(`${error} (${elapsedMs}ms)`);
     else {
       ok(`${data.count} databases (${elapsedMs}ms, source=${data.source})`);
       const dbs = data.databases || [];
@@ -341,7 +431,7 @@ async function main() {
   step('list-users (tryCache=true)...');
   {
     const { data, error, elapsedMs } = await callTool('list-users', { tryCache: true });
-    if (error) fail(error);
+    if (error) fail(`${error} (${elapsedMs}ms)`);
     else ok(`${data.count} users (${elapsedMs}ms, source=${data.source})`);
   }
 
