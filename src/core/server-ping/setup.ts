@@ -58,7 +58,7 @@ async function onSetupSubmit(args: {
   const s = (globalThis as any).getSkillState() as ServerPingState;
 
   if (stepId === 'server-config') {
-    const url = ((values.serverUrl as string) ?? '').trim();
+    const url = ((values.serverUrl as string) || '').trim();
     if (!url) {
       return {
         status: 'error',
@@ -131,8 +131,8 @@ async function onSetupSubmit(args: {
   }
 
   if (stepId === 'notification-config') {
-    s.config.notifyOnDown = (values.notifyOnDown as boolean) ?? true;
-    s.config.notifyOnRecover = (values.notifyOnRecover as boolean) ?? true;
+    s.config.notifyOnDown = values.notifyOnDown != null ? (values.notifyOnDown as boolean) : true;
+    s.config.notifyOnRecover = values.notifyOnRecover != null ? (values.notifyOnRecover as boolean) : true;
 
     state.set('config', s.config);
     data.write('config.json', JSON.stringify(s.config, null, 2));

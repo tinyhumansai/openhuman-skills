@@ -40,7 +40,9 @@ function withLogging(tool: ToolDefinition): ToolDefinition {
           ? argKeys
               .map(k => {
                 const v = args[k];
-                if (typeof v === 'string' && v.length > 50) return `${k}=<${v.length} chars>`;
+                if (typeof v === 'string') return `${k}=<${v.length} chars>`;
+                if (Array.isArray(v)) return `${k}=<array ${v.length}>`;
+                if (v && typeof v === 'object') return `${k}=<object>`;
                 return `${k}=${JSON.stringify(v)}`;
               })
               .join(', ')

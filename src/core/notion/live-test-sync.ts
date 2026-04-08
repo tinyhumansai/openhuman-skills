@@ -179,6 +179,10 @@ async function main() {
 
   // ── 4. Poll ──────────────────────────────────────────────────────────
 
+  // Capture initial lastSyncTime so we can detect when a new sync completes
+  const preSync = await getState();
+  const initialLastSyncTime = preSync ? (preSync.lastSyncTime as string | null) : null;
+
   const t0 = Date.now();
   let lastLine = '';
   let stale = 0;
@@ -201,6 +205,7 @@ async function main() {
     const content = (s.pagesWithContent as number) || 0;
     const inProg = s.syncInProgress;
     const err = s.lastSyncError as string | null;
+    const currentSyncTime = s.lastSyncTime as string | null;
 
     const line = `${phase}|${pct}|${msg}`;
     if (line === lastLine) {
@@ -219,7 +224,9 @@ async function main() {
 
     if (err) console.log(`    ${C.red}⚠ ${err}${C.reset}`);
 
-    if (!inProg && pages > 0) {
+    // Sync is done when not in progress AND lastSyncTime advanced (handles empty workspaces)
+    const syncTimeAdvanced = currentSyncTime && currentSyncTime !== initialLastSyncTime;
+    if (!inProg && (syncTimeAdvanced || pages > 0)) {
       if (err) {
         fail(`Sync error: ${err}`);
       } else {

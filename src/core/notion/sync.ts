@@ -93,9 +93,7 @@ export function performSync(): void {
     s.syncStatus.lastSyncDurationMs = durationMs;
 
     const counts = getEntityCounts();
-    if (counts.pages > 0 || counts.databases > 0) {
-      s.syncStatus.lastSyncTime = nowMs;
-    }
+    s.syncStatus.lastSyncTime = nowMs;
 
     s.syncStatus.totalPages = counts.pages;
     s.syncStatus.totalDatabases = counts.databases;
@@ -210,8 +208,13 @@ function syncPipeline(): void {
 
       if (objectType === 'page') {
         // Check if page is unchanged
-        const existing = getPageById ? getPageById(rec.id as string) : null;
-        if (existing && existing.last_edited_time === lastEdited) {
+        const existing = getPageById(rec.id as string);
+        if (
+          existing &&
+          existing.last_edited_time === lastEdited &&
+          existing.ingested === 1 &&
+          existing.content_text
+        ) {
           pageSkipped++;
           continue;
         }
@@ -607,7 +610,7 @@ function insertNotionMemorySnapshot(): void {
     synced_at: p.synced_at,
     has_content: !!p.content_text,
     content_length: p.content_text ? p.content_text.length : 0,
-    content_text: p.content_text,
+    // content_text omitted — too large for metadata snapshot
   }));
 
   const summaries = getLocalSummaries(100).map(summary => ({

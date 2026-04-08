@@ -47,14 +47,14 @@ export const getEmailTool: ToolDefinition = {
       if (!response.success) {
         return JSON.stringify({
           success: false,
-          error: response.error?.message || 'Failed to fetch email',
+          error: (response.error ? response.error.message : null) || 'Failed to fetch email',
         });
       }
 
       const message = response.data as GmailMessage;
 
       // Parse email content
-      const headers = message.payload?.headers || [];
+      const headers = (message.payload && message.payload.headers) || [];
       const result: any = {
         id: message.id,
         thread_id: message.threadId,
@@ -87,8 +87,8 @@ export const getEmailTool: ToolDefinition = {
       const from = result.headers.from;
       const fromMatch = from.match(/(.+?)\s*<([^>]+)>/) || [null, from, from];
       result.sender = {
-        name: fromMatch[1]?.trim().replace(/^["']|["']$/g, '') || null,
-        email: fromMatch[2]?.trim() || from,
+        name: (fromMatch[1] ? fromMatch[1].trim().replace(/^["']|["']$/g, '') : null) || null,
+        email: (fromMatch[2] ? fromMatch[2].trim() : null) || from,
       };
 
       // Parse recipients
@@ -100,13 +100,13 @@ export const getEmailTool: ToolDefinition = {
 
       // Status flags
       result.status = {
-        is_read: !message.labelIds?.includes('UNREAD'),
-        is_important: message.labelIds?.includes('IMPORTANT'),
-        is_starred: message.labelIds?.includes('STARRED'),
-        is_draft: message.labelIds?.includes('DRAFT'),
-        is_sent: message.labelIds?.includes('SENT'),
-        is_spam: message.labelIds?.includes('SPAM'),
-        is_trash: message.labelIds?.includes('TRASH'),
+        is_read: !(message.labelIds && message.labelIds.includes('UNREAD')),
+        is_important: message.labelIds && message.labelIds.includes('IMPORTANT'),
+        is_starred: message.labelIds && message.labelIds.includes('STARRED'),
+        is_draft: message.labelIds && message.labelIds.includes('DRAFT'),
+        is_sent: message.labelIds && message.labelIds.includes('SENT'),
+        is_spam: message.labelIds && message.labelIds.includes('SPAM'),
+        is_trash: message.labelIds && message.labelIds.includes('TRASH'),
       };
 
       // Extract body content if requested
@@ -134,9 +134,9 @@ export const getEmailTool: ToolDefinition = {
       // If sensitive and user has not opted in to show sensitive, return redacted response.
       // Consistent with search-emails: only check subject and snippet (not full body).
       const s = getGmailSkillState();
-      const showSensitive = s.config.showSensitiveMessages ?? false;
+      const showSensitive = (s.config.showSensitiveMessages !== null && s.config.showSensitiveMessages !== undefined) ? s.config.showSensitiveMessages : false;
       if (!showSensitive) {
-        const textToCheck = (result.headers?.subject || '') + ' ' + (result.snippet || '');
+        const textToCheck = ((result.headers && result.headers.subject) || '') + ' ' + (result.snippet || '');
         if (isSensitiveText(textToCheck)) {
           return JSON.stringify({
             success: true,
@@ -177,8 +177,8 @@ function parseEmailAddresses(headerValue: string): Array<{ email: string; name?:
     if (!trimmed) return;
 
     const match = trimmed.match(/(.+?)\s*<([^>]+)>/) || [null, trimmed, trimmed];
-    const name = match[1]?.trim().replace(/^["']|["']$/g, '') || undefined;
-    const email = match[2]?.trim() || trimmed;
+    const name = (match[1] ? match[1].trim().replace(/^["']|["']$/g, '') : undefined) || undefined;
+    const email = (match[2] ? match[2].trim() : null) || trimmed;
 
     addresses.push({ email, name: name !== email ? name : undefined });
   });
@@ -192,7 +192,7 @@ function parseEmailAddresses(headerValue: string): Array<{ email: string; name?:
 function extractEmailBodies(payload: any): { text?: string; html?: string } {
   const result: { text?: string; html?: string } = {};
 
-  if (payload.body?.data) {
+  if (payload.body && payload.body.data) {
     if (payload.mimeType === 'text/plain') {
       result.text = atob(payload.body.data);
     } else if (payload.mimeType === 'text/html') {
@@ -202,7 +202,7 @@ function extractEmailBodies(payload: any): { text?: string; html?: string } {
 
   if (payload.parts) {
     for (const part of payload.parts) {
-      if (part.body?.data) {
+      if (part.body && part.body.data) {
         if (part.mimeType === 'text/plain' && !result.text) {
           result.text = atob(part.body.data);
         } else if (part.mimeType === 'text/html' && !result.html) {
@@ -245,10 +245,10 @@ function extractAttachmentInfo(
   function processPayload(part: any) {
     if (part.filename && part.filename.length > 0) {
       attachments.push({
-        attachment_id: part.body?.attachmentId,
+        attachment_id: part.body ? part.body.attachmentId : undefined,
         filename: part.filename,
         mime_type: part.mimeType,
-        size: part.body?.size || 0,
+        size: (part.body ? part.body.size : 0) || 0,
         part_id: part.partId,
       });
     }

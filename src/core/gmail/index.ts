@@ -25,11 +25,11 @@ function init(): void {
   if (saved) {
     s.config.credentialId = saved.credentialId || s.config.credentialId;
     s.config.userEmail = saved.userEmail || s.config.userEmail;
-    s.config.syncEnabled = saved.syncEnabled ?? s.config.syncEnabled;
+    s.config.syncEnabled = saved.syncEnabled != null ? saved.syncEnabled : s.config.syncEnabled;
     s.config.syncIntervalMinutes = saved.syncIntervalMinutes || s.config.syncIntervalMinutes;
     s.config.maxEmailsPerSync = saved.maxEmailsPerSync || s.config.maxEmailsPerSync;
-    s.config.notifyOnNewEmails = saved.notifyOnNewEmails ?? s.config.notifyOnNewEmails;
-    s.config.showSensitiveMessages = saved.showSensitiveMessages ?? s.config.showSensitiveMessages;
+    s.config.notifyOnNewEmails = saved.notifyOnNewEmails != null ? saved.notifyOnNewEmails : s.config.notifyOnNewEmails;
+    s.config.showSensitiveMessages = saved.showSensitiveMessages != null ? saved.showSensitiveMessages : s.config.showSensitiveMessages;
   }
 
   // Load sync status from persistent state
@@ -235,7 +235,7 @@ function onAuthComplete(args: { mode: string; credentials: Record<string, unknow
   }
 
   if (args.mode === 'text') {
-    const content = (args.credentials.content ?? '') as string;
+    const content = (args.credentials.content || '') as string;
     if (!content.trim()) {
       return {
         status: 'error',
@@ -407,7 +407,7 @@ function onListOptions(): { options: SkillOption[] } {
         name: 'showSensitiveMessages',
         type: 'boolean',
         label: 'Show Sensitive Messages',
-        value: s.config.showSensitiveMessages ?? false,
+        value: s.config.showSensitiveMessages || false,
       },
     ],
   };
@@ -438,7 +438,7 @@ function onSetOption(args: { name: string; value: unknown }): void {
       break;
 
     case 'maxEmailsPerSync':
-      s.config.maxEmailsPerSync = parseInt(args.value as string, 100);
+      s.config.maxEmailsPerSync = parseInt(args.value as string, 10);
       break;
 
     case 'notifyOnNewEmails':

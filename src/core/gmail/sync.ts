@@ -97,7 +97,7 @@ function fetchMessagePage(
     nextPageToken?: string;
   }>(`/users/me/messages?${params.join('&')}`);
 
-  if (!response.success || !response.data?.messages) {
+  if (!response.success || !response.data || !response.data.messages) {
     if (response.error) console.error(`[gmail-sync] List error: ${response.error.message}`);
     return { messages: [] };
   }
@@ -300,7 +300,7 @@ function runSyncPages(
 
   do {
     page++;
-    log?.('Fetching message IDs (page ' + page + ')...', Math.min(5 + page * 5, 40));
+    if (log) log('Fetching message IDs (page ' + page + ')...', Math.min(5 + page * 5, 40));
 
     const result = fetchMessagePage(query, pageToken);
     if (result.messages.length === 0) break;
@@ -318,7 +318,7 @@ function runSyncPages(
     }
 
     totalFetched += result.messages.length;
-    log?.(
+    if (log) log(
       'Page ' +
         page +
         ': ' +
@@ -347,7 +347,7 @@ function runSyncPages(
       publishSkillState();
     }
 
-    log?.(
+    if (log) log(
       'Page ' + page + ' done: ' + newEmails + ' synced, ' + skipped + ' skipped',
       Math.min(40 + page * 6, 85)
     );
@@ -387,7 +387,7 @@ export function performInitialSync(onProgress?: SyncProgressCallback): void {
   const log = (msg: string, pct: number) => {
     console.log(`[gmail-sync] [${pct}%] ${msg}`);
     emitSyncProgress(msg, pct);
-    onProgress?.(msg, pct);
+    if (onProgress) onProgress(msg, pct);
   };
 
   s.syncStatus.syncInProgress = true;
@@ -437,7 +437,7 @@ export function performInitialSync(onProgress?: SyncProgressCallback): void {
       sender_email: e.sender_email,
       sender_name: e.sender_name,
       date: e.date,
-      snippet: e.snippet,
+      // snippet omitted — raw text can break JSON transport
       is_read: e.is_read,
       is_starred: e.is_starred,
       labels: e.labels,
@@ -517,7 +517,7 @@ export function onSync(): void {
       sender_email: e.sender_email,
       sender_name: e.sender_name,
       date: e.date,
-      snippet: e.snippet,
+      // snippet omitted — raw text can break JSON transport
       is_read: e.is_read,
       is_starred: e.is_starred,
       labels: e.labels,

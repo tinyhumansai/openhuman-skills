@@ -17,7 +17,7 @@ import type {
 
 /** Get headers from Gmail API message (top-level payload or first part for multipart). */
 function getMessageHeaders(message: GmailMessage): Array<{ name: string; value: string }> | null {
-  const p = message?.payload;
+  const p = message ? message.payload : null;
   if (!p) return null;
   if (Array.isArray(p.headers) && p.headers.length > 0) return p.headers;
   const firstPart = Array.isArray(p.parts) ? p.parts[0] : null;
@@ -44,25 +44,32 @@ export function upsertEmail(message: GmailMessage, redactSensitive = false): voi
   const headers = getMessageHeaders(message);
   if (!headers) {
     console.warn('[gmail] upsertEmail: no headers found (payload or first part)', {
-      id: message?.id,
-      hasPayload: !!message?.payload,
+      id: message ? message.id : null,
+      hasPayload: !!(message ? message.payload : null),
     });
     return;
   }
 
-  const subject = headers.find(h => h.name.toLowerCase() === 'subject')?.value ?? '';
-  const from = headers.find(h => h.name.toLowerCase() === 'from')?.value ?? '';
-  const to = headers.find(h => h.name.toLowerCase() === 'to')?.value ?? '';
-  const cc = headers.find(h => h.name.toLowerCase() === 'cc')?.value ?? null;
-  const bcc = headers.find(h => h.name.toLowerCase() === 'bcc')?.value ?? null;
-  const dateHeader = headers.find(h => h.name.toLowerCase() === 'date')?.value;
+  const subjectHeader = headers.find(h => h.name.toLowerCase() === 'subject');
+  const subject = subjectHeader ? subjectHeader.value : '';
+  const fromHeader = headers.find(h => h.name.toLowerCase() === 'from');
+  const from = fromHeader ? fromHeader.value : '';
+  const toHeader = headers.find(h => h.name.toLowerCase() === 'to');
+  const to = toHeader ? toHeader.value : '';
+  const ccHeader = headers.find(h => h.name.toLowerCase() === 'cc');
+  const cc = ccHeader ? ccHeader.value : null;
+  const bccHeader = headers.find(h => h.name.toLowerCase() === 'bcc');
+  const bcc = bccHeader ? bccHeader.value : null;
+  const dateHeaderObj = headers.find(h => h.name.toLowerCase() === 'date');
+  const dateHeader = dateHeaderObj ? dateHeaderObj.value : undefined;
 
   // Parse sender email and name from "Name <email>" format
   const fromMatch = from.match(/(.+?)\s*<([^>]+)>/) || [null, from, from];
-  const senderName = fromMatch[1]?.trim().replace(/^["']|["']$/g, '') ?? null;
-  const senderEmail = fromMatch[2]?.trim() || from;
+  const senderNameRaw = fromMatch[1] ? fromMatch[1].trim().replace(/^["']|["']$/g, '') : null;
+  const senderName = senderNameRaw !== null && senderNameRaw !== undefined ? senderNameRaw : null;
+  const senderEmail = (fromMatch[2] ? fromMatch[2].trim() : '') || from;
 
-  const internalDate = message.internalDate ?? '0';
+  const internalDate = (message.internalDate !== null && message.internalDate !== undefined) ? message.internalDate : '0';
   const date = dateHeader ? new Date(dateHeader).getTime() : parseInt(internalDate, 10);
   const labelIds = Array.isArray(message.labelIds) ? message.labelIds : [];
   const isRead = !labelIds.includes('UNREAD');
@@ -108,8 +115,8 @@ export function upsertEmail(message: GmailMessage, redactSensitive = false): voi
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       cid,
-      message.id ?? '',
-      message.threadId ?? '',
+      message.id || '',
+      message.threadId || '',
       subject,
       senderEmail,
       senderName,
@@ -117,9 +124,9 @@ export function upsertEmail(message: GmailMessage, redactSensitive = false): voi
       cc,
       bcc,
       Number.isFinite(date) ? date : 0,
-      message.snippet ?? '',
-      bodyText ?? null,
-      bodyHtml ?? null,
+      message.snippet || '',
+      (bodyText !== null && bodyText !== undefined) ? bodyText : null,
+      (bodyHtml !== null && bodyHtml !== undefined) ? bodyHtml : null,
       isRead ? 1 : 0,
       isImportant ? 1 : 0,
       isStarred ? 1 : 0,
@@ -127,7 +134,7 @@ export function upsertEmail(message: GmailMessage, redactSensitive = false): voi
       sensitive ? 1 : 0,
       JSON.stringify(labelIds),
       typeof message.sizeEstimate === 'number' ? message.sizeEstimate : 0,
-      message.historyId ?? '',
+      message.historyId || '',
       internalDate,
       now,
     ]
@@ -150,16 +157,19 @@ export function upsertThread(thread: GmailThread): void {
 
   if (!firstMessage || !lastMessage) return;
 
-  const subject =
-    firstMessage.payload.headers.find(h => h.name.toLowerCase() === 'subject')?.value || '';
+  const subjectHdr = firstMessage.payload.headers.find(h => h.name.toLowerCase() === 'subject');
+  const subject = subjectHdr ? subjectHdr.value : '';
   const participants = new Set<string>();
 
   // Collect all participants from all messages
   thread.messages.forEach(msg => {
     const headers = msg.payload.headers;
-    const from = headers.find(h => h.name.toLowerCase() === 'from')?.value;
-    const to = headers.find(h => h.name.toLowerCase() === 'to')?.value;
-    const cc = headers.find(h => h.name.toLowerCase() === 'cc')?.value;
+    const fromHdr = headers.find(h => h.name.toLowerCase() === 'from');
+    const from = fromHdr ? fromHdr.value : undefined;
+    const toHdr = headers.find(h => h.name.toLowerCase() === 'to');
+    const to = toHdr ? toHdr.value : undefined;
+    const ccHdr = headers.find(h => h.name.toLowerCase() === 'cc');
+    const cc = ccHdr ? ccHdr.value : undefined;
 
     if (from) participants.add(extractEmail(from));
     if (to) to.split(',').forEach(email => participants.add(extractEmail(email.trim())));
@@ -223,8 +233,8 @@ export function upsertLabel(label: GmailLabel): void {
       label.messagesUnread || 0,
       label.threadsTotal || 0,
       label.threadsUnread || 0,
-      label.color?.textColor || null,
-      label.color?.backgroundColor || null,
+      (label.color && label.color.textColor) || null,
+      (label.color && label.color.backgroundColor) || null,
       now,
     ]
   );
@@ -316,7 +326,7 @@ export function getEmailCount(): number {
   const row = db.get('SELECT COUNT(*) as count FROM emails WHERE credential_id = ?', [cid]) as {
     count: number;
   } | null;
-  return row?.count ?? 0;
+  return (row && row.count !== null && row.count !== undefined) ? row.count : 0;
 }
 
 /** Returns true if an email with the given ID exists in the local DB (no row data fetched). */
@@ -476,12 +486,12 @@ function extractEmail(emailStr: string): string {
  * Helper: Check if email has attachments (recursively searches nested parts)
  */
 function hasEmailAttachments(message: GmailMessage): boolean {
-  const p = message?.payload;
+  const p = message ? message.payload : null;
   if (!p) return false;
-  if (p.body?.attachmentId) return true;
+  if (p.body && p.body.attachmentId) return true;
   if (Array.isArray(p.parts)) {
     return p.parts.some(
-      part => part.body?.attachmentId || (part.filename && part.filename.length > 0)
+      part => (part.body && part.body.attachmentId) || (part.filename && part.filename.length > 0)
     );
   }
   return checkPart(p);
@@ -490,7 +500,7 @@ function hasEmailAttachments(message: GmailMessage): boolean {
 /** Recursively check a MIME part (or payload) for attachments. */
 function checkPart(part: GmailMessage['payload']): boolean {
   if (!part) return false;
-  if (part.body?.attachmentId) return true;
+  if (part.body && part.body.attachmentId) return true;
   if (part.filename && part.filename.length > 0) return true;
   if (Array.isArray(part.parts)) return part.parts.some(p => checkPart(p));
   return false;
@@ -521,9 +531,9 @@ function checkPart(part: GmailMessage['payload']): boolean {
  * Helper: Extract text body from message (recursively searches nested parts)
  */
 function extractTextBody(message: GmailMessage): string | null {
-  const p = message?.payload;
+  const p = message ? message.payload : null;
   if (!p) return null;
-  if (p.mimeType === 'text/plain' && p.body?.data) {
+  if (p.mimeType === 'text/plain' && p.body && p.body.data) {
     try {
       return atob(p.body.data);
     } catch {
@@ -532,7 +542,7 @@ function extractTextBody(message: GmailMessage): string | null {
   }
   if (Array.isArray(p.parts)) {
     for (const part of p.parts) {
-      if (part.mimeType === 'text/plain' && part.body?.data) {
+      if (part.mimeType === 'text/plain' && part.body && part.body.data) {
         try {
           return atob(part.body.data);
         } catch {
@@ -548,9 +558,9 @@ function extractTextBody(message: GmailMessage): string | null {
  * Helper: Extract HTML body from message (recursively searches nested parts)
  */
 function extractHtmlBody(message: GmailMessage): string | null {
-  const p = message?.payload;
+  const p = message ? message.payload : null;
   if (!p) return null;
-  if (p.mimeType === 'text/html' && p.body?.data) {
+  if (p.mimeType === 'text/html' && p.body && p.body.data) {
     try {
       return atob(p.body.data);
     } catch {
@@ -559,7 +569,7 @@ function extractHtmlBody(message: GmailMessage): string | null {
   }
   if (Array.isArray(p.parts)) {
     for (const part of p.parts) {
-      if (part.mimeType === 'text/html' && part.body?.data) {
+      if (part.mimeType === 'text/html' && part.body && part.body.data) {
         try {
           return atob(part.body.data);
         } catch {
@@ -576,7 +586,7 @@ function extractHtmlBody(message: GmailMessage): string | null {
  */
 function insertEmailAttachments(message: GmailMessage): void {
   const cid = credId();
-  const p = message?.payload;
+  const p = message ? message.payload : null;
   if (!p) return;
   const attachments: Array<{
     attachmentId: string;
@@ -587,26 +597,26 @@ function insertEmailAttachments(message: GmailMessage): void {
   }> = [];
 
   // Check main body
-  if (p.body?.attachmentId && p.filename) {
+  if (p.body && p.body.attachmentId && p.filename) {
     attachments.push({
       attachmentId: p.body.attachmentId,
       filename: p.filename,
-      mimeType: p.mimeType ?? '',
-      size: p.body.size ?? 0,
-      partId: p.partId ?? '',
+      mimeType: p.mimeType || '',
+      size: (p.body.size !== null && p.body.size !== undefined) ? p.body.size : 0,
+      partId: p.partId || '',
     });
   }
 
   // Check parts
   if (Array.isArray(p.parts)) {
     p.parts.forEach(part => {
-      if (part.body?.attachmentId && part.filename) {
+      if (part.body && part.body.attachmentId && part.filename) {
         attachments.push({
           attachmentId: part.body.attachmentId,
           filename: part.filename,
-          mimeType: part.mimeType ?? '',
-          size: part.body.size ?? 0,
-          partId: part.partId ?? '',
+          mimeType: part.mimeType || '',
+          size: (part.body.size !== null && part.body.size !== undefined) ? part.body.size : 0,
+          partId: part.partId || '',
         });
       }
     });

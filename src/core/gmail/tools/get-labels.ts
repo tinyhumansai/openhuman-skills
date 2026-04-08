@@ -30,7 +30,7 @@ export const getLabelsTool: ToolDefinition = {
       if (!response.success) {
         return JSON.stringify({
           success: false,
-          error: response.error?.message || 'Failed to fetch labels',
+          error: (response.error ? response.error.message : null) || 'Failed to fetch labels',
         });
       }
 

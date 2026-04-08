@@ -31,7 +31,7 @@ export const getPingStatsTool: ToolDefinition = {
       lastPing: latest
         ? { latencyMs: latest.latency_ms, status: latest.status, at: latest.timestamp }
         : null,
-      avgLatencyMs: avgLatency?.avg_ms ? Math.round(avgLatency.avg_ms) : null,
+      avgLatencyMs: avgLatency && avgLatency.avg_ms ? Math.round(avgLatency.avg_ms) : null,
       platform: platform.os(),
     });
   },

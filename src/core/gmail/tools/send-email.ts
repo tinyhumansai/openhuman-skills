@@ -95,7 +95,7 @@ export const sendEmailTool: ToolDefinition = {
 
       // Get user's email from state
       const s = getGmailSkillState();
-      const fromEmail = s.config.userEmail || s.profile?.emailAddress;
+      const fromEmail = s.config.userEmail || (s.profile ? s.profile.emailAddress : undefined);
 
       if (!fromEmail) {
         return JSON.stringify({
@@ -108,19 +108,22 @@ export const sendEmailTool: ToolDefinition = {
       const boundary = `----gmail_boundary_${Date.now()}_${Math.random().toString(36)}`;
       let rawMessage = '';
 
+      // Helper to strip CR/LF from header values to prevent header injection
+      const sanitizeHeader = (val: string): string => val.replace(/[\r\n]/g, '');
+
       // Headers
-      rawMessage += `From: ${fromEmail}\r\n`;
-      rawMessage += `To: ${formatEmailAddresses(to)}\r\n`;
+      rawMessage += `From: ${sanitizeHeader(fromEmail)}\r\n`;
+      rawMessage += `To: ${sanitizeHeader(formatEmailAddresses(to))}\r\n`;
 
       if (args.cc && Array.isArray(args.cc) && (args.cc as any[]).length > 0) {
-        rawMessage += `Cc: ${formatEmailAddresses(args.cc as Array<{ email: string; name?: string }>)}\r\n`;
+        rawMessage += `Cc: ${sanitizeHeader(formatEmailAddresses(args.cc as Array<{ email: string; name?: string }>))}\r\n`;
       }
 
       if (args.bcc && Array.isArray(args.bcc) && (args.bcc as any[]).length > 0) {
-        rawMessage += `Bcc: ${formatEmailAddresses(args.bcc as Array<{ email: string; name?: string }>)}\r\n`;
+        rawMessage += `Bcc: ${sanitizeHeader(formatEmailAddresses(args.bcc as Array<{ email: string; name?: string }>))}\r\n`;
       }
 
-      rawMessage += `Subject: ${subject}\r\n`;
+      rawMessage += `Subject: ${sanitizeHeader(subject)}\r\n`;
 
       // Threading headers
       if (args.reply_to_message_id) {
@@ -195,7 +198,7 @@ export const sendEmailTool: ToolDefinition = {
       if (!response.success) {
         return JSON.stringify({
           success: false,
-          error: response.error?.message || 'Failed to send email',
+          error: (response.error ? response.error.message : null) || 'Failed to send email',
         });
       }
 
@@ -211,12 +214,12 @@ export const sendEmailTool: ToolDefinition = {
 
       return JSON.stringify({
         success: true,
-        message_id: sentMessage?.id ?? null,
-        thread_id: sentMessage?.threadId ?? null,
-        label_ids: sentMessage?.labelIds ?? [],
+        message_id: sentMessage ? sentMessage.id : null,
+        thread_id: sentMessage ? sentMessage.threadId : null,
+        label_ids: sentMessage ? sentMessage.labelIds || [] : [],
         to: formatEmailAddresses(to),
         subject,
-        size_estimate: sentMessage?.sizeEstimate || 0,
+        size_estimate: (sentMessage ? sentMessage.sizeEstimate : 0) || 0,
       });
     } catch (error) {
       return JSON.stringify({

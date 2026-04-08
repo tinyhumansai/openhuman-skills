@@ -31,11 +31,11 @@ async function init(): Promise<void> {
   // Load persisted config from store
   const saved = state.get('config') as Partial<SkillConfig> | null;
   if (saved) {
-    s.config.serverUrl = saved.serverUrl ?? s.config.serverUrl;
-    s.config.pingIntervalSec = saved.pingIntervalSec ?? s.config.pingIntervalSec;
-    s.config.notifyOnDown = saved.notifyOnDown ?? s.config.notifyOnDown;
-    s.config.notifyOnRecover = saved.notifyOnRecover ?? s.config.notifyOnRecover;
-    s.config.verboseLogging = saved.verboseLogging ?? s.config.verboseLogging;
+    s.config.serverUrl = saved.serverUrl != null ? saved.serverUrl : s.config.serverUrl;
+    s.config.pingIntervalSec = saved.pingIntervalSec != null ? saved.pingIntervalSec : s.config.pingIntervalSec;
+    s.config.notifyOnDown = saved.notifyOnDown != null ? saved.notifyOnDown : s.config.notifyOnDown;
+    s.config.notifyOnRecover = saved.notifyOnRecover != null ? saved.notifyOnRecover : s.config.notifyOnRecover;
+    s.config.verboseLogging = saved.verboseLogging != null ? saved.verboseLogging : s.config.verboseLogging;
   }
 
   // Fall back to the host's backend URL if no server URL is configured yet
@@ -50,8 +50,8 @@ async function init(): Promise<void> {
   // Load counters from store
   const counters = state.get('counters') as { pingCount?: number; failCount?: number } | null;
   if (counters) {
-    s.pingCount = counters.pingCount ?? 0;
-    s.failCount = counters.failCount ?? 0;
+    s.pingCount = counters.pingCount || 0;
+    s.failCount = counters.failCount || 0;
   }
 
   console.log(`[server-ping] Config loaded — target: ${s.config.serverUrl}`);

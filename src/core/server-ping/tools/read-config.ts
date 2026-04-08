@@ -11,7 +11,7 @@ export const readConfigTool: ToolDefinition = {
   execute(): string {
     try {
       const raw = data.read('config.json');
-      return raw ?? JSON.stringify({ error: 'No config file found' });
+      return raw || JSON.stringify({ error: 'No config file found' });
     } catch (e) {
       return JSON.stringify({ error: `Failed to read config: ${e}` });
     }

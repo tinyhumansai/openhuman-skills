@@ -59,23 +59,7 @@ const SKILLS_DIR = resolve(rootDir, 'skills');
 const CORE_BINARY = resolve(rootDir, 'openhuman', 'target', 'debug', 'openhuman-core');
 
 // ---------------------------------------------------------------------------
-// Checks
-// ---------------------------------------------------------------------------
-
-if (!existsSync(CORE_BINARY)) {
-  console.error(`\x1b[31m  Error: openhuman-core binary not found at ${CORE_BINARY}\x1b[0m`);
-  console.error(`  Run: cd openhuman && cargo build`);
-  process.exit(1);
-}
-
-if (!existsSync(SKILLS_DIR)) {
-  console.error(`\x1b[31m  Error: compiled skills not found at ${SKILLS_DIR}\x1b[0m`);
-  console.error(`  Run: yarn build`);
-  process.exit(1);
-}
-
-// ---------------------------------------------------------------------------
-// Build skills
+// Build skills and runtime
 // ---------------------------------------------------------------------------
 
 console.log(`\x1b[36m  Building skills...\x1b[0m`);
@@ -93,6 +77,20 @@ try {
   console.log(`\x1b[32m  Runtime build complete.\x1b[0m\n`);
 } catch (err) {
   console.error(`\x1b[31m  Runtime build failed.\x1b[0m`);
+  process.exit(1);
+}
+
+// ---------------------------------------------------------------------------
+// Post-build checks
+// ---------------------------------------------------------------------------
+
+if (!existsSync(CORE_BINARY)) {
+  console.error(`\x1b[31m  Error: openhuman-core binary not found at ${CORE_BINARY}\x1b[0m`);
+  process.exit(1);
+}
+
+if (!existsSync(SKILLS_DIR)) {
+  console.error(`\x1b[31m  Error: compiled skills not found at ${SKILLS_DIR}\x1b[0m`);
   process.exit(1);
 }
 

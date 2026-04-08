@@ -43,7 +43,7 @@ export function getNotionAuth(): { type: 'token'; token: string } | { type: 'pro
   const authCred = auth.getCredential();
   if (authCred && authCred.mode !== 'managed') {
     const creds = authCred.credentials;
-    const token = (creds.api_token ?? creds.content ?? creds.access_token) as string | undefined;
+    const token = (creds.api_token || creds.content || creds.access_token) as string | undefined;
     if (token) {
       return { type: 'token', token };
     }
@@ -229,7 +229,7 @@ export function formatPageSummary(page: Record<string, unknown>): Record<string,
     created_time: page.created_time,
     last_edited_time: page.last_edited_time,
     archived: page.archived,
-    parent_type: (page.parent as Record<string, unknown>)?.type,
+    parent_type: page.parent ? (page.parent as Record<string, unknown>).type : undefined,
   };
 }
 
@@ -283,9 +283,9 @@ export function formatUserSummary(user: Record<string, unknown>): Record<string,
   // For bot-type users, drill into bot.owner.user.person to get the human owner info
   if (userType === 'bot') {
     const bot = user.bot as Record<string, unknown> | undefined;
-    const owner = bot?.owner as Record<string, unknown> | undefined;
-    const ownerUser = owner?.user as Record<string, unknown> | undefined;
-    const ownerPerson = ownerUser?.person as Record<string, unknown> | undefined;
+    const owner = (bot ? bot.owner : undefined) as Record<string, unknown> | undefined;
+    const ownerUser = (owner ? owner.user : undefined) as Record<string, unknown> | undefined;
+    const ownerPerson = (ownerUser ? ownerUser.person : undefined) as Record<string, unknown> | undefined;
 
     if (ownerUser) {
       id = (ownerUser.id as string) || id;
@@ -298,15 +298,15 @@ export function formatUserSummary(user: Record<string, unknown>): Record<string,
     }
   } else {
     const person = user.person as Record<string, unknown> | undefined;
-    email = (person?.email as string) || (user.email as string | undefined);
+    email = ((person ? person.email : undefined) as string) || (user.email as string | undefined);
   }
 
   return {
     id,
-    name: name ?? null,
-    email: email ?? null,
-    type: userType ?? null,
-    avatar_url: avatarUrl ?? null,
+    name: (name !== null && name !== undefined) ? name : null,
+    email: (email !== null && email !== undefined) ? email : null,
+    type: (userType !== null && userType !== undefined) ? userType : null,
+    avatar_url: (avatarUrl !== null && avatarUrl !== undefined) ? avatarUrl : null,
   };
 }
 

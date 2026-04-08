@@ -37,7 +37,9 @@ export const syncNowTool: ToolDefinition = {
       return JSON.stringify({
         success: !s.syncStatus.lastSyncError,
         duration_ms: s.syncStatus.lastSyncDurationMs,
-        last_sync_time: new Date(s.syncStatus.lastSyncTime).toISOString(),
+        last_sync_time: s.syncStatus.lastSyncTime
+          ? new Date(s.syncStatus.lastSyncTime).toISOString()
+          : null,
         error: s.syncStatus.lastSyncError,
         totals: {
           pages: s.syncStatus.totalPages,

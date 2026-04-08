@@ -17,12 +17,16 @@ function withLogging(tool: ToolDefinition): ToolDefinition {
     ...tool,
     execute(args: Record<string, unknown>): string {
       const argKeys = Object.keys(args || {});
+      const SENSITIVE_KEYS = ['to', 'cc', 'bcc', 'recipients', 'body', 'subject', 'query', 'search', 'content'];
       const argSummary =
         argKeys.length > 0
           ? argKeys
               .map(k => {
                 const v = args[k];
-                if (typeof v === 'string' && v.length > 50) return `${k}=<${v.length} chars>`;
+                if (SENSITIVE_KEYS.indexOf(k.toLowerCase()) >= 0) return `${k}=<redacted>`;
+                if (typeof v === 'string') return `${k}=<${v.length} chars>`;
+                if (Array.isArray(v)) return `${k}=<array ${v.length}>`;
+                if (v && typeof v === 'object') return `${k}=<object>`;
                 return `${k}=${JSON.stringify(v)}`;
               })
               .join(', ')

@@ -10,12 +10,7 @@ export const getProfileTool: ToolDefinition = {
     'Get Gmail user profile information including email address, total message counts, and account details. Optional accessToken for frontend calls.',
   input_schema: {
     type: 'object',
-    properties: {
-      accessToken: {
-        type: 'string',
-        description: 'Optional OAuth access token (e.g. from frontend).',
-      },
-    },
+    properties: {},
     required: [],
   },
   execute(_args: Record<string, unknown>): string {
@@ -25,7 +20,7 @@ export const getProfileTool: ToolDefinition = {
       if (!response.success) {
         return JSON.stringify({
           success: false,
-          error: response.error?.message || 'Failed to fetch profile',
+          error: (response.error ? response.error.message : null) || 'Failed to fetch profile',
         });
       }
 

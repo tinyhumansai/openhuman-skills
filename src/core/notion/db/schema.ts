@@ -297,7 +297,7 @@ function migrateCompositePrimaryKey(tableName: string, createNewTableSql: string
       'table',
       tableName,
     ]) as { sql: string } | undefined;
-    if (!row?.sql || row.sql.includes('PRIMARY KEY (credential_id, id)')) return;
+    if (!row || !row.sql || row.sql.includes('PRIMARY KEY (credential_id, id)')) return;
     const newTableName = `${tableName}_new`;
     db.exec(createNewTableSql, []);
     const columns = db.all(`PRAGMA table_info(${tableName})`, []) as Array<{

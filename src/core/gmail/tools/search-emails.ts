@@ -64,7 +64,7 @@ export const searchEmailsTool: ToolDefinition = {
       if (!searchResponse.success || !searchResponse.data) {
         return JSON.stringify({
           success: false,
-          error: searchResponse.error?.message || 'Search failed',
+          error: (searchResponse.error ? searchResponse.error.message : null) || 'Search failed',
         });
       }
 
@@ -97,7 +97,7 @@ export const searchEmailsTool: ToolDefinition = {
         for (const msgResponse of results) {
           if (msgResponse.success && msgResponse.data) {
             const message = msgResponse.data as GmailMessage;
-            const headers = message.payload?.headers || [];
+            const headers = (message.payload && message.payload.headers) || [];
 
             const headerMap: Record<string, string> = {};
             headers.forEach((header: any) => {
@@ -106,8 +106,8 @@ export const searchEmailsTool: ToolDefinition = {
 
             const from = headerMap.from || '';
             const fromMatch = from.match(/(.+?)\s*<([^>]+)>/) || [null, from, from];
-            const senderName = fromMatch[1]?.trim().replace(/^["']|["']$/g, '') || null;
-            const senderEmail = fromMatch[2]?.trim() || from;
+            const senderName = (fromMatch[1] ? fromMatch[1].trim().replace(/^["']|["']$/g, '') : null) || null;
+            const senderEmail = (fromMatch[2] ? fromMatch[2].trim() : null) || from;
 
             emails.push({
               id: message.id,
@@ -122,9 +122,9 @@ export const searchEmailsTool: ToolDefinition = {
               label_ids: message.labelIds || [],
               size_estimate: message.sizeEstimate || 0,
               status: {
-                is_read: !message.labelIds?.includes('UNREAD'),
-                is_important: message.labelIds?.includes('IMPORTANT'),
-                is_starred: message.labelIds?.includes('STARRED'),
+                is_read: !(message.labelIds && message.labelIds.includes('UNREAD')),
+                is_important: message.labelIds && message.labelIds.includes('IMPORTANT'),
+                is_starred: message.labelIds && message.labelIds.includes('STARRED'),
                 has_attachments: hasAttachments(message),
               },
               relevance_score: calculateRelevanceScore(message, query),
@@ -137,7 +137,7 @@ export const searchEmailsTool: ToolDefinition = {
 
       // Filter out sensitive emails unless user opted in to show them
       const s = getGmailSkillState();
-      const showSensitive = s.config.showSensitiveMessages ?? false;
+      const showSensitive = (s.config.showSensitiveMessages !== null && s.config.showSensitiveMessages !== undefined) ? s.config.showSensitiveMessages : false;
       const filteredEmails = showSensitive
         ? emails
         : emails.filter(
@@ -170,10 +170,10 @@ export const searchEmailsTool: ToolDefinition = {
  * Helper: Check if message has attachments
  */
 function hasAttachments(message: any): boolean {
-  if (message.payload?.body?.attachmentId) return true;
-  if (message.payload?.parts) {
+  if (message.payload && message.payload.body && message.payload.body.attachmentId) return true;
+  if (message.payload && message.payload.parts) {
     return message.payload.parts.some(
-      (part: any) => part.body?.attachmentId || (part.filename && part.filename.length > 0)
+      (part: any) => (part.body && part.body.attachmentId) || (part.filename && part.filename.length > 0)
     );
   }
   return false;
@@ -187,24 +187,25 @@ function calculateRelevanceScore(message: any, query: string): number {
   const queryLower = query.toLowerCase();
 
   // Check subject relevance
-  const subject =
-    message.payload?.headers?.find((h: any) => h.name.toLowerCase() === 'subject')?.value || '';
+  const payloadHeaders = (message.payload && message.payload.headers) || [];
+  const subjectHeader = payloadHeaders.find((h: any) => h.name.toLowerCase() === 'subject');
+  const subject = (subjectHeader ? subjectHeader.value : '') || '';
   if (subject.toLowerCase().includes(queryLower)) {
     score += 10;
   }
 
   // Check snippet relevance
-  if (message.snippet?.toLowerCase().includes(queryLower)) {
+  if (message.snippet && message.snippet.toLowerCase().includes(queryLower)) {
     score += 5;
   }
 
   // Boost score for unread messages
-  if (message.labelIds?.includes('UNREAD')) {
+  if (message.labelIds && message.labelIds.includes('UNREAD')) {
     score += 3;
   }
 
   // Boost score for important messages
-  if (message.labelIds?.includes('IMPORTANT')) {
+  if (message.labelIds && message.labelIds.includes('IMPORTANT')) {
     score += 5;
   }
 

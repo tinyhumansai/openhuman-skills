@@ -476,7 +476,7 @@ See [`src/telegram/`](src/telegram/) for the reference implementation demonstrat
 - **No raw text in published state** — `state.setPartial()` values pass through JSON-RPC transport. Raw text content (page bodies, email bodies) with newlines or special characters will break the JSON envelope. Only publish metadata (id, title, date) — never `content_text` or `body_text`.
 - **Tool logging** — All tools should be wrapped with `withLogging()` in `tools/index.ts`. This logs entry (tool name + args), exit (timing + result size), and errors for every call. See Notion or Gmail tools for the pattern.
 - **Sync is fire-and-forget** — The Rust event loop's `skill/sync` RPC starts `onSync()` as a background task and returns immediately. Sync progress should be published via `state.setPartial()` with `syncPhase`, `syncProgress` (0-100), and `syncMessage` fields. The `sync-status` tool exposes these to callers.
-- **MIN_CONTENT_LENGTH for ingestion** — When calling `memory.insert()`, skip content shorter than 10 characters. Very short strings crash the embedding model (ONNX/CoreML shape {0}).
+- **MIN_CONTENT_LENGTH for ingestion** — When calling `memory.insert()`, skip content shorter than 50 characters. Very short strings crash the embedding model (ONNX/CoreML shape {0}).
 - **6-field cron** — Cron includes seconds: `sec min hour day month dow`
 - **SQL params required** — Always use `?` placeholders, never interpolation
 - **No underscores in skill names** — Use lowercase-hyphens (e.g., `my-skill`)
@@ -485,7 +485,7 @@ See [`src/telegram/`](src/telegram/) for the reference implementation demonstrat
 
 ## OAuth Proxy
 
-Skills using OAuth (managed mode) make API calls via `oauth.fetch()`, which proxies through the backend at `/proxy/encrypted/:integrationId/:path`. The backend proxy sets provider-specific headers (e.g. `Notion-Version`) but forwards any such header the skill sends, letting the skill control the API version. The `X-Encryption-Key` header carries the client key share for token decryption. JWT for auth comes from `__ops.get_session_token()` (reads on-disk credential store, falls back to `JWT_TOKEN` env var).
+Skills using OAuth (managed mode) make API calls via `oauth.fetch()`, which proxies through the backend at `/proxy/encrypted/:integrationId/:path`. The backend proxy sets provider-specific headers (e.g. `Notion-Version`). For the Notion skill, the API version is hardcoded to `2026-03-11` in `notionFetch()` via the `NOTION_API_VERSION` constant — skills cannot override it through headers. The `X-Encryption-Key` header carries the client key share for token decryption. JWT for auth comes from `__ops.get_session_token()` (reads on-disk credential store, falls back to `JWT_TOKEN` env var).
 
 ### Test Harness RPC Methods
 
@@ -779,7 +779,7 @@ Initial data sync and periodic refresh:
 // sync.ts
 export function performInitialSync(onProgress?: (msg: string) => void): void {
   const s = globalThis.getMySkillState();
-  onProgress?.('Fetching items...');
+  if (onProgress) onProgress('Fetching items...');
 
   let cursor: string | undefined;
   let totalSynced = 0;
@@ -790,7 +790,7 @@ export function performInitialSync(onProgress?: (msg: string) => void): void {
       totalSynced++;
     }
     cursor = result.nextCursor;
-    onProgress?.(`Synced ${totalSynced} items...`);
+    if (onProgress) onProgress(`Synced ${totalSynced} items...`);
   } while (cursor);
 
   db.exec(`INSERT OR REPLACE INTO sync_state (key, value) VALUES ('last_sync', ?)`, [
@@ -892,8 +892,8 @@ function publishState(): void {
   state.setPartial({
     connection_status: s.isRunning ? 'connected' : 'disconnected',
     is_initialized: true,
-    lastSync: db.get("SELECT value FROM sync_state WHERE key = 'last_sync'", [])?.value ?? null,
-    itemCount: (db.get('SELECT COUNT(*) as count FROM items', []) as { count: number })?.count ?? 0,
+    lastSync: (() => { const row = db.get("SELECT value FROM sync_state WHERE key = 'last_sync'", []); return row ? row.value : null; })(),
+    itemCount: (() => { const row = db.get('SELECT COUNT(*) as count FROM items', []) as { count: number } | null; return row ? row.count : 0; })(),
   });
 }
 ```

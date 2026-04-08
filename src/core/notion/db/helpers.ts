@@ -83,8 +83,14 @@ function extractIcon(icon: unknown): string | null {
   if (!icon) return null;
   const iconObj = icon as Record<string, unknown>;
   if (iconObj.type === 'emoji') return iconObj.emoji as string;
-  if (iconObj.type === 'external') return (iconObj.external as Record<string, string>)?.url || null;
-  if (iconObj.type === 'file') return (iconObj.file as Record<string, string>)?.url || null;
+  if (iconObj.type === 'external') {
+    const ext = iconObj.external as Record<string, string> | undefined;
+    return (ext ? ext.url : null) || null;
+  }
+  if (iconObj.type === 'file') {
+    const file = iconObj.file as Record<string, string> | undefined;
+    return (file ? file.url : null) || null;
+  }
   return null;
 }
 
@@ -137,11 +143,11 @@ function extractPageEntities(
 
   // Top-level created_by / last_edited_by
   const createdBy = page.created_by as Record<string, unknown> | undefined;
-  if (createdBy?.id) {
+  if (createdBy && createdBy.id) {
     add(createdBy.id as string, 'person', createdBy.name as string | undefined, 'creator');
   }
   const lastEditedBy = page.last_edited_by as Record<string, unknown> | undefined;
-  if (lastEditedBy?.id) {
+  if (lastEditedBy && lastEditedBy.id) {
     add(
       lastEditedBy.id as string,
       'person',
@@ -253,8 +259,8 @@ export function upsertPage(page: Record<string, unknown>): void {
       iconStr,
       parent.type,
       parent.id,
-      (createdBy?.id as string) || null,
-      (lastEditedBy?.id as string) || null,
+      ((createdBy ? createdBy.id : null) as string) || null,
+      ((lastEditedBy ? lastEditedBy.id : null) as string) || null,
       page.created_time as string,
       page.last_edited_time as string,
       (page.archived as boolean) ? 1 : 0,
@@ -686,9 +692,9 @@ export function getSummaryCounts(): { total: number; synced: number; pending: nu
     [cid]
   ) as { cnt: number } | null;
   return {
-    total: total?.cnt || 0,
-    synced: synced?.cnt || 0,
-    pending: (total?.cnt || 0) - (synced?.cnt || 0),
+    total: (total ? total.cnt : 0) || 0,
+    synced: (synced ? synced.cnt : 0) || 0,
+    pending: ((total ? total.cnt : 0) || 0) - ((synced ? synced.cnt : 0) || 0),
   };
 }
 
@@ -822,7 +828,7 @@ function extractPropertiesText(properties: Record<string, unknown>): string {
       }
       case 'select': {
         const sel = prop.select as Record<string, unknown> | null;
-        if (sel?.name) parts.push(sel.name as string);
+        if (sel && sel.name) parts.push(sel.name as string);
         break;
       }
       case 'multi_select': {
@@ -836,13 +842,13 @@ function extractPropertiesText(properties: Record<string, unknown>): string {
       }
       case 'status': {
         const st = prop.status as Record<string, unknown> | null;
-        if (st?.name) parts.push(st.name as string);
+        if (st && st.name) parts.push(st.name as string);
         break;
       }
       case 'date': {
         const dt = prop.date as Record<string, unknown> | null;
-        if (dt?.start) parts.push(dt.start as string);
-        if (dt?.end) parts.push(dt.end as string);
+        if (dt && dt.start) parts.push(dt.start as string);
+        if (dt && dt.end) parts.push(dt.end as string);
         break;
       }
       case 'email': {
@@ -960,8 +966,8 @@ export function upsertDatabaseRow(row: Record<string, unknown>, databaseId: stri
       iconStr,
       propertiesJson,
       propertiesText,
-      (createdBy?.id as string) || null,
-      (lastEditedBy?.id as string) || null,
+      ((createdBy ? createdBy.id : null) as string) || null,
+      ((lastEditedBy ? lastEditedBy.id : null) as string) || null,
       row.created_time as string,
       row.last_edited_time as string,
       (row.archived as boolean) ? 1 : 0,
@@ -1036,7 +1042,7 @@ export function upsertUser(user: Record<string, unknown>): void {
       cid,
       (user.name as string) || '(Unknown)',
       (user.type as string) || 'person',
-      (person?.email as string) || null,
+      ((person ? person.email : null) as string) || null,
       (user.avatar_url as string) || null,
       now,
     ]
@@ -1171,12 +1177,12 @@ export function getEntityCounts(): {
   ) as { cnt: number } | null;
 
   return {
-    pages: pages?.cnt || 0,
-    databases: databases?.cnt || 0,
-    databaseRows: databaseRows?.cnt || 0,
-    pagesWithContent: pagesWithContent?.cnt || 0,
-    pagesWithSummary: pagesWithSummary?.cnt || 0,
-    summariesTotal: summariesTotal?.cnt || 0,
-    summariesPending: summariesPending?.cnt || 0,
+    pages: (pages ? pages.cnt : 0) || 0,
+    databases: (databases ? databases.cnt : 0) || 0,
+    databaseRows: (databaseRows ? databaseRows.cnt : 0) || 0,
+    pagesWithContent: (pagesWithContent ? pagesWithContent.cnt : 0) || 0,
+    pagesWithSummary: (pagesWithSummary ? pagesWithSummary.cnt : 0) || 0,
+    summariesTotal: (summariesTotal ? summariesTotal.cnt : 0) || 0,
+    summariesPending: (summariesPending ? summariesPending.cnt : 0) || 0,
   };
 }

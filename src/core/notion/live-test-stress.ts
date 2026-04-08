@@ -133,7 +133,7 @@ async function directProxyCall(
         'Content-Type': 'application/json',
         Authorization: `Bearer ${JWT}`,
         'X-Encryption-Key': KEY,
-        'Notion-Version': '2025-09-03',
+        'Notion-Version': '2026-03-11',
       },
       body: ep.body ? JSON.stringify(ep.body) : undefined,
       signal: undefined,

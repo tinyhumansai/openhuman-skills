@@ -79,7 +79,7 @@ function resolveAccessToken(): string | null {
   if (authCred && authCred.mode === 'text') {
     // Text mode: the user pasted a service account JSON or an access token.
     // If the content looks like a raw token (no JSON structure), use it directly.
-    const content = (authCred.credentials.content ?? '') as string;
+    const content = (authCred.credentials.content || '') as string;
     try {
       const parsed = JSON.parse(content) as Record<string, unknown>;
       // Service account JSON — would need JWT exchange (complex).
@@ -106,7 +106,7 @@ function resolveAccessToken(): string | null {
 
   // Fall back to OAuth credential
   const oauthCred = oauth.getCredential();
-  if (oauthCred?.accessToken) {
+  if (oauthCred && oauthCred.accessToken) {
     return oauthCred.accessToken as string;
   }
 
@@ -149,19 +149,21 @@ export function gmailFetch<T = unknown>(
 
   // Determine whether to use direct API calls (with a resolved access token)
   // or the OAuth proxy (for encrypted/managed credentials without a local token).
-  const accessToken = resolveAccessToken();
   const oauthCred = oauth.getCredential();
-  const useProxy = !accessToken && !!oauthCred;
-
-  if (!accessToken && !useProxy) {
-    console.log('[gmail] gmailFetch: no access token and no OAuth credential');
-    return {
-      success: false,
-      error: { code: 401, message: 'Gmail not connected. Complete setup first.' },
-    };
-  }
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    // Resolve token inside the loop so retries after 401 cache clear get a fresh token
+    const accessToken = resolveAccessToken();
+    const useProxy = !accessToken && !!oauthCred;
+
+    if (!accessToken && !useProxy) {
+      console.log('[gmail] gmailFetch: no access token and no OAuth credential');
+      return {
+        success: false,
+        error: { code: 401, message: 'Gmail not connected. Complete setup first.' },
+      };
+    }
+
     try {
       let response: { status: number; headers: Record<string, string>; body: string };
 
@@ -215,12 +217,9 @@ export function gmailFetch<T = unknown>(
         const bodyPreview = response.body ? response.body.slice(0, 200) : '(empty)';
         console.log(`[gmail] gmailFetch: 401 Unauthorized body=${bodyPreview}`);
         cachedSelfHostedToken = null;
-        const freshToken = resolveAccessToken();
-        if (freshToken && freshToken !== accessToken) {
-          // Can't reassign accessToken in proxy branch, but this is the direct branch
-          console.log('[gmail] gmailFetch: refreshed token, retrying');
-          continue;
-        }
+        // Token will be re-resolved at the top of the next iteration
+        console.log('[gmail] gmailFetch: cleared token cache, retrying');
+        continue;
       } else if (response.status >= 400) {
         const bodyPreview = response.body ? response.body.slice(0, 200) : '(empty)';
         console.log(`[gmail] gmailFetch: error status=${response.status} body=${bodyPreview}`);

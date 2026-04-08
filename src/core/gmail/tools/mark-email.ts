@@ -80,7 +80,7 @@ export const markEmailTool: ToolDefinition = {
             results.push({
               message_id: messageId,
               success: false,
-              error: response.error?.message || 'Failed to update message',
+              error: (response.error ? response.error.message : null) || 'Failed to update message',
             });
             errors.push(messageId);
           }
