@@ -212,29 +212,30 @@ function syncPipeline(): void {
         }
 
         // 1. Upsert page metadata
+        const pageTitle = formatPageTitle(rec);
         try {
           upsertPage(rec);
           pageCount++;
         } catch (e) {
-          console.error(`[notion] Failed to upsert page ${rec.id}: ${e}`);
+          console.error(`[notion][sync] FAIL upsert page "${pageTitle}" (${rec.id}): ${e}`);
           errorCount++;
           continue;
         }
 
-        // 2. Fetch block content immediately
+        // 2. Fetch block content + ingest immediately
         if (contentEnabled) {
+          const pageT0 = Date.now();
           try {
             const text = fetchBlockTreeText(rec.id as string, 2);
             updatePageContent(rec.id as string, text);
             contentSynced++;
-
-            // 3. Ingest into memory right away
             const trimmed = text.trim();
+            const fetchMs = Date.now() - pageT0;
+
             if (trimmed.length >= MIN_CONTENT_LENGTH) {
-              const title = formatPageTitle(rec);
               try {
                 memory.insert({
-                  title: title || `Notion page ${rec.id}`,
+                  title: pageTitle || `Notion page ${rec.id}`,
                   content: trimmed,
                   sourceType: 'doc',
                   documentId: `notion-page-${rec.id}`,
@@ -256,16 +257,20 @@ function syncPipeline(): void {
                 });
                 markPagesSubmitted([rec.id as string]);
                 ingested++;
+                console.log(`[notion][sync] ✓ page #${pageCount} "${pageTitle}" — ${trimmed.length}ch, ingested (${fetchMs}ms)`);
               } catch (e) {
-                console.error(`[notion] Failed to ingest page ${rec.id}: ${e}`);
+                console.error(`[notion][sync] FAIL ingest page "${pageTitle}" (${rec.id}): ${e}`);
+                markPagesSubmitted([rec.id as string]);
               }
             } else {
-              // Mark as submitted even if empty (so we don't re-process)
               markPagesSubmitted([rec.id as string]);
+              console.log(`[notion][sync] ✓ page #${pageCount} "${pageTitle}" — ${trimmed.length}ch (too short, skipped ingest) (${fetchMs}ms)`);
             }
           } catch (e) {
-            console.error(`[notion] Failed to fetch content for page ${rec.id}: ${e}`);
+            console.error(`[notion][sync] FAIL content page "${pageTitle}" (${rec.id}): ${e}`);
           }
+        } else {
+          console.log(`[notion][sync] ✓ page #${pageCount} "${pageTitle}" — metadata only`);
         }
       } else if (objectType === 'data_source' || objectType === 'database') {
         const existing = getDatabaseById ? getDatabaseById(rec.id as string) : null;
