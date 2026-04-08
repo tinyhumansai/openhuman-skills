@@ -496,13 +496,34 @@ See [`src/telegram/`](src/telegram/) for the reference implementation demonstrat
 
 - **TypeScript only** — Skills are TypeScript compiled to JavaScript
 - **QuickJS runtime** — Sandboxed JS environment with bridge APIs
-- **Synchronous execution** — No async/await; `net.fetch()` is sync with timeout
+- **ES2019 target** — esbuild bundles with `target: 'es2019'`. **Do NOT use optional chaining (`?.`) or nullish coalescing (`??`) in skill code** — QuickJS does not support them and they will crash the event loop silently. Use ternary/`||` instead: `x ? x.y : null` not `x?.y`, `x !== null && x !== undefined ? x : fallback` not `x ?? fallback`.
 - **JSON string results** — Tool execute functions must return JSON strings
+- **No raw text in published state** — `state.setPartial()` values pass through JSON-RPC transport. Raw text content (page bodies, email bodies) with newlines or special characters will break the JSON envelope. Only publish metadata (id, title, date) — never `content_text` or `body_text`.
+- **Tool logging** — All tools should be wrapped with `withLogging()` in `tools/index.ts`. This logs entry (tool name + args), exit (timing + result size), and errors for every call. See Notion or Gmail tools for the pattern.
+- **Sync is fire-and-forget** — The Rust event loop's `skill/sync` RPC starts `onSync()` as a background task and returns immediately. Sync progress should be published via `state.setPartial()` with `syncPhase`, `syncProgress` (0-100), and `syncMessage` fields. The `sync-status` tool exposes these to callers.
+- **MIN_CONTENT_LENGTH for ingestion** — When calling `memory.insert()`, skip content shorter than 10 characters. Very short strings crash the embedding model (ONNX/CoreML shape {0}).
 - **6-field cron** — Cron includes seconds: `sec min hour day month dow`
 - **SQL params required** — Always use `?` placeholders, never interpolation
 - **No underscores in skill names** — Use lowercase-hyphens (e.g., `my-skill`)
 - **Isolated data** — Skills cannot access other skills' databases or files
 - **Globals via globalThis** — Tools must access shared state via `globalThis.getSkillState()`, not bare variable names (see Skill State Management pattern)
+
+## OAuth Proxy
+
+Skills using OAuth (managed mode) make API calls via `oauth.fetch()`, which proxies through the backend at `/proxy/encrypted/:integrationId/:path`. The backend proxy sets provider-specific headers (e.g. `Notion-Version`) but forwards any such header the skill sends, letting the skill control the API version. The `X-Encryption-Key` header carries the client key share for token decryption. JWT for auth comes from `__ops.get_session_token()` (reads on-disk credential store, falls back to `JWT_TOKEN` env var).
+
+### Test Harness RPC Methods
+
+The Rust event loop matches these exact RPC method strings — use them in test harness calls:
+
+| Method | What it does |
+|--------|-------------|
+| `oauth/complete` | Inject OAuth credential + client key share |
+| `auth/complete` | Inject self-hosted credential with validation |
+| `skill/sync` | Fire-and-forget background sync |
+| `skill/ping` | Health check |
+| `oauth/revoked` | Clear OAuth credential |
+| `auth/revoked` | Clear auth credential |
 
 ## Build Process
 

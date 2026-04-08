@@ -693,6 +693,13 @@ void _syncSummariesToServer; // Reserved for Phase 4; reference to avoid TS6133
 const INGEST_QUERY_LIMIT = 500;
 
 /**
+ * Minimum content length (in characters) required for ingestion.
+ * Very short strings may tokenize to zero tokens and crash the ONNX/CoreML
+ * embedding model (shape {0} is not supported). Skip anything shorter.
+ */
+const MIN_CONTENT_LENGTH = 10;
+
+/**
  * Ingest un-submitted pages and database rows into the knowledge graph.
  * Each document is sent via memory.insert() which routes through the Rust
  * ingestion pipeline (upsert → GLiNER entity/relation extraction → graph).
@@ -717,7 +724,7 @@ function ingestNewDocuments(): void {
 
   for (const page of pages) {
     const content = (page.content_text || '').trim();
-    if (content.length === 0) {
+    if (content.length < MIN_CONTENT_LENGTH) {
       emptyPageIds.push(page.id);
       continue;
     }
@@ -752,7 +759,7 @@ function ingestNewDocuments(): void {
 
   for (const row of rows) {
     const content = (row.properties_text || '').trim();
-    if (content.length === 0) {
+    if (content.length < MIN_CONTENT_LENGTH) {
       emptyRowIds.push(row.id);
       continue;
     }

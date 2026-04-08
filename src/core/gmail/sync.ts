@@ -222,7 +222,12 @@ export async function performInitialSync(onProgress?: SyncProgressCallback): Pro
     s.syncStatus.syncProgress = 0;
     s.syncStatus.syncProgressMessage = '';
     publishSkillState();
-    const emails = getEmails();
+    // Publish email metadata (no body_text to avoid breaking JSON transport)
+    const emails = getEmails().map(e => ({
+      id: e.id, subject: e.subject, sender_email: e.sender_email,
+      sender_name: e.sender_name, date: e.date, snippet: e.snippet,
+      is_read: e.is_read, is_starred: e.is_starred, labels: e.labels,
+    }));
     state.setPartial({ emails });
   }
 }
@@ -291,7 +296,12 @@ export async function onSync(): Promise<void> {
     s.syncStatus.syncProgressMessage = '';
     publishSkillState();
     syncGmailMetadataToBackend();
-    const emails = getEmails();
+    // Publish email metadata (no body_text to avoid breaking JSON transport)
+    const emails = getEmails().map(e => ({
+      id: e.id, subject: e.subject, sender_email: e.sender_email,
+      sender_name: e.sender_name, date: e.date, snippet: e.snippet,
+      is_read: e.is_read, is_starred: e.is_starred, labels: e.labels,
+    }));
     state.setPartial({ emails });
   }
 }
@@ -302,6 +312,13 @@ export async function onSync(): Promise<void> {
 
 /** Max emails to pull from DB per ingestion round. */
 const INGEST_QUERY_LIMIT = 500;
+
+/**
+ * Minimum content length (in characters) required for ingestion.
+ * Very short strings may tokenize to zero tokens and crash the ONNX/CoreML
+ * embedding model (shape {0} is not supported). Skip anything shorter.
+ */
+const MIN_CONTENT_LENGTH = 10;
 
 /**
  * Ingest un-submitted emails into the knowledge graph.
@@ -316,12 +333,14 @@ function ingestNewEmails(): void {
   const emails = getUnsubmittedEmails(INGEST_QUERY_LIMIT);
   if (emails.length === 0) return;
 
+  emitSyncProgress(`Ingesting ${emails.length} emails into knowledge graph...`, 92);
+
   const submittedIds: string[] = [];
   let ingested = 0;
 
   for (const email of emails) {
-    const content = email.body_text || email.snippet || '';
-    if (content.length === 0) {
+    const content = (email.body_text || email.snippet || '').trim();
+    if (content.length < MIN_CONTENT_LENGTH) {
       submittedIds.push(email.id);
       continue;
     }

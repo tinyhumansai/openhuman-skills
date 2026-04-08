@@ -6,7 +6,49 @@ import { markEmailTool } from './mark-email';
 import { searchEmailsTool } from './search-emails';
 import { sendEmailTool } from './send-email';
 
-export const tools: ToolDefinition[] = [
+/**
+ * Wrap a tool's execute function with entry/exit logging.
+ * Logs: tool name, args summary, elapsed time, result size or error.
+ */
+function withLogging(tool: ToolDefinition): ToolDefinition {
+  const originalExecute = tool.execute;
+  const toolName = tool.name;
+  return {
+    ...tool,
+    async execute(args: Record<string, unknown>): Promise<string> {
+      const argKeys = Object.keys(args || {});
+      const argSummary = argKeys.length > 0
+        ? argKeys.map(k => {
+            const v = args[k];
+            if (typeof v === 'string' && v.length > 50) return `${k}=<${v.length} chars>`;
+            return `${k}=${JSON.stringify(v)}`;
+          }).join(', ')
+        : '(none)';
+      console.log(`[gmail][tool:${toolName}] called with ${argSummary}`);
+
+      const t0 = Date.now();
+      try {
+        const text = await originalExecute.call(this, args);
+        const ms = Date.now() - t0;
+        const len = text ? text.length : 0;
+        let errMsg = '';
+        try {
+          const parsed = JSON.parse(text);
+          if (parsed.error) errMsg = ` error="${String(parsed.error).slice(0, 100)}"`;
+        } catch { /* not JSON */ }
+        console.log(`[gmail][tool:${toolName}] OK ${ms}ms (${len}b)${errMsg}`);
+        return text;
+      } catch (e) {
+        const ms = Date.now() - t0;
+        const msg = e instanceof Error ? e.message : String(e);
+        console.error(`[gmail][tool:${toolName}] FAILED ${ms}ms: ${msg}`);
+        throw e;
+      }
+    },
+  };
+}
+
+const rawTools: ToolDefinition[] = [
   getEmailTool,
   getEmailsTool,
   getLabelsTool,
@@ -15,3 +57,5 @@ export const tools: ToolDefinition[] = [
   searchEmailsTool,
   sendEmailTool,
 ];
+
+export const tools: ToolDefinition[] = rawTools.map(withLogging);
