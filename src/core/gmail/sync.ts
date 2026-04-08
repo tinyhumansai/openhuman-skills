@@ -330,7 +330,7 @@ const INGEST_QUERY_LIMIT = 500;
  * Very short strings may tokenize to zero tokens and crash the ONNX/CoreML
  * embedding model (shape {0} is not supported). Skip anything shorter.
  */
-const MIN_CONTENT_LENGTH = 10;
+const MIN_CONTENT_LENGTH = 50;
 
 /**
  * Ingest un-submitted emails into the knowledge graph.

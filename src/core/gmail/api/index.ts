@@ -9,9 +9,12 @@ const MAX_RETRIES = 3;
 /** Default backoff in ms when Retry-After header is absent. */
 const DEFAULT_BACKOFF_MS = 5_000;
 
-/** Sleep helper for retry backoff. */
+/** Busy-wait sleep for retry backoff (QuickJS has no async setTimeout). */
 function sleep(ms: number): void {
-  setTimeout(() => {}, ms);
+  const end = Date.now() + ms;
+  while (Date.now() < end) {
+    /* busy wait */
+  }
 }
 
 const GMAIL_BASE_URL = 'https://gmail.googleapis.com/gmail/v1';
