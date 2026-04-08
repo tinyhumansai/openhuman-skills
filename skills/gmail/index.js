@@ -773,70 +773,6 @@ var __skill_bundle = (() => {
   while (Date.now() < end) {
   }
  }
- var GMAIL_BASE_URL = "https://gmail.googleapis.com/gmail/v1";
- var GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
- var cachedSelfHostedToken = null;
- function resolveAccessToken() {
-  const authCred = auth.getCredential();
-  if (authCred && authCred.mode === "self_hosted") {
-   const creds = authCred.credentials;
-   const clientId = creds.client_id;
-   const clientSecret = creds.client_secret;
-   const refreshToken = creds.refresh_token;
-   if (clientId && clientSecret && refreshToken) {
-    if (cachedSelfHostedToken && cachedSelfHostedToken.expiresAt > Date.now() + 6e4) {
-     return cachedSelfHostedToken.token;
-    }
-    try {
-     const body = `client_id=${encodeURIComponent(clientId)}&client_secret=${encodeURIComponent(clientSecret)}&refresh_token=${encodeURIComponent(refreshToken)}&grant_type=refresh_token`;
-     const response = net.fetch(GOOGLE_TOKEN_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body,
-      timeout: 15
-     });
-     if (response.status === 200) {
-      const data = JSON.parse(response.body);
-      cachedSelfHostedToken = {
-       token: data.access_token,
-       expiresAt: Date.now() + data.expires_in * 1e3
-      };
-      console.log("[gmail] Self-hosted token refreshed, expires in", data.expires_in, "s");
-      return data.access_token;
-     } else {
-      console.error("[gmail] Token refresh failed:", response.status, response.body);
-      return null;
-     }
-    } catch (err) {
-     console.error("[gmail] Token refresh error:", err);
-     return null;
-    }
-   }
-  }
-  if (authCred && authCred.mode === "text") {
-   const content = authCred.credentials.content || "";
-   try {
-    const parsed = JSON.parse(content);
-    if (parsed.access_token) {
-     return parsed.access_token;
-    }
-    if (parsed.private_key) {
-     console.warn("[gmail] Service account JSON detected but JWT signing is not yet supported. Use a refresh token flow instead.");
-     return null;
-    }
-   } catch {
-    if (content.trim()) {
-     return content.trim();
-    }
-   }
-   return null;
-  }
-  const oauthCred = oauth.getCredential();
-  if (oauthCred && oauthCred.accessToken) {
-   return oauthCred.accessToken;
-  }
-  return null;
- }
  function isGmailConnected() {
   const authCred = auth.getCredential();
   if (authCred && authCred.mode !== "managed")
@@ -844,49 +780,27 @@ var __skill_bundle = (() => {
   const oauthCred = oauth.getCredential();
   return !!oauthCred;
  }
- function resetTokenCache() {
-  cachedSelfHostedToken = null;
- }
  function gmailFetch(endpoint, options = {}) {
   const cleanPath = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
   const method = options.method || "GET";
   const timeout = options.timeout || 10;
-  const isBatch = cleanPath === "/batch";
   const oauthCred = oauth.getCredential();
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-   const accessToken = resolveAccessToken();
-   const useProxy = !accessToken && !!oauthCred;
-   if (!accessToken && !useProxy) {
-    console.log("[gmail] gmailFetch: no access token and no OAuth credential");
+   if (!oauthCred) {
+    console.log("[gmail] gmailFetch: no OAuth credential");
     return {
      success: false,
      error: { code: 401, message: "Gmail not connected. Complete setup first." }
     };
    }
    try {
-    let response;
-    if (useProxy) {
-     console.log("[gmail] gmailFetch (proxy):", method, cleanPath);
-     response = oauth.fetch(cleanPath, {
-      method,
-      headers: { "Content-Type": "application/json", ...options.headers || {} },
-      body: options.body,
-      timeout
-     });
-    } else {
-     const url = isBatch ? "https://www.googleapis.com/batch/gmail/v1" : `${GMAIL_BASE_URL}${cleanPath}`;
-     console.log("[gmail] gmailFetch (direct):", method, url);
-     response = net.fetch(url, {
-      method,
-      headers: {
-       Authorization: `Bearer ${accessToken}`,
-       ...isBatch ? {} : { "Content-Type": "application/json" },
-       ...options.headers || {}
-      },
-      body: options.body,
-      timeout
-     });
-    }
+    console.log("[gmail] gmailFetch (oauth.fetch):", method, cleanPath);
+    const response = oauth.fetch(cleanPath, {
+     method,
+     headers: { "Content-Type": "application/json", ...options.headers || {} },
+     body: options.body,
+     timeout
+    });
     console.log("[gmail] gmailFetch response status:", response.status);
     const s2 = getGmailSkillState();
     if (response.status === 429 && attempt < MAX_RETRIES) {
@@ -896,13 +810,7 @@ var __skill_bundle = (() => {
      sleep(waitMs);
      continue;
     }
-    if (!useProxy && response.status === 401 && attempt < MAX_RETRIES) {
-     const bodyPreview = response.body ? response.body.slice(0, 200) : "(empty)";
-     console.log(`[gmail] gmailFetch: 401 Unauthorized body=${bodyPreview}`);
-     cachedSelfHostedToken = null;
-     console.log("[gmail] gmailFetch: cleared token cache, retrying");
-     continue;
-    } else if (response.status >= 400) {
+    if (response.status >= 400) {
      const bodyPreview = response.body ? response.body.slice(0, 200) : "(empty)";
      console.log(`[gmail] gmailFetch: error status=${response.status} body=${bodyPreview}`);
     }
@@ -7235,6 +7143,7 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
    s2.syncStatus.newEmailsCount = newEmails;
    s2.syncStatus.nextSyncTime = now + s2.config.syncIntervalMinutes * 60 * 1e3;
    log(`Initial sync complete: ${newEmails} new emails, ${skipped} skipped`, 100);
+   s2.lastApiError = null;
    ingestNewEmails();
    if (newEmails > 0 && s2.config.notifyOnNewEmails) {
     platform.notify("Gmail Sync Complete", `Synchronized ${newEmails} new emails`);
@@ -7293,6 +7202,7 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
    s2.syncStatus.nextSyncTime = now + s2.config.syncIntervalMinutes * 60 * 1e3;
    emitSyncProgress(`Sync complete: ${newEmails} new, ${skipped} skipped`, 100);
    console.log(`[gmail-sync] Incremental sync done: ${newEmails} new, ${skipped} skipped`);
+   s2.lastApiError = null;
    ingestNewEmails();
    if (newEmails > 0 && s2.config.notifyOnNewEmails) {
     platform.notify("New Gmail Emails", `${newEmails} new emails synced`);
@@ -8636,7 +8546,6 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
   if (args.mode === "managed") {
    return { status: "complete" };
   }
-  resetTokenCache();
   if (args.mode === "self_hosted") {
    const clientId = args.credentials.client_id;
    const clientSecret = args.credentials.client_secret;
@@ -8779,7 +8688,6 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
   s2.profile = null;
   state.delete("config");
   cron.unregister("gmail-sync");
-  resetTokenCache();
   publishSkillState2();
  }
  function onSetupStart() {

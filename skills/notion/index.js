@@ -592,9 +592,6 @@ var __skill_bundle = (() => {
   }
   const oauthCred = oauth.getCredential();
   if (oauthCred) {
-   if (oauthCred.accessToken) {
-    return { type: "token", token: oauthCred.accessToken };
-   }
    return { type: "proxy" };
   }
   return null;
@@ -626,8 +623,8 @@ var __skill_bundle = (() => {
      timeout: 30
     });
    } else {
-    console.log(`[notion][fetch] ${method} /v1${path} (proxy, attempt ${attempt})`);
-    response = oauth.fetch(`/v1${path}`, {
+    console.log(`[notion][fetch] ${method} ${path} (oauth.fetch proxy, attempt ${attempt})`);
+    response = oauth.fetch(path, {
      method,
      headers: { "Content-Type": "application/json", "Notion-Version": apiVersion },
      body: options.body ? JSON.stringify(options.body) : void 0,
@@ -652,7 +649,7 @@ var __skill_bundle = (() => {
    }
    if (response.status >= 400) {
     const errorBody = response.body || "";
-    let message = `Notion API error: ${response.status} \u2014 ${errorBody.slice(0, 300)}`;
+    const message = `Notion API error: ${response.status} \u2014 ${errorBody.slice(0, 300)}`;
     console.error("[notion][helpers] notionFetch error body:", errorBody);
     throw new Error(message);
    }
