@@ -10,7 +10,7 @@ export const getUserTool: ToolDefinition = {
     properties: { user_id: { type: 'string', description: 'The user ID' } },
     required: ['user_id'],
   },
-  async execute(args: Record<string, unknown>): Promise<string> {
+  execute(args: Record<string, unknown>): string {
     try {
       const userId = (args.user_id as string) || '';
 
@@ -18,7 +18,7 @@ export const getUserTool: ToolDefinition = {
         return JSON.stringify({ error: 'user_id is required' });
       }
 
-      const user = await notionApi.getUser(userId);
+      const user = notionApi.getUser(userId);
       const summary = formatUserSummary(user as Record<string, unknown>);
       return JSON.stringify(summary);
     } catch (e) {

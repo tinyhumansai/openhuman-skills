@@ -9,7 +9,7 @@ export const syncNowTool: ToolDefinition = {
     'Trigger an immediate Notion sync to refresh local data. ' +
     'Returns sync results including counts of synced pages and databases.',
   input_schema: { type: 'object', properties: {} },
-  async execute(): Promise<string> {
+  execute(): string {
     try {
       const s = getNotionSkillState();
 
@@ -31,7 +31,7 @@ export const syncNowTool: ToolDefinition = {
         });
       }
 
-      await performSync();
+      performSync();
 
       // Return results after sync completes
       return JSON.stringify({

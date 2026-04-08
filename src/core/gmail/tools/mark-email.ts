@@ -37,7 +37,7 @@ export const markEmailTool: ToolDefinition = {
     },
     required: ['message_ids', 'action'],
   },
-  async execute(args: Record<string, unknown>): Promise<string> {
+  execute(args: Record<string, unknown>): string {
     try {
       const messageIds = args.message_ids as string[];
       const action = args.action as string;
@@ -65,7 +65,7 @@ export const markEmailTool: ToolDefinition = {
         try {
           const requestBody = { ids: [messageId], ...labelOperations };
 
-          const response = await gmailFetch<{ ids: string[] }>('/users/me/messages/batchModify', {
+          const response = gmailFetch<{ ids: string[] }>('/users/me/messages/batchModify', {
             method: 'POST',
             body: JSON.stringify(requestBody),
           });

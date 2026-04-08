@@ -5,21 +5,22 @@ import { formatApiError, formatPageTitle } from '../helpers';
 
 /** Shape of one search result item matching Notion API response. */
 function toSearchResultItem(item: Record<string, unknown>): Record<string, unknown> {
+  const inTrashVal = item.in_trash !== undefined && item.in_trash !== null ? item.in_trash : (item.archived !== undefined && item.archived !== null ? item.archived : false);
   const base = {
     object: item.object,
     id: item.id,
     created_time: item.created_time,
     last_edited_time: item.last_edited_time,
-    in_trash: item.in_trash ?? item.archived ?? false,
-    is_locked: item.is_locked ?? false,
-    url: item.url ?? null,
-    public_url: item.public_url ?? null,
-    parent: item.parent ?? null,
-    properties: item.properties ?? {},
-    icon: item.icon ?? null,
-    cover: item.cover ?? null,
-    created_by: item.created_by ?? null,
-    last_edited_by: item.last_edited_by ?? null,
+    in_trash: inTrashVal,
+    is_locked: item.is_locked !== undefined && item.is_locked !== null ? item.is_locked : false,
+    url: item.url !== undefined && item.url !== null ? item.url : null,
+    public_url: item.public_url !== undefined && item.public_url !== null ? item.public_url : null,
+    parent: item.parent !== undefined && item.parent !== null ? item.parent : null,
+    properties: item.properties !== undefined && item.properties !== null ? item.properties : {},
+    icon: item.icon !== undefined && item.icon !== null ? item.icon : null,
+    cover: item.cover !== undefined && item.cover !== null ? item.cover : null,
+    created_by: item.created_by !== undefined && item.created_by !== null ? item.created_by : null,
+    last_edited_by: item.last_edited_by !== undefined && item.last_edited_by !== null ? item.last_edited_by : null,
   };
   if (item.object === 'page') {
     return { ...base, title: formatPageTitle(item) };
@@ -27,7 +28,7 @@ function toSearchResultItem(item: Record<string, unknown>): Record<string, unkno
   if (item.object === 'database' || item.object === 'data_source') {
     const title =
       Array.isArray(item.title) && item.title.length
-        ? (item.title as Array<{ plain_text?: string }>).map(t => t.plain_text ?? '').join('')
+        ? (item.title as Array<{ plain_text?: string }>).map(t => t.plain_text || '').join('')
         : '(Untitled)';
     return { ...base, title };
   }
@@ -59,7 +60,7 @@ export const searchTool: ToolDefinition = {
       },
     },
   },
-  async execute(args: Record<string, unknown>): Promise<string> {
+  execute(args: Record<string, unknown>): string {
     try {
       const query = ((args.query as string) || '').trim();
       const filter = args.filter as string | undefined;
@@ -79,13 +80,14 @@ export const searchTool: ToolDefinition = {
         timestamp: 'last_edited_time',
       };
 
-      const result = await notionApi.search(body as Record<string, unknown>);
+      const result = notionApi.search(body as Record<string, unknown>);
       const results = (result.results as Record<string, unknown>[]).map(toSearchResultItem);
 
+      const resultRec = result as Record<string, unknown>;
       return JSON.stringify({
-        object: (result as Record<string, unknown>).object ?? 'list',
-        next_cursor: (result as Record<string, unknown>).next_cursor ?? null,
-        has_more: result.has_more ?? false,
+        object: resultRec.object !== undefined && resultRec.object !== null ? resultRec.object : 'list',
+        next_cursor: resultRec.next_cursor !== undefined && resultRec.next_cursor !== null ? resultRec.next_cursor : null,
+        has_more: result.has_more !== undefined && result.has_more !== null ? result.has_more : false,
         results,
       });
     } catch (e) {

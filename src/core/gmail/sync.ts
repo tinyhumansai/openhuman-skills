@@ -78,14 +78,14 @@ function gmailDateStr(msOrDaysAgo: number, isDaysAgo = false): string {
  * Fetch a page of message IDs from the Gmail API.
  * Returns the message references and optional next page token.
  */
-async function fetchMessagePage(
+function fetchMessagePage(
   query: string,
   pageToken?: string
-): Promise<{ messages: Array<{ id: string; threadId: string }>; nextPageToken?: string }> {
+): { messages: Array<{ id: string; threadId: string }>; nextPageToken?: string } {
   const params = [`maxResults=${PAGE_SIZE}`, `q=${encodeURIComponent(query)}`];
   if (pageToken) params.push(`pageToken=${encodeURIComponent(pageToken)}`);
 
-  const response = await gmailFetch<{
+  const response = gmailFetch<{
     messages?: Array<{ id: string; threadId: string }>;
     nextPageToken?: string;
   }>(`/users/me/messages?${params.join('&')}`);
@@ -103,10 +103,10 @@ async function fetchMessagePage(
  * Uses emailExists (SELECT 1) instead of fetching the full row for the skip check.
  * Returns true if a new email was synced, false if skipped (already exists).
  */
-async function syncMessage(msgId: string): Promise<boolean> {
+function syncMessage(msgId: string): boolean {
   if (emailExists(msgId)) return false;
 
-  const msgResponse = await gmailFetch(`/users/me/messages/${msgId}`);
+  const msgResponse = gmailFetch(`/users/me/messages/${msgId}`);
   if (msgResponse.success && msgResponse.data) {
     const s = getGmailSkillState();
     upsertEmail(msgResponse.data as GmailMessage, !s.config.showSensitiveMessages);
@@ -122,11 +122,11 @@ async function syncMessage(msgId: string): Promise<boolean> {
  * Fetches pages of message IDs then syncs each message individually.
  * Returns { newEmails, skipped }.
  */
-async function runSyncPages(
+function runSyncPages(
   query: string,
   maxPages: number,
   log?: SyncProgressCallback
-): Promise<{ newEmails: number; skipped: number }> {
+): { newEmails: number; skipped: number } {
   let pageToken: string | undefined;
   let newEmails = 0;
   let skipped = 0;
@@ -136,7 +136,7 @@ async function runSyncPages(
     page++;
     log?.(`Fetching page ${page}...`, Math.min(5 + page * 8, 80));
 
-    const result = await fetchMessagePage(query, pageToken);
+    const result = fetchMessagePage(query, pageToken);
     if (result.messages.length === 0) break;
 
     pageToken = result.nextPageToken;
@@ -145,7 +145,7 @@ async function runSyncPages(
     const CONCURRENCY = 5;
     for (let i = 0; i < result.messages.length; i += CONCURRENCY) {
       const batch = result.messages.slice(i, i + CONCURRENCY);
-      const results = await Promise.all(batch.map(msgRef => syncMessage(msgRef.id)));
+      const results = batch.map(msgRef => syncMessage(msgRef.id));
       for (const wasNew of results) {
         if (wasNew) newEmails++;
         else skipped++;
@@ -167,7 +167,7 @@ async function runSyncPages(
  * Paginates through results and skips emails already in the local database.
  * Called on first connect or when initial sync hasn't been completed.
  */
-export async function performInitialSync(onProgress?: SyncProgressCallback): Promise<void> {
+export function performInitialSync(onProgress?: SyncProgressCallback): void {
   const s = getGmailSkillState();
 
   if (!isGmailConnected()) {
@@ -195,7 +195,7 @@ export async function performInitialSync(onProgress?: SyncProgressCallback): Pro
     const afterDate = gmailDateStr(SYNC_WINDOW_DAYS, true);
     log(`Starting initial sync (emails after ${afterDate})...`, 0);
 
-    const { newEmails, skipped } = await runSyncPages(`after:${afterDate}`, MAX_PAGES, log);
+    const { newEmails, skipped } = runSyncPages(`after:${afterDate}`, MAX_PAGES, log);
 
     const now = Date.now();
     state.set('initialSyncCompleted', true);
@@ -246,7 +246,7 @@ export async function performInitialSync(onProgress?: SyncProgressCallback): Pro
  * Incremental sync: fetches only emails newer than the last sync time,
  * within the 30-day window. Falls back to initial sync if not yet completed.
  */
-export async function onSync(): Promise<void> {
+export function onSync(): void {
   const s = getGmailSkillState();
 
   if (!isGmailConnected() || s.syncStatus.syncInProgress) return;
@@ -275,7 +275,7 @@ export async function onSync(): Promise<void> {
     const effectiveMs = lastSyncTime ? Math.max(lastSyncTime, thirtyDaysAgoMs) : thirtyDaysAgoMs;
     const query = `after:${gmailDateStr(effectiveMs)}`;
 
-    const { newEmails, skipped } = await runSyncPages(query, MAX_PAGES);
+    const { newEmails, skipped } = runSyncPages(query, MAX_PAGES);
 
     const now = Date.now();
     state.set('lastSyncTime', now);

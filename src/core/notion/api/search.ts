@@ -11,6 +11,6 @@ export interface SearchRequest {
   start_cursor?: string;
 }
 
-export function search(body: SearchRequest | Record<string, unknown>): Promise<SearchResponse> {
+export function search(body: SearchRequest | Record<string, unknown>): SearchResponse {
   return apiFetch<SearchResponse>('/search', { method: 'POST', body });
 }

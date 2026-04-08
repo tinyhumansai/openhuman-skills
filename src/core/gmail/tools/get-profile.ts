@@ -18,9 +18,9 @@ export const getProfileTool: ToolDefinition = {
     },
     required: [],
   },
-  async execute(_args: Record<string, unknown>): Promise<string> {
+  execute(_args: Record<string, unknown>): string {
     try {
-      const response = await gmailFetch<GmailProfile>('/users/me/profile');
+      const response = gmailFetch<GmailProfile>('/users/me/profile');
 
       if (!response.success) {
         return JSON.stringify({

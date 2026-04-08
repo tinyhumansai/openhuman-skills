@@ -15,7 +15,7 @@ function withLogging(tool: ToolDefinition): ToolDefinition {
   const toolName = tool.name;
   return {
     ...tool,
-    async execute(args: Record<string, unknown>): Promise<string> {
+    execute(args: Record<string, unknown>): string {
       const argKeys = Object.keys(args || {});
       const argSummary =
         argKeys.length > 0
@@ -31,7 +31,7 @@ function withLogging(tool: ToolDefinition): ToolDefinition {
 
       const t0 = Date.now();
       try {
-        const text = await originalExecute.call(this, args);
+        const text = originalExecute.call(this, args) as string;
         const ms = Date.now() - t0;
         const len = text ? text.length : 0;
         let errMsg = '';

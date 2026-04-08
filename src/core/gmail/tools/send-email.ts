@@ -69,7 +69,7 @@ export const sendEmailTool: ToolDefinition = {
     },
     required: ['to', 'subject'],
   },
-  async execute(args: Record<string, unknown>): Promise<string> {
+  execute(args: Record<string, unknown>): string {
     try {
       // Validate required fields
       const to = args.to as Array<{ email: string; name?: string }>;
@@ -187,7 +187,7 @@ export const sendEmailTool: ToolDefinition = {
       }
 
       // Send email
-      const response = await gmailFetch<GmailMessage>('/users/me/messages/send', {
+      const response = gmailFetch<GmailMessage>('/users/me/messages/send', {
         method: 'POST',
         body: JSON.stringify(requestBody),
       });
@@ -203,7 +203,7 @@ export const sendEmailTool: ToolDefinition = {
 
       // Update local database if email was sent successfully
       if (sentMessage && sentMessage.id) {
-        const getEmailResponse = await gmailFetch(`/users/me/messages/${sentMessage.id}`);
+        const getEmailResponse = gmailFetch(`/users/me/messages/${sentMessage.id}`);
         if (getEmailResponse.success && getEmailResponse.data) {
           upsertEmail(getEmailResponse.data as GmailMessage);
         }

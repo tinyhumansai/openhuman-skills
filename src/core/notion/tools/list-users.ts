@@ -19,7 +19,7 @@ export const listUsersTool: ToolDefinition = {
       },
     },
   },
-  async execute(args: Record<string, unknown>): Promise<string> {
+  execute(args: Record<string, unknown>): string {
     try {
       const pageSize = Math.min((args.page_size as number) || 100, 100);
       const tryCache = args.tryCache === true;
@@ -38,7 +38,7 @@ export const listUsersTool: ToolDefinition = {
         }
       }
 
-      const result = await notionApi.listUsers(pageSize);
+      const result = notionApi.listUsers(pageSize);
       const users = result.results.map((u: Record<string, unknown>) => formatUserSummary(u));
       return JSON.stringify({
         count: users.length,

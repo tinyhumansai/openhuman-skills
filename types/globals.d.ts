@@ -22,7 +22,7 @@ declare const db: {
 /** HTTP networking. */
 declare const net: {
   /** Synchronous HTTP fetch. Returns the parsed response. */
-  fetch(url: string, options?: NetFetchOptions): Promise<NetFetchResponse>;
+  fetch(url: string, options?: NetFetchOptions): NetFetchResponse;
 };
 
 /** Cron scheduling. */
@@ -103,7 +103,7 @@ declare const oauth: {
    * Server attaches the OAuth access_token and forwards to the provider API.
    * Path is relative to manifest's apiBaseUrl.
    */
-  fetch(path: string, options?: OAuthFetchOptions): Promise<OAuthFetchResponse>;
+  fetch(path: string, options?: OAuthFetchOptions): OAuthFetchResponse;
 
   /** Revoke the current OAuth credential server-side. */
   revoke(): boolean;
@@ -136,7 +136,7 @@ declare const auth: {
    * For managed: delegates to oauth.fetch.
    * For text: no auto-injection (skill should handle manually).
    */
-  fetch(url: string, options?: OAuthFetchOptions): Promise<OAuthFetchResponse>;
+  fetch(url: string, options?: OAuthFetchOptions): OAuthFetchResponse;
 };
 
 /** Memory insertion bridge (persists through native memory client). */
@@ -191,7 +191,7 @@ declare const backend: {
    * @param chunks - Data chunks (max 500, each content max 1MB).
    * @param options - Data source identifier and optional metadata.
    */
-  submitData(chunks: DataSubmissionChunk[], options?: DataSubmissionOptions): Promise<void>;
+  submitData(chunks: DataSubmissionChunk[], options?: DataSubmissionOptions): void;
 };
 
 interface ModelGenerateOptions {
@@ -283,7 +283,7 @@ interface ToolDefinition {
   name: string;
   description: string;
   input_schema: ToolInputSchema;
-  execute: (args: Record<string, unknown>) => Promise<string>;
+  execute: (args: Record<string, unknown>) => string;
 }
 
 interface ToolInputSchema {

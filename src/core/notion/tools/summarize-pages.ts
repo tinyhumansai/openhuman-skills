@@ -8,7 +8,7 @@ export const summarizePagesTool: ToolDefinition = {
     'AI summarization of Notion pages is now handled by the backend server. ' +
     'Synced page content is submitted to the server which runs summarization.',
   input_schema: { type: 'object', properties: {} },
-  async execute(): Promise<string> {
+  execute(): string {
     return JSON.stringify({
       success: false,
       error:

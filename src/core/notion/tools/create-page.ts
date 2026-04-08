@@ -25,7 +25,7 @@ export const createPageTool: ToolDefinition = {
     },
     required: ['parent_id', 'title'],
   },
-  async execute(args: Record<string, unknown>): Promise<string> {
+  execute(args: Record<string, unknown>): string {
     try {
       const parentId = (args.parent_id as string) || '';
       const parentType = (args.parent_type as string) || 'page_id';
@@ -42,7 +42,7 @@ export const createPageTool: ToolDefinition = {
 
       let parentPayload: Record<string, unknown>;
       if (parentType === 'database_id') {
-        const dataSourceId = await notionApi.resolveDataSourceId(parentId);
+        const dataSourceId = notionApi.resolveDataSourceId(parentId);
         parentPayload = { data_source_id: dataSourceId };
       } else {
         parentPayload = { [parentType]: parentId };
@@ -71,11 +71,11 @@ export const createPageTool: ToolDefinition = {
         body.children = [buildParagraphBlock(content)];
       }
 
-      const page = await notionApi.createPage(body);
+      const page = notionApi.createPage(body);
       const pageId = (page as Record<string, unknown>).id as string;
 
       if (appendContentAfterCreate && content) {
-        await notionApi.appendBlockChildren(pageId, [buildParagraphBlock(content)]);
+        notionApi.appendBlockChildren(pageId, [buildParagraphBlock(content)]);
       }
 
       return JSON.stringify({

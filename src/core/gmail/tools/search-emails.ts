@@ -32,7 +32,7 @@ export const searchEmailsTool: ToolDefinition = {
     },
     required: ['query'],
   },
-  async execute(args: Record<string, unknown>): Promise<string> {
+  execute(args: Record<string, unknown>): string {
     try {
       const query = args.query as string;
       if (!query) {
@@ -55,7 +55,7 @@ export const searchEmailsTool: ToolDefinition = {
       }
 
       // Search messages
-      const searchResponse = await gmailFetch<{
+      const searchResponse = gmailFetch<{
         messages?: Array<{ id: string; threadId: string }>;
         nextPageToken?: string;
         resultSizeEstimate: number;
@@ -88,11 +88,9 @@ export const searchEmailsTool: ToolDefinition = {
 
       for (let i = 0; i < refs.length; i += CONCURRENCY) {
         const batch = refs.slice(i, i + CONCURRENCY);
-        const results = await Promise.all(
-          batch.map(msgRef =>
-            gmailFetch<GmailMessage>(
-              `/users/me/messages/${msgRef.id}?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Date`
-            )
+        const results = batch.map(msgRef =>
+          gmailFetch<GmailMessage>(
+            `/users/me/messages/${msgRef.id}?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Date`
           )
         );
 

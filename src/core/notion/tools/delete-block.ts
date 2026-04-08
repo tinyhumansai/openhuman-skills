@@ -12,17 +12,17 @@ export const deleteBlockTool: ToolDefinition = {
     properties: { block_id: { type: 'string', description: 'The block ID to delete' } },
     required: ['block_id'],
   },
-  async execute(args: Record<string, unknown>): Promise<string> {
+  execute(args: Record<string, unknown>): string {
     try {
       const blockId = (args.block_id as string) || '';
       if (!blockId) {
         return JSON.stringify({ error: 'block_id is required' });
       }
 
-      const result = await notionApi.deleteBlock(blockId);
+      const result = notionApi.deleteBlock(blockId);
       const rec = result as Record<string, unknown>;
 
-      return JSON.stringify({ object: rec.object ?? 'block', id: rec.id });
+      return JSON.stringify({ object: rec.object || 'block', id: rec.id });
     } catch (e) {
       return JSON.stringify({ error: formatApiError(e) });
     }

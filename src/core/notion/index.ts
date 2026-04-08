@@ -11,7 +11,7 @@ import type { NotionSkillConfig } from './state';
 import { performSync } from './sync';
 import tools from './tools/index';
 
-async function init(): Promise<void> {
+function init(): void {
   console.log('[notion] Initializing');
   const s = getNotionSkillState();
 
@@ -23,7 +23,7 @@ async function init(): Promise<void> {
     s.config.credentialId = saved.credentialId || s.config.credentialId;
     s.config.workspaceName = saved.workspaceName || s.config.workspaceName;
     s.config.syncIntervalMinutes = saved.syncIntervalMinutes || s.config.syncIntervalMinutes;
-    s.config.contentSyncEnabled = saved.contentSyncEnabled ?? s.config.contentSyncEnabled;
+    s.config.contentSyncEnabled = saved.contentSyncEnabled !== undefined && saved.contentSyncEnabled !== null ? saved.contentSyncEnabled : s.config.contentSyncEnabled;
     s.config.maxPagesPerContentSync =
       saved.maxPagesPerContentSync || s.config.maxPagesPerContentSync;
   }
@@ -61,7 +61,7 @@ async function init(): Promise<void> {
   publishState();
 }
 
-async function start(): Promise<void> {
+function start(): void {
   const s = getNotionSkillState();
 
   if (!isNotionConnected()) {
@@ -75,7 +75,7 @@ async function start(): Promise<void> {
   console.log(`[notion] Scheduled sync every ${s.config.syncIntervalMinutes} minutes`);
 }
 
-async function stop(): Promise<void> {
+function stop(): void {
   console.log('[notion] Stopping');
   const s = getNotionSkillState();
 
@@ -88,11 +88,11 @@ async function stop(): Promise<void> {
   console.log('[notion] Stopped');
 }
 
-async function onCronTrigger(scheduleId: string): Promise<void> {
+function onCronTrigger(scheduleId: string): void {
   console.log(`[notion] Cron triggered: ${scheduleId}`);
 
   if (scheduleId === 'notion-sync') {
-    await performSync();
+    performSync();
   }
 }
 
@@ -100,12 +100,12 @@ async function onCronTrigger(scheduleId: string): Promise<void> {
 // Session lifecycle
 // ---------------------------------------------------------------------------
 
-async function onSessionStart(args: { sessionId: string }): Promise<void> {
+function onSessionStart(args: { sessionId: string }): void {
   const s = getNotionSkillState();
   s.activeSessions.push(args.sessionId);
 }
 
-async function onSessionEnd(args: { sessionId: string }): Promise<void> {
+function onSessionEnd(args: { sessionId: string }): void {
   const s = getNotionSkillState();
   const index = s.activeSessions.indexOf(args.sessionId);
   if (index > -1) {
@@ -117,7 +117,7 @@ async function onSessionEnd(args: { sessionId: string }): Promise<void> {
 // OAuth lifecycle
 // ---------------------------------------------------------------------------
 
-async function onOAuthComplete(args: OAuthCompleteArgs): Promise<OAuthCompleteResult | void> {
+function onOAuthComplete(args: OAuthCompleteArgs): OAuthCompleteResult | void {
   const s = getNotionSkillState();
   s.config.credentialId = args.credentialId;
   console.log(
@@ -137,7 +137,7 @@ async function onOAuthComplete(args: OAuthCompleteArgs): Promise<OAuthCompleteRe
   publishState();
 }
 
-async function onOAuthRevoked(args: OAuthRevokedArgs): Promise<void> {
+function onOAuthRevoked(args: OAuthRevokedArgs): void {
   console.log(`[notion] OAuth revoked — reason: ${args.reason}`);
   const s = getNotionSkillState();
 
@@ -148,7 +148,7 @@ async function onOAuthRevoked(args: OAuthRevokedArgs): Promise<void> {
   publishState();
 }
 
-async function onDisconnect(): Promise<void> {
+function onDisconnect(): void {
   console.log('[notion] Disconnecting');
   const s = getNotionSkillState();
 
@@ -164,14 +164,14 @@ async function onDisconnect(): Promise<void> {
 // Advanced auth lifecycle (self_hosted / text modes)
 // ---------------------------------------------------------------------------
 
-async function onAuthComplete(args: {
+function onAuthComplete(args: {
   mode: string;
   credentials: Record<string, unknown>;
-}): Promise<{
+}): {
   status: string;
   errors?: Array<{ field: string; message: string }>;
   message?: string;
-}> {
+} {
   console.log(`[notion] onAuthComplete — mode: ${args.mode}`);
   const s = getNotionSkillState();
 
@@ -181,8 +181,8 @@ async function onAuthComplete(args: {
   }
 
   // For self_hosted: validate the API token by making a test call
-  const token = (args.credentials.api_token ??
-    args.credentials.content ??
+  const token = (args.credentials.api_token ||
+    args.credentials.content ||
     args.credentials.access_token) as string | undefined;
 
   if (!token) {
@@ -191,7 +191,7 @@ async function onAuthComplete(args: {
 
   // Test the token against Notion API
   try {
-    const response = await net.fetch('https://api.notion.com/v1/users/me', {
+    const response = net.fetch('https://api.notion.com/v1/users/me', {
       method: 'GET',
       headers: {
         Authorization: `Bearer ${token}`,
@@ -230,8 +230,8 @@ async function onAuthComplete(args: {
       const data = JSON.parse(response.body) as {
         results?: Array<{ name?: string; type?: string }>;
       };
-      const botUser = data.results?.find(u => u.type === 'bot');
-      if (botUser?.name) {
+      const botUser = data.results ? data.results.find(u => u.type === 'bot') : undefined;
+      if (botUser && botUser.name) {
         s.config.workspaceName = botUser.name;
       }
     } catch {
@@ -247,7 +247,6 @@ async function onAuthComplete(args: {
   // Persist config and reset API version cache (new credential may have different access)
   state.set('config', s.config);
 
-
   // Register sync cron
   const cronExpr = `0 */${s.config.syncIntervalMinutes} * * * *`;
   cron.register('notion-sync', cronExpr);
@@ -257,7 +256,7 @@ async function onAuthComplete(args: {
   return { status: 'complete', message: 'Connected to Notion!' };
 }
 
-async function onAuthRevoked(args: { mode?: string }): Promise<void> {
+function onAuthRevoked(args: { mode?: string }): void {
   console.log(`[notion] Auth revoked — mode: ${args.mode || 'unknown'}`);
   const s = getNotionSkillState();
 
@@ -275,7 +274,7 @@ async function onAuthRevoked(args: { mode?: string }): Promise<void> {
 // Setup compatibility stubs (required while validator expects onSetupStart/onSetupSubmit)
 // ---------------------------------------------------------------------------
 
-async function onSetupStart(): Promise<SetupStartResult> {
+function onSetupStart(): SetupStartResult {
   // Auth phase already handled credentials — return a pass-through step
   return {
     step: {
@@ -287,20 +286,20 @@ async function onSetupStart(): Promise<SetupStartResult> {
   };
 }
 
-async function onSetupSubmit(_args: {
+function onSetupSubmit(_args: {
   stepId: string;
   values: Record<string, unknown>;
-}): Promise<SetupSubmitResult> {
+}): SetupSubmitResult {
   return { status: 'complete' };
 }
 
-async function onSync(): Promise<void> {
+function onSync(): void {
   console.log('[notion] Syncing');
 
   // Fetch the Notion profile immediately and publish it into state so the
   // workspace/user context is available to the host.
   try {
-    const user = await notionApi.getUser('me');
+    const user = notionApi.getUser('me');
     const profile = formatUserSummary(user as Record<string, unknown>);
     state.setPartial({ profile });
   } catch (e) {
@@ -309,14 +308,14 @@ async function onSync(): Promise<void> {
 
   publishState();
 
-  await performSync();
+  performSync();
 }
 
 // ---------------------------------------------------------------------------
 // Options system
 // ---------------------------------------------------------------------------
 
-async function onListOptions(): Promise<{ options: SkillOption[] }> {
+function onListOptions(): { options: SkillOption[] } {
   const s = getNotionSkillState();
 
   return {
@@ -354,7 +353,7 @@ async function onListOptions(): Promise<{ options: SkillOption[] }> {
   };
 }
 
-async function onSetOption(args: { name: string; value: unknown }): Promise<void> {
+function onSetOption(args: { name: string; value: unknown }): void {
   const s = getNotionSkillState();
 
   switch (args.name) {
@@ -384,7 +383,7 @@ async function onSetOption(args: { name: string; value: unknown }): Promise<void
 // State publishing
 // ---------------------------------------------------------------------------
 
-async function publishState(): Promise<void> {
+function publishState(): void {
   const s = getNotionSkillState();
   const isConnected = isNotionConnected();
 
@@ -439,26 +438,15 @@ async function publishState(): Promise<void> {
 // without explicit assignment they are unreachable from outside.
 // ---------------------------------------------------------------------------
 
-async function onPing(): Promise<PingResult> {
+function onPing(): PingResult {
+  // Ping is called via handle_js_call which cannot drive async network calls
+  // to completion (the QuickJS scheduler and tokio runtime deadlock).
+  // Just check if we have a valid credential — actual connectivity is verified by sync.
   if (!isNotionConnected()) {
     return { ok: false, errorType: 'auth', errorMessage: 'No credential' };
   }
-  try {
-    // Use notionFetch so transient Cloudflare 52x errors are retried automatically
-    // before reporting a failure (up to MAX_RETRIES times with exponential backoff).
-    await notionFetch('/users/me');
-    console.log('[notion] onPing: ok');
-    return { ok: true };
-  } catch (err) {
-    const msg = String(err);
-    console.warn('[notion] onPing error:', msg);
-    // Treat auth errors (401/403) as auth failures so the skill is stopped.
-    if (msg.includes('401') || msg.includes('403') || msg.toLowerCase().includes('unauthorized')) {
-      return { ok: false, errorType: 'auth', errorMessage: msg };
-    }
-    // Everything else (522, timeouts, network errors) is a transient network failure.
-    return { ok: false, errorType: 'network', errorMessage: msg };
-  }
+  console.log('[notion] onPing: ok (credential present)');
+  return { ok: true };
 }
 
 const skill: Skill = {

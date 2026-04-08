@@ -114,7 +114,7 @@ export const getEmailsTool: ToolDefinition = {
     },
     required: [],
   },
-  async execute(args: Record<string, unknown>): Promise<string> {
+  execute(args: Record<string, unknown>): string {
     const params = buildListParams(args);
     const listEndpoint = `/users/me/messages?${params.join('&')}`;
 
@@ -122,7 +122,7 @@ export const getEmailsTool: ToolDefinition = {
       messages?: Array<{ id: string; threadId: string }>;
       nextPageToken?: string;
       resultSizeEstimate: number;
-    }> = await gmailFetch(listEndpoint);
+    }> = gmailFetch(listEndpoint);
 
     if (!listResponse.success) {
       return JSON.stringify({
@@ -156,12 +156,10 @@ export const getEmailsTool: ToolDefinition = {
 
     for (let i = 0; i < refs.length; i += CONCURRENCY) {
       const batch = refs.slice(i, i + CONCURRENCY);
-      const results = await Promise.all(
-        batch.map(msgRef => {
-          const msgEndpoint = `/users/me/messages/${msgRef.id}?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Date`;
-          return gmailFetch<GmailMessage>(msgEndpoint);
-        })
-      );
+      const results = batch.map(msgRef => {
+        const msgEndpoint = `/users/me/messages/${msgRef.id}?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Date`;
+        return gmailFetch<GmailMessage>(msgEndpoint);
+      });
       for (const msgResponse of results) {
         if (msgResponse.success && msgResponse.data) {
           const message = msgResponse.data as any;

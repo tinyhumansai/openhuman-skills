@@ -23,7 +23,7 @@ export const getPageContentTool: ToolDefinition = {
     },
     required: ['page_id'],
   },
-  async execute(args: Record<string, unknown>): Promise<string> {
+  execute(args: Record<string, unknown>): string {
     try {
       const pageId = (args.page_id as string) || '';
       const recursive = args.recursive === 'true';
@@ -33,7 +33,7 @@ export const getPageContentTool: ToolDefinition = {
         return JSON.stringify({ error: 'page_id is required' });
       }
 
-      const result = await notionApi.getPageContent(pageId, pageSize);
+      const result = notionApi.getPageContent(pageId, pageSize);
 
       const blocks: Record<string, unknown>[] = [];
       for (const block of result.results) {
@@ -41,7 +41,7 @@ export const getPageContentTool: ToolDefinition = {
 
         let children: Record<string, unknown>[] = [];
         if (recursive && block.object === 'block') {
-          const childrenResult = await notionApi.getBlockChildren(block.id, 50);
+          const childrenResult = notionApi.getBlockChildren(block.id, 50);
           children = childrenResult.results.map((c: Record<string, unknown>) =>
             formatBlockSummary(c)
           );

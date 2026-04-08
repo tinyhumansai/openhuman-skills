@@ -4,15 +4,11 @@ import { formatApiError, formatPageSummary } from '../helpers';
 
 export const queryDatabaseTool: ToolDefinition = {
   name: 'query-database',
-  description:
-    'Query a database with optional filters and sorts. Returns database rows/pages.',
+  description: 'Query a database with optional filters and sorts. Returns database rows/pages.',
   input_schema: {
     type: 'object',
     properties: {
-      database_id: {
-        type: 'string',
-        description: 'The database ID to query',
-      },
+      database_id: { type: 'string', description: 'The database ID to query' },
       filter: {
         type: 'string',
         description: 'JSON string of filter object (Notion filter syntax)',
@@ -22,7 +18,7 @@ export const queryDatabaseTool: ToolDefinition = {
     },
     required: ['database_id'],
   },
-  async execute(args: Record<string, unknown>): Promise<string> {
+  execute(args: Record<string, unknown>): string {
     try {
       const databaseId = (args.database_id as string) || '';
       const filterJson = args.filter as string | undefined;
@@ -51,25 +47,18 @@ export const queryDatabaseTool: ToolDefinition = {
         }
       }
 
-      const result = await notionApi.queryDataSource(databaseId, body);
+      const result = notionApi.queryDataSource(databaseId, body);
 
       const rows = result.results.map((page: Record<string, unknown>) => {
         return { ...formatPageSummary(page), properties: page.properties };
       });
 
-      return JSON.stringify({
-        count: rows.length,
-        has_more: result.has_more,
-        rows,
-      });
+      return JSON.stringify({ count: rows.length, has_more: result.has_more, rows });
     } catch (e) {
       const error = formatApiError(e);
       console.error(`[notion][query-database] Error querying database ${args.database_id}:`, e);
 
-      return JSON.stringify({
-        error,
-        database_id: args.database_id,
-      });
+      return JSON.stringify({ error, database_id: args.database_id });
     }
   },
 };

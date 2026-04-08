@@ -23,7 +23,7 @@ export const getEmailTool: ToolDefinition = {
     },
     required: ['message_id'],
   },
-  async execute(args: Record<string, unknown>): Promise<string> {
+  execute(args: Record<string, unknown>): string {
     try {
       const messageId = args.message_id as string;
       if (!messageId) {
@@ -40,7 +40,7 @@ export const getEmailTool: ToolDefinition = {
       const params: string[] = [];
       params.push(`format=${encodeURIComponent(format)}`);
 
-      const response = await gmailFetch<GmailMessage>(
+      const response = gmailFetch<GmailMessage>(
         `/users/me/messages/${messageId}?${params.join('&')}`
       );
 

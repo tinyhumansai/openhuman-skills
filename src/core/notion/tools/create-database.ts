@@ -25,7 +25,7 @@ export const createDatabaseTool: ToolDefinition = {
     },
     required: ['parent_page_id', 'title'],
   },
-  async execute(args: Record<string, unknown>): Promise<string> {
+  execute(args: Record<string, unknown>): string {
     try {
       const parentId = (args.parent_page_id as string) || '';
       const title = (args.title as string) || '';
@@ -53,10 +53,10 @@ export const createDatabaseTool: ToolDefinition = {
         properties,
       };
 
-      const dbResult = await notionApi.createDatabase(body as Record<string, unknown>);
+      const dbResult = notionApi.createDatabase(body as Record<string, unknown>);
       const rec = dbResult as Record<string, unknown>;
 
-      return JSON.stringify({ object: rec.object ?? 'database', id: rec.id });
+      return JSON.stringify({ object: rec.object || 'database', id: rec.id });
     } catch (e) {
       return JSON.stringify({ error: formatApiError(e) });
     }

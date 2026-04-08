@@ -79,7 +79,9 @@ async function callTool(
       const parsed = JSON.parse(text);
       if (parsed.error) return { ok: false, elapsedMs, error: String(parsed.error).slice(0, 120) };
       status = parsed.status;
-    } catch { /* not JSON */ }
+    } catch {
+      /* not JSON */
+    }
     return { ok: true, elapsedMs, status, bodyLen: text.length };
   } catch (e: any) {
     return { ok: false, elapsedMs: Date.now() - t0, error: e.message.slice(0, 120) };
@@ -101,8 +103,18 @@ interface DirectProxyEndpoint {
 
 const proxyEndpoints: DirectProxyEndpoint[] = [
   { label: 'users', path: '/v1/users/?page_size=2' },
-  { label: 'search-pages', path: '/v1/search', method: 'POST', body: { page_size: 2, filter: { property: 'object', value: 'page' } } },
-  { label: 'search-dbs', path: '/v1/search', method: 'POST', body: { page_size: 2, filter: { property: 'object', value: 'data_source' } } },
+  {
+    label: 'search-pages',
+    path: '/v1/search',
+    method: 'POST',
+    body: { page_size: 2, filter: { property: 'object', value: 'page' } },
+  },
+  {
+    label: 'search-dbs',
+    path: '/v1/search',
+    method: 'POST',
+    body: { page_size: 2, filter: { property: 'object', value: 'data_source' } },
+  },
   { label: 'search', path: '/v1/search', method: 'POST', body: { query: 'test', page_size: 100 } },
 ];
 
@@ -119,7 +131,7 @@ async function directProxyCall(
       method: ep.method || 'GET',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${JWT}`,
+        Authorization: `Bearer ${JWT}`,
         'X-Encryption-Key': KEY,
         'Notion-Version': '2025-09-03',
       },
@@ -128,7 +140,8 @@ async function directProxyCall(
     });
     const elapsedMs = Date.now() - t0;
     const text = await resp.text();
-    if (resp.status >= 400) return { ok: false, elapsedMs, status: resp.status, error: text.slice(0, 120) };
+    if (resp.status >= 400)
+      return { ok: false, elapsedMs, status: resp.status, error: text.slice(0, 120) };
     return { ok: true, elapsedMs, status: resp.status, bodyLen: text.length };
   } catch (e: any) {
     return { ok: false, elapsedMs: Date.now() - t0, error: e.message.slice(0, 120) };
@@ -171,18 +184,26 @@ if (!JWT_TOKEN || !INTEGRATION_ID || !CLIENT_KEY) {
 
 async function main() {
   console.log(`\n${C.bold}  Notion API Stress Test${C.reset}`);
-  console.log(`${C.dim}    Requests: ${COUNT} | Timeout: ${TIMEOUT_MS}ms | Scenarios: ${scenarios.length}${C.reset}`);
+  console.log(
+    `${C.dim}    Requests: ${COUNT} | Timeout: ${TIMEOUT_MS}ms | Scenarios: ${scenarios.length}${C.reset}`
+  );
 
   // ── Setup ────────────────────────────────────────────────────────────────
 
   header('Setup');
 
-  try { await stopSkill(SKILL_ID); } catch { /* not running */ }
+  try {
+    await stopSkill(SKILL_ID);
+  } catch {
+    /* not running */
+  }
 
   let t0 = Date.now();
   process.stdout.write(`  Starting skill... `);
   const snap = await startSkill(SKILL_ID);
-  console.log(`${C.green}OK${C.reset} (tools=${snap.tools.length}) ${C.dim}${Date.now() - t0}ms${C.reset}`);
+  console.log(
+    `${C.green}OK${C.reset} (tools=${snap.tools.length}) ${C.dim}${Date.now() - t0}ms${C.reset}`
+  );
 
   t0 = Date.now();
   process.stdout.write(`  oauthComplete... `);
@@ -244,8 +265,12 @@ async function main() {
   const directTotal = Date.now() - directStart;
   const directPassed = directResults.filter(r => r.ok).length;
   const directTimes = directResults.filter(r => r.ok).map(r => r.elapsedMs);
-  const directAvg = directTimes.length ? Math.round(directTimes.reduce((a, b) => a + b, 0) / directTimes.length) : 0;
-  console.log(`\n  ${C.dim}Direct proxy: ${directPassed}/${COUNT} passed, avg=${directAvg}ms, total=${(directTotal / 1000).toFixed(1)}s${C.reset}`);
+  const directAvg = directTimes.length
+    ? Math.round(directTimes.reduce((a, b) => a + b, 0) / directTimes.length)
+    : 0;
+  console.log(
+    `\n  ${C.dim}Direct proxy: ${directPassed}/${COUNT} passed, avg=${directAvg}ms, total=${(directTotal / 1000).toFixed(1)}s${C.reset}`
+  );
 
   // ── Warmup ───────────────────────────────────────────────────────────────
 
@@ -354,7 +379,9 @@ async function main() {
     console.log(`${C.red}${e.message}${C.reset}`);
   }
 
-  console.log(`\n${passed === COUNT ? C.green : C.yellow}${C.bold}  Done: ${passed}/${COUNT} passed.${C.reset}\n`);
+  console.log(
+    `\n${passed === COUNT ? C.green : C.yellow}${C.bold}  Done: ${passed}/${COUNT} passed.${C.reset}\n`
+  );
   process.exit(failed > 0 ? 1 : 0);
 }
 

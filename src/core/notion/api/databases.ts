@@ -11,16 +11,13 @@ import type {
 import { formatApiError, getQueryEndpoint, resolveDataSourceId } from '../helpers';
 import { apiFetch } from './client';
 
-export function getDatabase(databaseId: string): Promise<GetDatabaseResponse> {
+export function getDatabase(databaseId: string): GetDatabaseResponse {
   return apiFetch<GetDatabaseResponse>(`/databases/${databaseId}`);
 }
 
-/**
- * Resolve a database container ID to its first data_source ID.
- */
-export async function resolveDataSourceIdCompat(databaseId: string): Promise<string> {
+export function resolveDataSourceIdCompat(databaseId: string): string {
   try {
-    return await resolveDataSourceId(databaseId);
+    return resolveDataSourceId(databaseId);
   } catch (error) {
     throw new Error(
       `Database has no data sources or is not accessible. Share the database with your integration. ${formatApiError(error)}`
@@ -28,51 +25,34 @@ export async function resolveDataSourceIdCompat(databaseId: string): Promise<str
   }
 }
 
-export function getDataSource(dataSourceId: string): Promise<GetDataSourceResponse> {
+export function getDataSource(dataSourceId: string): GetDataSourceResponse {
   return apiFetch<GetDataSourceResponse>(`/data_sources/${dataSourceId}`);
 }
 
-/**
- * Query a database via its data source endpoint.
- */
-export async function queryDataSource(
+export function queryDataSource(
   databaseId: string,
   body?: Record<string, unknown>
-): Promise<QueryDataSourceResponse> {
-  const endpoint = await getQueryEndpoint(databaseId);
+): QueryDataSourceResponse {
+  const endpoint = getQueryEndpoint(databaseId);
   const requestBody = body || {};
-
   console.log(`[notion][databases] Querying ${endpoint}`);
-
-  return await apiFetch<QueryDataSourceResponse>(endpoint, {
-    method: 'POST',
-    body: requestBody,
-  });
+  return apiFetch<QueryDataSourceResponse>(endpoint, { method: 'POST', body: requestBody });
 }
 
-export async function createDatabase(
-  body: Record<string, unknown>
-): Promise<CreateDatabaseResponse> {
+export function createDatabase(body: Record<string, unknown>): CreateDatabaseResponse {
   return apiFetch<CreateDatabaseResponse>('/databases', { method: 'POST', body });
 }
 
-export async function updateDatabase(
+export function updateDatabase(
   databaseId: string,
   body: Record<string, unknown>
-): Promise<UpdateDatabaseResponse> {
-  return apiFetch<UpdateDatabaseResponse>(`/databases/${databaseId}`, {
-    method: 'PATCH',
-    body,
-  });
+): UpdateDatabaseResponse {
+  return apiFetch<UpdateDatabaseResponse>(`/databases/${databaseId}`, { method: 'PATCH', body });
 }
 
-/**
- * List all databases via search with data_source filter.
- */
-export async function listAllDatabases(pageSize: number = 20): Promise<SearchResponse> {
+export function listAllDatabases(pageSize: number = 20): SearchResponse {
   const filter = { property: 'object', value: 'data_source' };
-
-  return await apiFetch<SearchResponse>('/search', {
+  return apiFetch<SearchResponse>('/search', {
     method: 'POST',
     body: { filter, page_size: pageSize },
   });

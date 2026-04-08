@@ -22,7 +22,7 @@ export const updateBlockTool: ToolDefinition = {
     },
     required: ['block_id'],
   },
-  async execute(args: Record<string, unknown>): Promise<string> {
+  execute(args: Record<string, unknown>): string {
     try {
       const blockId = (args.block_id as string) || '';
       const contentJson = args.content as string | undefined;
@@ -51,7 +51,7 @@ export const updateBlockTool: ToolDefinition = {
         return JSON.stringify({ error: 'No updates specified' });
       }
 
-      const block = await notionApi.updateBlock(blockId, body);
+      const block = notionApi.updateBlock(blockId, body);
 
       return JSON.stringify({
         success: true,

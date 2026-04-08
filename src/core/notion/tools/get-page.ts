@@ -14,14 +14,14 @@ export const getPageTool: ToolDefinition = {
     },
     required: ['page_id'],
   },
-  async execute(args: Record<string, unknown>): Promise<string> {
+  execute(args: Record<string, unknown>): string {
     try {
       const pageId = (args.page_id as string) || '';
       if (!pageId) {
         return JSON.stringify({ error: 'page_id is required' });
       }
 
-      const page = await notionApi.getPage(pageId);
+      const page = notionApi.getPage(pageId);
 
       return JSON.stringify({
         ...formatPageSummary(page as Record<string, unknown>),

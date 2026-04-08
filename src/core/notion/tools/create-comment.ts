@@ -28,7 +28,7 @@ export const createCommentTool: ToolDefinition = {
     },
     required: ['text'],
   },
-  async execute(args: Record<string, unknown>): Promise<string> {
+  execute(args: Record<string, unknown>): string {
     try {
       const pageId = args.page_id as string | undefined;
       const blockId = args.block_id as string | undefined;
@@ -58,10 +58,10 @@ export const createCommentTool: ToolDefinition = {
         body.parent = { type: 'page_id', page_id: pageId };
       }
 
-      const comment = await notionApi.createComment(body);
+      const comment = notionApi.createComment(body);
       const rec = comment as Record<string, unknown>;
 
-      return JSON.stringify({ object: rec.object ?? 'comment', id: rec.id });
+      return JSON.stringify({ object: rec.object || 'comment', id: rec.id });
     } catch (e) {
       return JSON.stringify({ error: formatApiError(e) });
     }

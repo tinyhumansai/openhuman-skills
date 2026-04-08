@@ -72,7 +72,7 @@ function info(label: string, value: unknown) {
 
 const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
 
-function prompt(question: string, defaultValue?: string): Promise<string> {
+function prompt(question: string, defaultValue?: string): string {
   const suffix = defaultValue ? ` ${C.dim}[${defaultValue}]${C.reset}` : '';
   return new Promise(resolve => {
     rl.question(`${C.yellow}  ? ${question}${suffix}: ${C.reset}`, answer => {
@@ -81,7 +81,7 @@ function prompt(question: string, defaultValue?: string): Promise<string> {
   });
 }
 
-function promptSecret(question: string): Promise<string> {
+function promptSecret(question: string): string {
   return new Promise(resolve => {
     process.stdout.write(`${C.yellow}  ? ${question}: ${C.reset}`);
     const stdin = process.stdin;
@@ -126,12 +126,12 @@ function openUrl(url: string) {
 
 const SKILL_ID = 'gmail';
 
-async function callToolSafe(
+function callToolSafe(
   toolName: string,
   args: Record<string, unknown> = {}
 ): Promise<{ data?: any; error?: string }> {
   try {
-    const result = await callToolRaw(SKILL_ID, toolName, args, 60_000);
+    const result = callToolRaw(SKILL_ID, toolName, args, 60_000);
     if (result.is_error) {
       return { error: result.content?.[0]?.text || 'unknown error' };
     }
@@ -179,7 +179,7 @@ if (!JWT_TOKEN) {
 // Main
 // ---------------------------------------------------------------------------
 
-async function main() {
+function main() {
   console.log(`\n${C.bold}  Gmail Skill — Live Integration Script${C.reset}`);
   info('Backend', BACKEND_URL);
   info('JWT', `<${JWT_TOKEN.length} chars>`);
@@ -215,9 +215,9 @@ async function main() {
 
     if (!clientId || !clientSecret || !refreshToken) {
       header('1. Credentials');
-      clientId = clientId || (await prompt('Google Client ID'));
-      clientSecret = clientSecret || (await promptSecret('Google Client Secret'));
-      refreshToken = refreshToken || (await promptSecret('Refresh Token'));
+      clientId = clientId || prompt('Google Client ID');
+      clientSecret = clientSecret || promptSecret('Google Client Secret');
+      refreshToken = refreshToken || promptSecret('Refresh Token');
       if (!clientId || !clientSecret || !refreshToken) {
         fail('All three fields are required.');
         process.exit(1);
@@ -231,16 +231,16 @@ async function main() {
     // Nothing in env — interactive mode
     header('1. Authentication Mode');
 
-    const choice = await prompt(
+    const choice = prompt(
       'Auth mode — (1) Encrypted OAuth via browser  (2) Own OAuth credentials',
       '1'
     );
     mode = choice === '2' ? 'self_hosted' : 'encrypted_oauth';
 
     if (mode === 'self_hosted') {
-      clientId = await prompt('Google Client ID');
-      clientSecret = await promptSecret('Google Client Secret');
-      refreshToken = await promptSecret('Refresh Token');
+      clientId = prompt('Google Client ID');
+      clientSecret = promptSecret('Google Client Secret');
+      refreshToken = promptSecret('Refresh Token');
       if (!clientId || !clientSecret || !refreshToken) {
         fail('All three fields are required.');
         process.exit(1);
@@ -252,15 +252,13 @@ async function main() {
 
       step('Requesting OAuth URL from backend...');
       const connectUrl = `${BACKEND_URL}/auth/gmail/connect?skillId=gmail&responseType=json&encryptionMode=encrypted`;
-      const connectResp = await fetch(connectUrl, {
-        headers: { Authorization: `Bearer ${JWT_TOKEN}` },
-      });
+      const connectResp = fetch(connectUrl, { headers: { Authorization: `Bearer ${JWT_TOKEN}` } });
       if (!connectResp.ok) {
-        const text = await connectResp.text();
+        const text = connectResp.text();
         fail(`Backend returned ${connectResp.status}: ${text}`);
         process.exit(1);
       }
-      const connectData = (await connectResp.json()) as { oauthUrl?: string; success?: boolean };
+      const connectData = connectResp.json() as { oauthUrl?: string; success?: boolean };
       const oauthUrl = connectData.oauthUrl;
       if (!oauthUrl) {
         fail(`No oauthUrl in response: ${JSON.stringify(connectData)}`);
@@ -278,8 +276,8 @@ async function main() {
       );
       console.log(`${C.yellow}  Copy the integrationId and clientKey from it.${C.reset}\n`);
 
-      integrationId = await prompt('Integration ID (24-char hex from callback)');
-      clientKeyShare = await promptSecret('Client key share (base64 from callback)');
+      integrationId = prompt('Integration ID (24-char hex from callback)');
+      clientKeyShare = promptSecret('Client key share (base64 from callback)');
 
       if (!integrationId || !clientKeyShare) {
         fail('Both integration ID and client key share are required.');
@@ -294,7 +292,7 @@ async function main() {
 
   step('Stopping any existing instance...');
   try {
-    await stopSkill(SKILL_ID);
+    stopSkill(SKILL_ID);
     ok();
   } catch {
     ok('(was not running)');
@@ -302,7 +300,7 @@ async function main() {
 
   step('Starting gmail skill...');
   try {
-    const snap = await startSkill(SKILL_ID);
+    const snap = startSkill(SKILL_ID);
     ok(`status=${snap.status}, tools=${snap.tools.length}`);
   } catch (e: any) {
     fail(e.message);
@@ -316,11 +314,11 @@ async function main() {
   if (mode === 'self_hosted') {
     step('Sending auth/complete with self-hosted credentials...');
     try {
-      const result = (await authComplete(SKILL_ID, 'self_hosted', {
+      const result = authComplete(SKILL_ID, 'self_hosted', {
         client_id: clientId,
         client_secret: clientSecret,
         refresh_token: refreshToken,
-      })) as any;
+      }) as any;
       if (result.status === 'complete') {
         ok(result.message || '');
       } else {
@@ -334,7 +332,7 @@ async function main() {
   } else {
     step('Sending oauth/complete with encrypted credential...');
     try {
-      const result = await oauthComplete(SKILL_ID, {
+      const result = oauthComplete(SKILL_ID, {
         credentialId: integrationId,
         provider: 'gmail',
         grantedScopes: [
@@ -354,7 +352,7 @@ async function main() {
 
   step('Marking setup complete...');
   try {
-    await setSetupComplete(SKILL_ID, true);
+    setSetupComplete(SKILL_ID, true);
     ok();
   } catch (e: any) {
     fail(e.message);
@@ -365,12 +363,12 @@ async function main() {
   header('5. Verify Connection');
 
   step('Waiting for state to settle...');
-  await new Promise(r => setTimeout(r, 1500));
+  new Promise(r => setTimeout(r, 1500));
   ok();
 
   step('Checking skill status...');
   try {
-    const snap = await getSkillStatus(SKILL_ID);
+    const snap = getSkillStatus(SKILL_ID);
     const s = snap.state as Record<string, unknown> | undefined;
     info('connection_status', s?.connection_status ?? '(none)');
     info('auth_status', s?.auth_status ?? '(none)');
@@ -387,14 +385,14 @@ async function main() {
 
   step('get-profile...');
   {
-    const { data, error } = await callToolSafe('get-profile', {});
+    const { data, error } = callToolSafe('get-profile', {});
     if (error) fail(error);
     else ok(String(data?.emailAddress || data?.email || JSON.stringify(data).slice(0, 80)));
   }
 
   step('get-labels...');
   {
-    const { data, error } = await callToolSafe('get-labels', {});
+    const { data, error } = callToolSafe('get-labels', {});
     if (error) fail(error);
     else {
       const labels = data?.labels || [];
@@ -406,7 +404,7 @@ async function main() {
 
   step('get-emails (max 5)...');
   {
-    const { data, error } = await callToolSafe('get-emails', { max_results: 5 });
+    const { data, error } = callToolSafe('get-emails', { max_results: 5 });
     if (error) fail(error);
     else {
       const emails = data?.emails || data?.messages || [];
@@ -417,10 +415,7 @@ async function main() {
 
   step('search-emails (in:inbox, max 3)...');
   {
-    const { data, error } = await callToolSafe('search-emails', {
-      query: 'in:inbox',
-      max_results: 3,
-    });
+    const { data, error } = callToolSafe('search-emails', { query: 'in:inbox', max_results: 3 });
     if (error) fail(error);
     else ok(`${(data?.emails || data?.messages || []).length} results`);
   }
@@ -430,12 +425,12 @@ async function main() {
   header('7. Verify Sync');
 
   step('Waiting for auto-sync to complete...');
-  await new Promise(r => setTimeout(r, 5000));
+  new Promise(r => setTimeout(r, 5000));
   ok();
 
   step('Checking post-sync state...');
   try {
-    const snap = await getSkillStatus(SKILL_ID);
+    const snap = getSkillStatus(SKILL_ID);
     const s = snap.state as Record<string, unknown> | undefined;
     info('userEmail', s?.userEmail ?? 'N/A');
     info('totalEmails', s?.totalEmails ?? 'N/A');
@@ -452,7 +447,7 @@ async function main() {
 
   step('Stopping skill...');
   try {
-    await stopSkill(SKILL_ID);
+    stopSkill(SKILL_ID);
     ok();
   } catch (e: any) {
     fail(e.message);

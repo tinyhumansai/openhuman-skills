@@ -17,7 +17,7 @@ export const appendBlocksTool: ToolDefinition = {
     },
     required: ['block_id', 'blocks'],
   },
-  async execute(args: Record<string, unknown>): Promise<string> {
+  execute(args: Record<string, unknown>): string {
     try {
       const blockId = (args.block_id as string) || '';
       const blocksJson = (args.blocks as string) || '';
@@ -40,7 +40,7 @@ export const appendBlocksTool: ToolDefinition = {
         return JSON.stringify({ error: 'blocks must be a non-empty array' });
       }
 
-      const result = await notionApi.appendBlockChildren(blockId, children);
+      const result = notionApi.appendBlockChildren(blockId, children);
 
       return JSON.stringify({
         success: true,

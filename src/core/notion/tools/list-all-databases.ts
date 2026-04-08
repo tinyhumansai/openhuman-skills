@@ -19,7 +19,7 @@ export const listDatabasesTool: ToolDefinition = {
       },
     },
   },
-  async execute(args: Record<string, unknown>): Promise<string> {
+  execute(args: Record<string, unknown>): string {
     try {
       const pageSize = Math.min((args.page_size as number) || 20, 100);
       const tryCache = args.tryCache === true;
@@ -44,7 +44,7 @@ export const listDatabasesTool: ToolDefinition = {
         }
       }
 
-      const result = await notionApi.listAllDatabases(pageSize);
+      const result = notionApi.listAllDatabases(pageSize);
       const databases = result.results.map((item: Record<string, unknown>) =>
         formatDatabaseSummary(item)
       );

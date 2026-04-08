@@ -10,8 +10,8 @@ const MAX_RETRIES = 3;
 const DEFAULT_BACKOFF_MS = 5_000;
 
 /** Sleep helper for retry backoff. */
-function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
+function sleep(ms: number): void {
+  setTimeout(() => {}, ms);
 }
 
 const GMAIL_BASE_URL = 'https://gmail.googleapis.com/gmail/v1';
@@ -29,7 +29,7 @@ let cachedSelfHostedToken: { token: string; expiresAt: number } | null = null;
  * 3. OAuth credential with accessToken
  * 4. null — not connected
  */
-async function resolveAccessToken(): Promise<string | null> {
+function resolveAccessToken(): string | null {
   // Check advanced auth bridge first
   const authCred = auth.getCredential();
   if (authCred && authCred.mode === 'self_hosted') {
@@ -47,7 +47,7 @@ async function resolveAccessToken(): Promise<string | null> {
       // Exchange refresh_token for access_token
       try {
         const body = `client_id=${encodeURIComponent(clientId)}&client_secret=${encodeURIComponent(clientSecret)}&refresh_token=${encodeURIComponent(refreshToken)}&grant_type=refresh_token`;
-        const response = await net.fetch(GOOGLE_TOKEN_URL, {
+        const response = net.fetch(GOOGLE_TOKEN_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
           body,
@@ -129,7 +129,7 @@ export interface GmailApiResponse<T> {
   error?: ApiError;
 }
 
-export async function gmailFetch<T = unknown>(
+export function gmailFetch<T = unknown>(
   endpoint: string,
   options: {
     method?: string;
@@ -137,14 +137,14 @@ export async function gmailFetch<T = unknown>(
     headers?: Record<string, string>;
     timeout?: number;
   } = {}
-): Promise<GmailApiResponse<T>> {
+): GmailApiResponse<T> {
   const cleanPath = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
   const method = options.method || 'GET';
   const timeout = options.timeout || 10;
 
   // Determine whether to use direct API calls (with a resolved access token)
   // or the OAuth proxy (for encrypted/managed credentials without a local token).
-  const accessToken = await resolveAccessToken();
+  const accessToken = resolveAccessToken();
   const oauthCred = oauth.getCredential();
   const useProxy = !accessToken && !!oauthCred;
 
@@ -165,7 +165,7 @@ export async function gmailFetch<T = unknown>(
         // oauth.fetch path is relative to the manifest apiBaseUrl (gmail.googleapis.com/gmail/v1),
         // so pass the endpoint path directly without the /gmail/v1 prefix.
         console.log('[gmail] gmailFetch (proxy):', method, cleanPath);
-        response = await oauth.fetch(cleanPath, {
+        response = oauth.fetch(cleanPath, {
           method,
           headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
           body: options.body,
@@ -175,7 +175,7 @@ export async function gmailFetch<T = unknown>(
         // Direct API call with resolved access token
         const url = `${GMAIL_BASE_URL}${cleanPath}`;
         console.log('[gmail] gmailFetch (direct):', method, url);
-        response = await net.fetch(url, {
+        response = net.fetch(url, {
           method,
           headers: {
             Authorization: `Bearer ${accessToken}`,
@@ -199,7 +199,7 @@ export async function gmailFetch<T = unknown>(
         console.log(
           `[gmail] gmailFetch: 429 rate-limited — retrying in ${waitMs}ms (attempt ${attempt + 1}/${MAX_RETRIES})`
         );
-        await sleep(waitMs);
+        sleep(waitMs);
         continue;
       }
 
@@ -208,7 +208,7 @@ export async function gmailFetch<T = unknown>(
         const bodyPreview = response.body ? response.body.slice(0, 200) : '(empty)';
         console.log(`[gmail] gmailFetch: 401 Unauthorized body=${bodyPreview}`);
         cachedSelfHostedToken = null;
-        const freshToken = await resolveAccessToken();
+        const freshToken = resolveAccessToken();
         if (freshToken && freshToken !== accessToken) {
           // Can't reassign accessToken in proxy branch, but this is the direct branch
           console.log('[gmail] gmailFetch: refreshed token, retrying');

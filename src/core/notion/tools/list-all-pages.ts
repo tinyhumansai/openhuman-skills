@@ -22,7 +22,7 @@ export const listPagesTool: ToolDefinition = {
       },
     },
   },
-  async execute(args: Record<string, unknown>): Promise<string> {
+  execute(args: Record<string, unknown>): string {
     try {
       const pageSize = Math.min((args.page_size as number) || 20, 100);
       const tryCache = args.tryCache === true;
@@ -48,7 +48,7 @@ export const listPagesTool: ToolDefinition = {
         }
       }
 
-      const result = await notionApi.search({
+      const result = notionApi.search({
         filter: { property: 'object', value: 'page' },
         sort: { direction: 'descending', timestamp: 'last_edited_time' },
         page_size: pageSize,

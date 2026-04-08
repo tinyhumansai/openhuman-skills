@@ -39,7 +39,7 @@ function syncProgress(phase: string, progress: number, message: string): void {
   publishSyncState();
 }
 
-export async function performSync(): Promise<void> {
+export function performSync(): void {
   const s = getNotionSkillState();
 
   // Guard: skip if already syncing or no credential
@@ -61,17 +61,17 @@ export async function performSync(): Promise<void> {
   try {
     // Phase 1: Sync users (0-10%)
     syncProgress('users', 0, 'Fetching workspace users...');
-    await syncUsers();
+    syncUsers();
     syncProgress('users', 10, 'Users synced');
 
     // Phase 2: Sync pages and databases via search (10-60%)
     syncProgress('pages', 10, 'Discovering pages and databases...');
-    await syncSearchItems();
+    syncSearchItems();
 
     // Phase 3: Sync page content (60-90%)
     if (s.config.contentSyncEnabled) {
       syncProgress('content', 60, 'Fetching page content...');
-      await syncContent();
+      syncContent();
     }
 
     // Phase 4: Ingest into knowledge graph (90-100%)
@@ -122,8 +122,8 @@ function insertNotionMemorySnapshot(): void {
   const now = Date.now();
   const nowIso = new Date(now).toISOString();
   const s = getNotionSkillState();
-  const profile = (state.get('profile') as Record<string, unknown> | null) ?? null;
-  if (!profile?.id) return;
+  const profile = (state.get('profile') as Record<string, unknown> | null) || null;
+  if (!profile || !profile.id) return;
 
   const pages = getLocalPages({ limit: 100 }).map(p => ({
     id: p.id,
@@ -189,10 +189,10 @@ function insertNotionMemorySnapshot(): void {
     snapshot_version: 'notion-sync-v2',
     captured_at: nowIso,
     id: profile.id,
-    name: (profile.name as string | null) ?? null,
-    email: (profile.email as string | null) ?? null,
-    type: (profile.type as string | null) ?? null,
-    avatar_url: (profile.avatar_url as string | null) ?? null,
+    name: (profile.name as string | null) || null,
+    email: (profile.email as string | null) || null,
+    type: (profile.type as string | null) || null,
+    avatar_url: (profile.avatar_url as string | null) || null,
     workspace_name: s.config.workspaceName || null,
     sync: {
       in_progress: s.syncStatus.syncInProgress,
@@ -228,13 +228,13 @@ function insertNotionMemorySnapshot(): void {
 // Phase 1: Sync users
 // ---------------------------------------------------------------------------
 
-async function syncUsers(): Promise<void> {
+function syncUsers(): void {
   let startCursor: string | undefined;
   let hasMore = true;
   let count = 0;
 
   while (hasMore) {
-    const result = await notionApi.listUsers(100, startCursor);
+    const result = notionApi.listUsers(100, startCursor);
 
     for (const user of result.results) {
       try {
@@ -262,7 +262,7 @@ async function syncUsers(): Promise<void> {
 
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 
-async function syncSearchItems(): Promise<void> {
+function syncSearchItems(): void {
   const s = getNotionSkillState();
   const lastSyncTime = s.syncStatus.lastSyncTime;
   const isFirstSync = lastSyncTime === 0;
@@ -286,7 +286,7 @@ async function syncSearchItems(): Promise<void> {
     };
     if (startCursor) body.start_cursor = startCursor;
 
-    const result = await notionApi.search(body);
+    const result = notionApi.search(body);
 
     for (const item of result.results) {
       const rec = item as Record<string, unknown>;
@@ -356,7 +356,7 @@ async function syncSearchItems(): Promise<void> {
 
   // Fetch data_sources explicitly (50-55%)
   syncProgress('pages', 50, 'Fetching databases (data_sources)...');
-  const dsResult = await syncDataSources(
+  const dsResult = syncDataSources(
     upsertDatabase,
     getDatabaseById,
     cutoffMs,
@@ -383,13 +383,13 @@ async function syncSearchItems(): Promise<void> {
   );
 }
 
-async function syncDataSources(
+function syncDataSources(
   upsertDatabase: (db: Record<string, unknown>) => void,
   getDatabaseById: ((id: string) => { last_edited_time: string } | null) | undefined,
   cutoffMs: number,
   lastSyncTime: number,
   isFirstSync: boolean
-): Promise<{ count: number; skipped: number; errors: number }> {
+): { count: number; skipped: number; errors: number } {
   let startCursor: string | undefined;
   let hasMore = true;
   let count = 0;
@@ -398,12 +398,14 @@ async function syncDataSources(
   let reachedOldItems = false;
 
   while (hasMore && !reachedOldItems) {
-    const result = await notionApi.search({
+    const searchBody: Record<string, unknown> = {
       page_size: 100,
       sort: { direction: 'descending', timestamp: 'last_edited_time' },
       filter: { property: 'object', value: 'data_source' },
-      ...(startCursor ? { start_cursor: startCursor } : {}),
-    });
+    };
+    if (startCursor) searchBody.start_cursor = startCursor;
+
+    const result = notionApi.search(searchBody);
 
     for (const item of result.results) {
       const rec = item as Record<string, unknown>;
@@ -421,7 +423,7 @@ async function syncDataSources(
         break;
       }
 
-      const existing = getDatabaseById?.(rec.id as string);
+      const existing = getDatabaseById ? getDatabaseById(rec.id as string) : null;
       if (existing && existing.last_edited_time === lastEdited) {
         skipped++;
       } else {
@@ -450,7 +452,6 @@ async function syncDataSources(
 
 /** Max rows to sync per database per sync cycle */
 // const MAX_ROWS_PER_DATABASE = 200;
-
 
 // async function syncDatabaseRows(startTime: number, budgetMs: number): Promise<void> {
 //   // Get all locally synced databases
@@ -575,7 +576,7 @@ async function syncDataSources(
 // Phase 3: Sync page content (block text extraction)
 // ---------------------------------------------------------------------------
 
-async function syncContent(): Promise<void> {
+function syncContent(): void {
   const s = getNotionSkillState();
   const batchSize = s.config.maxPagesPerContentSync;
   const cutoffIso = new Date(Date.now() - THIRTY_DAYS_MS).toISOString();
@@ -594,7 +595,7 @@ async function syncContent(): Promise<void> {
 
   for (const page of pages) {
     try {
-      const text = await fetchBlockTreeText(page.id, 2);
+      const text = fetchBlockTreeText(page.id, 2);
       updatePageContent(page.id, text);
       synced++;
     } catch (e) {
@@ -630,7 +631,7 @@ async function syncContent(): Promise<void> {
  * and marks them as synced on success.
  * Reserved for Phase 4 — currently not called to avoid extra network dependency.
  */
-async function _syncSummariesToServer(): Promise<void> {
+function _syncSummariesToServer(): void {
   const batch = getUnsyncedSummaries(100);
   if (batch.length === 0) {
     console.log('[notion] No unsynced summaries to send');
@@ -670,7 +671,7 @@ async function _syncSummariesToServer(): Promise<void> {
         updatedAt: row.source_updated_at,
       };
 
-      const resp = await net.fetch(`${backendUrl}/api/summaries`, {
+      const resp = net.fetch(`${backendUrl}/api/summaries`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken}` },
         body: JSON.stringify(submission),

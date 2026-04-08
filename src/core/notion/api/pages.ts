@@ -8,22 +8,22 @@ import type {
 
 import { apiFetch } from './client';
 
-export function getPage(pageId: string): Promise<GetPageResponse> {
+export function getPage(pageId: string): GetPageResponse {
   return apiFetch<GetPageResponse>(`/pages/${pageId}`);
 }
 
-export function createPage(body: Record<string, unknown>): Promise<CreatePageResponse> {
+export function createPage(body: Record<string, unknown>): CreatePageResponse {
   return apiFetch<CreatePageResponse>('/pages', { method: 'POST', body });
 }
 
 export function updatePage(
   pageId: string,
   body: Record<string, unknown>
-): Promise<UpdatePageResponse> {
+): UpdatePageResponse {
   return apiFetch<UpdatePageResponse>(`/pages/${pageId}`, { method: 'PATCH', body });
 }
 
-export function archivePage(pageId: string): Promise<UpdatePageResponse> {
+export function archivePage(pageId: string): UpdatePageResponse {
   return apiFetch<UpdatePageResponse>(`/pages/${pageId}`, {
     method: 'PATCH',
     body: { archived: true },
@@ -33,6 +33,6 @@ export function archivePage(pageId: string): Promise<UpdatePageResponse> {
 export function getPageContent(
   pageId: string,
   pageSize: number = 50
-): Promise<ListBlockChildrenResponse> {
+): ListBlockChildrenResponse {
   return apiFetch<ListBlockChildrenResponse>(`/blocks/${pageId}/children?page_size=${pageSize}`);
 }

@@ -21,9 +21,12 @@ const CLOUDFLARE_RETRYABLE = new Set([520, 521, 522, 523, 524, 525, 526, 527]);
 /** Notion API version — hardcoded to latest. */
 export const NOTION_API_VERSION = '2026-03-11';
 
-/** Async sleep for backoff waits. */
-function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
+/** Synchronous busy-wait sleep for backoff waits. */
+function sleep(ms: number): void {
+  const end = Date.now() + ms;
+  while (Date.now() < end) {
+    // busy wait — QuickJS has no sync sleep primitive
+  }
 }
 
 /**
@@ -63,10 +66,10 @@ export function isNotionConnected(): boolean {
   return getNotionAuth() !== null;
 }
 
-export async function notionFetch<T>(
+export function notionFetch<T>(
   endpoint: string,
   options: { method?: string; body?: unknown } = {}
-): Promise<T> {
+): T {
   const notionAuth = getNotionAuth();
   if (!notionAuth) throw new Error('Notion not connected. Please complete setup first.');
 
@@ -83,7 +86,7 @@ export async function notionFetch<T>(
       // Direct Notion API call with token (self_hosted API token or OAuth accessToken)
       const url = `https://api.notion.com/v1${path}`;
       console.log(`[notion][fetch] ${method} ${url} (direct, attempt ${attempt})`);
-      response = await net.fetch(url, {
+      response = net.fetch(url, {
         method,
         headers: {
           Authorization: `Bearer ${notionAuth.token}`,
@@ -97,7 +100,7 @@ export async function notionFetch<T>(
       // Server-side OAuth proxy — the proxy validates against an allowlist of
       // full paths (e.g. /v1/users, /v1/search), so we must include the /v1 prefix.
       console.log(`[notion][fetch] ${method} /v1${path} (proxy, attempt ${attempt})`);
-      response = await oauth.fetch(`/v1${path}`, {
+      response = oauth.fetch(`/v1${path}`, {
         method,
         headers: { 'Content-Type': 'application/json', 'Notion-Version': apiVersion },
         body: options.body ? JSON.stringify(options.body) : undefined,
@@ -120,7 +123,7 @@ export async function notionFetch<T>(
       console.warn(
         `[notion][helpers] 429 rate-limited — waiting ${waitMs}ms (attempt ${attempt + 1}/${MAX_RETRIES})`
       );
-      await sleep(waitMs);
+      sleep(waitMs);
       continue;
     }
 
@@ -130,7 +133,7 @@ export async function notionFetch<T>(
       console.warn(
         `[notion][helpers] Cloudflare ${response.status} (transient) — waiting ${waitMs}ms (attempt ${attempt + 1}/${MAX_RETRIES})`
       );
-      await sleep(waitMs);
+      sleep(waitMs);
       continue;
     }
 
@@ -333,7 +336,7 @@ export function buildParagraphBlock(text: string): Record<string, unknown> {
  * Recursively fetch block children and extract plain text content.
  * Used by the sync engine to populate page content_text.
  */
-export async function fetchBlockTreeText(blockId: string, maxDepth: number = 2): Promise<string> {
+export function fetchBlockTreeText(blockId: string, maxDepth: number = 2): string {
   if (maxDepth < 0) return '';
 
   const lines: string[] = [];
@@ -345,26 +348,22 @@ export async function fetchBlockTreeText(blockId: string, maxDepth: number = 2):
 
     let result: { results: Record<string, unknown>[]; has_more: boolean; next_cursor?: string };
     try {
-      result = (await notionFetch(endpoint)) as typeof result;
+      result = notionFetch(endpoint) as typeof result;
     } catch {
-      // If we can't fetch children (permissions, deleted, etc.), skip
       break;
     }
 
     for (const block of result.results) {
       const text = formatBlockContent(block);
-      // Only include blocks that have meaningful text
       if (text && !text.startsWith('[') && !text.endsWith(']')) {
         lines.push(text);
       } else if (text && text !== `[${block.type as string}]`) {
-        // Include non-empty typed blocks (e.g. "[empty paragraph]" is skipped)
         const cleaned = text.replace(/^\[empty .*\]$/, '').trim();
         if (cleaned) lines.push(cleaned);
       }
 
-      // Recurse into children if the block has them and we have depth budget
       if (block.has_children && maxDepth > 0) {
-        const childText = await fetchBlockTreeText(block.id as string, maxDepth - 1);
+        const childText = fetchBlockTreeText(block.id as string, maxDepth - 1);
         if (childText) lines.push(childText);
       }
     }
@@ -384,9 +383,9 @@ export async function fetchBlockTreeText(blockId: string, maxDepth: number = 2):
  * Resolve a database ID to its data source ID.
  * The current API uses data_sources for queries and schema access.
  */
-export async function resolveDataSourceId(databaseId: string): Promise<string> {
+export function resolveDataSourceId(databaseId: string): string {
   try {
-    const response = await notionFetch<{ data_sources?: Array<{ id: string }>; id: string }>(
+    const response = notionFetch<{ data_sources?: Array<{ id: string }>; id: string }>(
       `/databases/${databaseId}`
     );
 
@@ -411,7 +410,7 @@ export async function resolveDataSourceId(databaseId: string): Promise<string> {
 /**
  * Get the query endpoint for a database — resolves to data_sources endpoint.
  */
-export async function getQueryEndpoint(databaseId: string): Promise<string> {
-  const dataSourceId = await resolveDataSourceId(databaseId);
+export function getQueryEndpoint(databaseId: string): string {
+  const dataSourceId = resolveDataSourceId(databaseId);
   return `/data_sources/${dataSourceId}/query`;
 }
