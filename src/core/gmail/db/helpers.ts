@@ -375,10 +375,10 @@ export function updateEmailReadStatus(emailId: string, isRead: boolean): void {
  * Excludes sensitive emails — those are never sent to the backend.
  * Returns oldest-first so submissions are chronologically ordered.
  */
-export function getUnsubmittedEmails(limit = 500): DatabaseEmail[] {
+export function getUningestedEmails(limit = 500): DatabaseEmail[] {
   const cid = credId();
   return db.all(
-    'SELECT * FROM emails WHERE credential_id = ? AND backend_submitted = 0 AND is_sensitive = 0 ORDER BY date ASC LIMIT ?',
+    'SELECT * FROM emails WHERE credential_id = ? AND ingested = 0 AND is_sensitive = 0 ORDER BY date ASC LIMIT ?',
     [cid, limit]
   ) as unknown as DatabaseEmail[];
 }
@@ -387,10 +387,10 @@ export function getUnsubmittedEmails(limit = 500): DatabaseEmail[] {
  * Mark all sensitive emails as submitted so they don't accumulate
  * in the un-submitted queue. They are never actually sent to the backend.
  */
-export function markSensitiveAsSubmitted(): void {
+export function markSensitiveAsIngested(): void {
   const cid = credId();
   db.exec(
-    'UPDATE emails SET backend_submitted = 1 WHERE credential_id = ? AND is_sensitive = 1 AND backend_submitted = 0',
+    'UPDATE emails SET ingested = 1 WHERE credential_id = ? AND is_sensitive = 1 AND ingested = 0',
     [cid]
   );
 }
@@ -398,7 +398,7 @@ export function markSensitiveAsSubmitted(): void {
 /**
  * Mark a batch of emails as submitted to the backend.
  */
-export function markEmailsSubmitted(ids: string[]): void {
+export function markEmailsIngested(ids: string[]): void {
   if (ids.length === 0) return;
   const cid = credId();
   // SQLite has a variable limit, batch in groups of 99 (leaving 1 slot for credential_id)
@@ -406,7 +406,7 @@ export function markEmailsSubmitted(ids: string[]): void {
     const batch = ids.slice(i, i + 99);
     const placeholders = batch.map(() => '?').join(',');
     db.exec(
-      `UPDATE emails SET backend_submitted = 1 WHERE credential_id = ? AND id IN (${placeholders})`,
+      `UPDATE emails SET ingested = 1 WHERE credential_id = ? AND id IN (${placeholders})`,
       [cid, ...batch]
     );
   }

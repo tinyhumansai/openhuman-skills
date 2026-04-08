@@ -19,7 +19,7 @@ export interface LocalPage {
   content_text: string | null;
   content_synced_at: number | null;
   page_entities: string | null;
-  backend_submitted: number;
+  ingested: number;
   synced_at: number;
 }
 
@@ -37,7 +37,7 @@ export interface LocalDatabaseRow {
   created_time: string;
   last_edited_time: string;
   archived: number;
-  backend_submitted: number;
+  ingested: number;
   synced_at: number;
 }
 
@@ -52,7 +52,7 @@ export interface LocalDatabase {
   created_time: string;
   last_edited_time: string;
   archived: number;
-  backend_submitted: number;
+  ingested: number;
   synced_at: number;
 }
 
@@ -243,7 +243,7 @@ export function upsertPage(page: Record<string, unknown>): void {
       last_edited_time = excluded.last_edited_time,
       archived = excluded.archived,
       page_entities = excluded.page_entities,
-      backend_submitted = 0,
+      ingested = 0,
       synced_at = excluded.synced_at`,
     [
       page.id as string,
@@ -265,13 +265,13 @@ export function upsertPage(page: Record<string, unknown>): void {
 }
 
 /**
- * Update a page's extracted content text and reset backend_submitted
+ * Update a page's extracted content text and reset ingested
  * so the updated content gets re-submitted.
  */
 export function updatePageContent(pageId: string, contentText: string): void {
   const cid = credId();
   db.exec(
-    'UPDATE pages SET content_text = ?, content_synced_at = ?, backend_submitted = 0 WHERE credential_id = ? AND id = ?',
+    'UPDATE pages SET content_text = ?, content_synced_at = ?, ingested = 0 WHERE credential_id = ? AND id = ?',
     [contentText, Date.now(), cid, pageId]
   );
 }
@@ -736,7 +736,7 @@ export function upsertDatabase(database: Record<string, unknown>): void {
       created_time = excluded.created_time,
       last_edited_time = excluded.last_edited_time,
       archived = excluded.archived,
-      backend_submitted = 0,
+      ingested = 0,
       synced_at = excluded.synced_at`,
     [
       database.id as string,
@@ -949,7 +949,7 @@ export function upsertDatabaseRow(row: Record<string, unknown>, databaseId: stri
       created_time = excluded.created_time,
       last_edited_time = excluded.last_edited_time,
       archived = excluded.archived,
-      backend_submitted = 0,
+      ingested = 0,
       synced_at = excluded.synced_at`,
     [
       row.id as string,
@@ -1066,7 +1066,7 @@ export function getUnsubmittedPages(limit = 500): LocalPage[] {
   const cid = credId();
   return db.all(
     `SELECT * FROM pages
-     WHERE credential_id = ? AND backend_submitted = 0 AND archived = 0
+     WHERE credential_id = ? AND ingested = 0 AND archived = 0
        AND content_text IS NOT NULL
      ORDER BY last_edited_time ASC LIMIT ?`,
     [cid, limit]
@@ -1081,7 +1081,7 @@ export function getUnsubmittedRows(limit = 500): LocalDatabaseRow[] {
   const cid = credId();
   return db.all(
     `SELECT * FROM database_rows
-     WHERE credential_id = ? AND backend_submitted = 0 AND archived = 0
+     WHERE credential_id = ? AND ingested = 0 AND archived = 0
        AND properties_text IS NOT NULL AND properties_text != ''
      ORDER BY last_edited_time ASC LIMIT ?`,
     [cid, limit]
@@ -1098,7 +1098,7 @@ export function markPagesSubmitted(ids: string[]): void {
     const batch = ids.slice(i, i + 99);
     const placeholders = batch.map(() => '?').join(',');
     db.exec(
-      `UPDATE pages SET backend_submitted = 1 WHERE credential_id = ? AND id IN (${placeholders})`,
+      `UPDATE pages SET ingested = 1 WHERE credential_id = ? AND id IN (${placeholders})`,
       [cid, ...batch]
     );
   }
@@ -1114,7 +1114,7 @@ export function markRowsSubmitted(ids: string[]): void {
     const batch = ids.slice(i, i + 99);
     const placeholders = batch.map(() => '?').join(',');
     db.exec(
-      `UPDATE database_rows SET backend_submitted = 1 WHERE credential_id = ? AND id IN (${placeholders})`,
+      `UPDATE database_rows SET ingested = 1 WHERE credential_id = ? AND id IN (${placeholders})`,
       [cid, ...batch]
     );
   }

@@ -9,9 +9,9 @@ import {
   getEmailById,
   getEmailCount,
   getEmails,
-  getUnsubmittedEmails,
-  markEmailsSubmitted,
-  markSensitiveAsSubmitted,
+  getUningestedEmails,
+  markEmailsIngested,
+  markSensitiveAsIngested,
   upsertEmail,
 } from './db/helpers';
 import { getGmailSkillState, publishSkillState } from './state';
@@ -228,7 +228,7 @@ function syncAndIngestMessage(msg: GmailMessage, redactSensitive: boolean): bool
 
   // Skip if email is already in DB and already ingested
   const existing = getEmailById(msg.id);
-  if (existing && existing.backend_submitted === 1) {
+  if (existing && existing.ingested === 1) {
     return false;
   }
 
@@ -270,14 +270,14 @@ function syncAndIngestMessage(msg: GmailMessage, redactSensitive: boolean): bool
         },
         createdAt: msg.internalDate ? parseInt(msg.internalDate as string, 10) / 1000 : undefined,
       });
-      markEmailsSubmitted([msg.id]);
+      markEmailsIngested([msg.id]);
     } catch (e) {
       // Non-fatal — email is still in DB
       console.error('[gmail-sync] FAIL ingest ' + msg.id + ': ' + e);
     }
   } else {
     // Mark as submitted even if too short to ingest
-    markEmailsSubmitted([msg.id]);
+    markEmailsIngested([msg.id]);
   }
 
   return true;
@@ -539,9 +539,9 @@ const MIN_CONTENT_LENGTH = 50;
  */
 function ingestNewEmails(): void {
   // Mark sensitive emails as submitted so they never enter the ingestion queue
-  markSensitiveAsSubmitted();
+  markSensitiveAsIngested();
 
-  const emails = getUnsubmittedEmails(INGEST_QUERY_LIMIT);
+  const emails = getUningestedEmails(INGEST_QUERY_LIMIT);
   if (emails.length === 0) return;
 
   emitSyncProgress(`Ingesting ${emails.length} emails into knowledge graph...`, 92);
@@ -586,7 +586,7 @@ function ingestNewEmails(): void {
     }
   }
 
-  if (submittedIds.length > 0) markEmailsSubmitted(submittedIds);
+  if (submittedIds.length > 0) markEmailsIngested(submittedIds);
 
   if (ingested > 0) {
     console.log(`[gmail] Ingested ${ingested} email(s) into knowledge graph`);

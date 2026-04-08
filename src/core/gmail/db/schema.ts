@@ -128,9 +128,9 @@ export function initializeGmailSchema(): void {
     console.log('[gmail] Added credential_id column to all tables');
   }
 
-  if (!columnNames.has('backend_submitted')) {
-    db.exec('ALTER TABLE emails ADD COLUMN backend_submitted INTEGER NOT NULL DEFAULT 0', []);
-    console.log('[gmail] Added backend_submitted column to emails table');
+  if (!columnNames.has('ingested')) {
+    db.exec('ALTER TABLE emails ADD COLUMN ingested INTEGER NOT NULL DEFAULT 0', []);
+    console.log('[gmail] Added ingested column to emails table');
   }
 
   if (!columnNames.has('is_sensitive')) {
@@ -152,7 +152,7 @@ export function initializeGmailSchema(): void {
   db.exec('CREATE INDEX IF NOT EXISTS idx_emails_labels ON emails (credential_id, labels)', []);
   db.exec('CREATE INDEX IF NOT EXISTS idx_emails_is_read ON emails (credential_id, is_read)', []);
   db.exec(
-    'CREATE INDEX IF NOT EXISTS idx_emails_backend_submitted ON emails (credential_id, backend_submitted)',
+    'CREATE INDEX IF NOT EXISTS idx_emails_ingested ON emails (credential_id, ingested)',
     []
   );
   db.exec(
