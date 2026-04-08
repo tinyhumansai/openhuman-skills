@@ -38,9 +38,11 @@ const C = {
   magenta: '\x1b[35m',
 };
 
-const header = (t: string) => console.log(`\n${C.cyan}${'─'.repeat(60)}\n  ${t}\n${'─'.repeat(60)}${C.reset}`);
+const header = (t: string) =>
+  console.log(`\n${C.cyan}${'─'.repeat(60)}\n  ${t}\n${'─'.repeat(60)}${C.reset}`);
 const step = (l: string) => process.stdout.write(`${C.blue}  ▸ ${l}${C.reset} `);
-const ok = (d?: string) => console.log(`${C.green}✓${C.reset}${d ? ` ${C.dim}${d}${C.reset}` : ''}`);
+const ok = (d?: string) =>
+  console.log(`${C.green}✓${C.reset}${d ? ` ${C.dim}${d}${C.reset}` : ''}`);
 const fail = (d: string) => console.log(`${C.red}✗ ${d}${C.reset}`);
 const info = (l: string, v: unknown) => console.log(`${C.dim}    ${l}: ${C.reset}${v}`);
 const ts = () => new Date().toISOString().slice(11, 19);
@@ -97,7 +99,9 @@ const INTEGRATION_ID = (process.env.NOTION_INTEGRATION_ID || '').trim();
 const CLIENT_KEY = (process.env.NOTION_CLIENT_KEY_SHARE || '').trim();
 
 if (!process.env.JWT_TOKEN || !INTEGRATION_ID || !CLIENT_KEY) {
-  console.error(`\n${C.red}  Missing env vars: JWT_TOKEN, NOTION_INTEGRATION_ID, NOTION_CLIENT_KEY_SHARE${C.reset}\n`);
+  console.error(
+    `\n${C.red}  Missing env vars: JWT_TOKEN, NOTION_INTEGRATION_ID, NOTION_CLIENT_KEY_SHARE${C.reset}\n`
+  );
   process.exit(1);
 }
 
@@ -113,7 +117,12 @@ async function main() {
   header('1. Setup');
 
   step('Stop existing...');
-  try { await stopSkill(SKILL_ID); ok(); } catch { ok('(not running)'); }
+  try {
+    await stopSkill(SKILL_ID);
+    ok();
+  } catch {
+    ok('(not running)');
+  }
 
   step('Start skill...');
   const [snap, startMs] = await timed(() => startSkill(SKILL_ID));
@@ -141,8 +150,15 @@ async function main() {
   header('2. Pre-Sync');
 
   step('list-users...');
-  const { data: users, error: userErr, ms: userMs } = await callTool('list-users', { page_size: 100 }, 30_000);
-  if (userErr) { fail(`${userErr} (${userMs}ms)`); process.exit(1); }
+  const {
+    data: users,
+    error: userErr,
+    ms: userMs,
+  } = await callTool('list-users', { page_size: 100 }, 30_000);
+  if (userErr) {
+    fail(`${userErr} (${userMs}ms)`);
+    process.exit(1);
+  }
   ok(`${users.count} users (${userMs}ms)`);
 
   step('sync-status...');
@@ -171,7 +187,10 @@ async function main() {
     await new Promise(r => setTimeout(r, 2000));
 
     const s = await getState();
-    if (!s) { console.log(`${C.yellow}    [${ts()}] state=null${C.reset}`); continue; }
+    if (!s) {
+      console.log(`${C.yellow}    [${ts()}] state=null${C.reset}`);
+      continue;
+    }
 
     const elapsed = ((Date.now() - t0) / 1000).toFixed(0);
     const phase = (s.syncPhase as string) || '-';
@@ -184,24 +203,35 @@ async function main() {
     const err = s.lastSyncError as string | null;
 
     const line = `${phase}|${pct}|${msg}`;
-    if (line === lastLine) { stale++; } else { stale = 0; }
+    if (line === lastLine) {
+      stale++;
+    } else {
+      stale = 0;
+    }
     lastLine = line;
 
     const staleTag = stale >= 5 ? ` ${C.yellow}STALE(${stale})${C.reset}` : '';
     console.log(
       `    [${C.dim}${elapsed}s${C.reset}] ${C.cyan}[${pct}%]${C.reset} ` +
-      `${C.bold}${phase}${C.reset} ${msg} ` +
-      `| p=${pages} db=${dbs} c=${content} run=${inProg}${staleTag}`
+        `${C.bold}${phase}${C.reset} ${msg} ` +
+        `| p=${pages} db=${dbs} c=${content} run=${inProg}${staleTag}`
     );
 
     if (err) console.log(`    ${C.red}⚠ ${err}${C.reset}`);
 
     if (!inProg && pages > 0) {
-      if (err) { fail(`Sync error: ${err}`); } else { ok(`Sync done in ${elapsed}s`); }
+      if (err) {
+        fail(`Sync error: ${err}`);
+      } else {
+        ok(`Sync done in ${elapsed}s`);
+      }
       break;
     }
 
-    if (stale >= 30) { fail(`Stuck for ${stale} polls`); break; }
+    if (stale >= 30) {
+      fail(`Stuck for ${stale} polls`);
+      break;
+    }
   }
 
   // ── 5. Results ───────────────────────────────────────────────────────
@@ -240,7 +270,12 @@ async function main() {
   // ── Cleanup ──────────────────────────────────────────────────────────
 
   step('Stop...');
-  try { await stopSkill(SKILL_ID); ok(); } catch (e: any) { fail(e.message); }
+  try {
+    await stopSkill(SKILL_ID);
+    ok();
+  } catch (e: any) {
+    fail(e.message);
+  }
 
   console.log(`\n${C.green}${C.bold}  Done.${C.reset}\n`);
   process.exit(0);

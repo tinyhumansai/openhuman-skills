@@ -138,7 +138,9 @@ function syncUsers(): void {
         upsertUser(user as Record<string, unknown>);
         count++;
       } catch (e) {
-        console.error(`[notion] Failed to upsert user ${(user as Record<string, unknown>).id}: ${e}`);
+        console.error(
+          `[notion] Failed to upsert user ${(user as Record<string, unknown>).id}: ${e}`
+        );
       }
     }
 
@@ -257,14 +259,18 @@ function syncPipeline(): void {
                 });
                 markPagesSubmitted([rec.id as string]);
                 ingested++;
-                console.log(`[notion][sync] ✓ page #${pageCount} "${pageTitle}" — ${trimmed.length}ch, ingested (${fetchMs}ms)`);
+                console.log(
+                  `[notion][sync] ✓ page #${pageCount} "${pageTitle}" — ${trimmed.length}ch, ingested (${fetchMs}ms)`
+                );
               } catch (e) {
                 console.error(`[notion][sync] FAIL ingest page "${pageTitle}" (${rec.id}): ${e}`);
                 markPagesSubmitted([rec.id as string]);
               }
             } else {
               markPagesSubmitted([rec.id as string]);
-              console.log(`[notion][sync] ✓ page #${pageCount} "${pageTitle}" — ${trimmed.length}ch (too short, skipped ingest) (${fetchMs}ms)`);
+              console.log(
+                `[notion][sync] ✓ page #${pageCount} "${pageTitle}" — ${trimmed.length}ch (too short, skipped ingest) (${fetchMs}ms)`
+              );
             }
           } catch (e) {
             console.error(`[notion][sync] FAIL content page "${pageTitle}" (${rec.id}): ${e}`);
@@ -382,7 +388,11 @@ function syncDataSources(): void {
     syncProgress('databases', 92, `Data sources: ${count} synced, ${skipped} unchanged...`);
   }
 
-  syncProgress('databases', 95, `Data sources: ${count} synced${skipped > 0 ? `, ${skipped} unchanged` : ''}`);
+  syncProgress(
+    'databases',
+    95,
+    `Data sources: ${count} synced${skipped > 0 ? `, ${skipped} unchanged` : ''}`
+  );
 }
 
 // ---------------------------------------------------------------------------

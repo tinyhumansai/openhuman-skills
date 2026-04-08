@@ -16,11 +16,17 @@ interface Skill {
   stop: () => MaybeAsync<void>;
   onCronTrigger?: (scheduleId: string) => MaybeAsync<void>;
   onSetupStart?: () => MaybeAsync<SetupStartResult>;
-  onSetupSubmit?: (args: { stepId: string; values: Record<string, unknown> }) => MaybeAsync<SetupSubmitResult>;
+  onSetupSubmit?: (args: {
+    stepId: string;
+    values: Record<string, unknown>;
+  }) => MaybeAsync<SetupSubmitResult>;
   onSetupCancel?: () => MaybeAsync<void>;
   onOAuthComplete?: (args: OAuthCompleteArgs) => MaybeAsync<unknown>;
   /** Called when advanced auth credentials are submitted (self_hosted / text modes). */
-  onAuthComplete?: (args: { mode: string; credentials: Record<string, unknown> }) => MaybeAsync<{
+  onAuthComplete?: (args: {
+    mode: string;
+    credentials: Record<string, unknown>;
+  }) => MaybeAsync<{
     status: string;
     errors?: Array<{ field: string; message: string }>;
     message?: string;

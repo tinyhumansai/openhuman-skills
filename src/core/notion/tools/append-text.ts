@@ -31,7 +31,12 @@ export const appendTextTool: ToolDefinition = {
   execute(args: Record<string, unknown>): string {
     try {
       const blockId = (args.block_id as string) || (args.page_id as string) || '';
-      const _textVal = args.text !== undefined && args.text !== null ? args.text : (args.content !== undefined && args.content !== null ? args.content : '');
+      const _textVal =
+        args.text !== undefined && args.text !== null
+          ? args.text
+          : args.content !== undefined && args.content !== null
+            ? args.content
+            : '';
       const text = String(_textVal).trim();
 
       if (!blockId) {

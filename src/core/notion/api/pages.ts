@@ -16,10 +16,7 @@ export function createPage(body: Record<string, unknown>): CreatePageResponse {
   return apiFetch<CreatePageResponse>('/pages', { method: 'POST', body });
 }
 
-export function updatePage(
-  pageId: string,
-  body: Record<string, unknown>
-): UpdatePageResponse {
+export function updatePage(pageId: string, body: Record<string, unknown>): UpdatePageResponse {
   return apiFetch<UpdatePageResponse>(`/pages/${pageId}`, { method: 'PATCH', body });
 }
 
@@ -30,9 +27,6 @@ export function archivePage(pageId: string): UpdatePageResponse {
   });
 }
 
-export function getPageContent(
-  pageId: string,
-  pageSize: number = 50
-): ListBlockChildrenResponse {
+export function getPageContent(pageId: string, pageSize: number = 50): ListBlockChildrenResponse {
   return apiFetch<ListBlockChildrenResponse>(`/blocks/${pageId}/children?page_size=${pageSize}`);
 }

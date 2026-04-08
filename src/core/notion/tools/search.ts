@@ -5,7 +5,12 @@ import { formatApiError, formatPageTitle } from '../helpers';
 
 /** Shape of one search result item matching Notion API response. */
 function toSearchResultItem(item: Record<string, unknown>): Record<string, unknown> {
-  const inTrashVal = item.in_trash !== undefined && item.in_trash !== null ? item.in_trash : (item.archived !== undefined && item.archived !== null ? item.archived : false);
+  const inTrashVal =
+    item.in_trash !== undefined && item.in_trash !== null
+      ? item.in_trash
+      : item.archived !== undefined && item.archived !== null
+        ? item.archived
+        : false;
   const base = {
     object: item.object,
     id: item.id,
@@ -20,7 +25,10 @@ function toSearchResultItem(item: Record<string, unknown>): Record<string, unkno
     icon: item.icon !== undefined && item.icon !== null ? item.icon : null,
     cover: item.cover !== undefined && item.cover !== null ? item.cover : null,
     created_by: item.created_by !== undefined && item.created_by !== null ? item.created_by : null,
-    last_edited_by: item.last_edited_by !== undefined && item.last_edited_by !== null ? item.last_edited_by : null,
+    last_edited_by:
+      item.last_edited_by !== undefined && item.last_edited_by !== null
+        ? item.last_edited_by
+        : null,
   };
   if (item.object === 'page') {
     return { ...base, title: formatPageTitle(item) };
@@ -85,9 +93,14 @@ export const searchTool: ToolDefinition = {
 
       const resultRec = result as Record<string, unknown>;
       return JSON.stringify({
-        object: resultRec.object !== undefined && resultRec.object !== null ? resultRec.object : 'list',
-        next_cursor: resultRec.next_cursor !== undefined && resultRec.next_cursor !== null ? resultRec.next_cursor : null,
-        has_more: result.has_more !== undefined && result.has_more !== null ? result.has_more : false,
+        object:
+          resultRec.object !== undefined && resultRec.object !== null ? resultRec.object : 'list',
+        next_cursor:
+          resultRec.next_cursor !== undefined && resultRec.next_cursor !== null
+            ? resultRec.next_cursor
+            : null,
+        has_more:
+          result.has_more !== undefined && result.has_more !== null ? result.has_more : false,
         results,
       });
     } catch (e) {

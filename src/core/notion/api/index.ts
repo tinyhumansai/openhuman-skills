@@ -53,15 +53,9 @@ export interface NotionApi {
   getDatabase(databaseId: string): GetDatabaseResponse;
   resolveDataSourceId(databaseId: string): string;
   getDataSource(dataSourceId: string): GetDataSourceResponse;
-  queryDataSource(
-    databaseId: string,
-    body?: Record<string, unknown>
-  ): QueryDataSourceResponse;
+  queryDataSource(databaseId: string, body?: Record<string, unknown>): QueryDataSourceResponse;
   createDatabase(body: Record<string, unknown>): CreateDatabaseResponse;
-  updateDatabase(
-    databaseId: string,
-    body: Record<string, unknown>
-  ): UpdateDatabaseResponse;
+  updateDatabase(databaseId: string, body: Record<string, unknown>): UpdateDatabaseResponse;
   listAllDatabases(pageSize?: number): SearchResponse;
   // blocks
   getBlock(blockId: string): GetBlockResponse;

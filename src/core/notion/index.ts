@@ -23,7 +23,10 @@ function init(): void {
     s.config.credentialId = saved.credentialId || s.config.credentialId;
     s.config.workspaceName = saved.workspaceName || s.config.workspaceName;
     s.config.syncIntervalMinutes = saved.syncIntervalMinutes || s.config.syncIntervalMinutes;
-    s.config.contentSyncEnabled = saved.contentSyncEnabled !== undefined && saved.contentSyncEnabled !== null ? saved.contentSyncEnabled : s.config.contentSyncEnabled;
+    s.config.contentSyncEnabled =
+      saved.contentSyncEnabled !== undefined && saved.contentSyncEnabled !== null
+        ? saved.contentSyncEnabled
+        : s.config.contentSyncEnabled;
     s.config.maxPagesPerContentSync =
       saved.maxPagesPerContentSync || s.config.maxPagesPerContentSync;
   }
@@ -164,10 +167,7 @@ function onDisconnect(): void {
 // Advanced auth lifecycle (self_hosted / text modes)
 // ---------------------------------------------------------------------------
 
-function onAuthComplete(args: {
-  mode: string;
-  credentials: Record<string, unknown>;
-}): {
+function onAuthComplete(args: { mode: string; credentials: Record<string, unknown> }): {
   status: string;
   errors?: Array<{ field: string; message: string }>;
   message?: string;

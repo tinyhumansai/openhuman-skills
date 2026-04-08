@@ -30,10 +30,7 @@ export function appendBlockChildren(
   });
 }
 
-export function updateBlock(
-  blockId: string,
-  body: Record<string, unknown>
-): UpdateBlockResponse {
+export function updateBlock(blockId: string, body: Record<string, unknown>): UpdateBlockResponse {
   return apiFetch<UpdateBlockResponse>(`/blocks/${blockId}`, { method: 'PATCH', body });
 }
 
