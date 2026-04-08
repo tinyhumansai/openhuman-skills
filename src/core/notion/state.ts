@@ -22,6 +22,12 @@ export interface NotionSyncStatus {
   summariesPending: number;
   lastSyncError: string | null;
   lastSyncDurationMs: number;
+  /** Current sync phase label (e.g. "users", "pages", "content", "ingestion") */
+  syncPhase: string | null;
+  /** 0-100 progress within the current sync run */
+  syncProgress: number;
+  /** Human-readable status message (e.g. "Fetching pages... 450 so far") */
+  syncMessage: string | null;
 }
 
 export interface NotionSkillState {
@@ -62,6 +68,9 @@ function initNotionSkillState(): NotionSkillState {
       summariesPending: 0,
       lastSyncError: null,
       lastSyncDurationMs: 0,
+      syncPhase: null,
+      syncProgress: 0,
+      syncMessage: null,
     },
     activeSessions: [],
   };

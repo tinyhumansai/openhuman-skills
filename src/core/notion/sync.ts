@@ -29,6 +29,16 @@ import { getNotionSkillState } from './state';
 // Main sync orchestrator
 // ---------------------------------------------------------------------------
 
+/** Update sync progress and publish to frontend state. */
+function syncProgress(phase: string, progress: number, message: string): void {
+  const s = getNotionSkillState();
+  s.syncStatus.syncPhase = phase;
+  s.syncStatus.syncProgress = Math.round(Math.min(100, Math.max(0, progress)));
+  s.syncStatus.syncMessage = message;
+  console.log(`[notion][sync] [${phase}] ${progress.toFixed(0)}% — ${message}`);
+  publishSyncState();
+}
+
 export async function performSync(): Promise<void> {
   const s = getNotionSkillState();
 
@@ -46,72 +56,62 @@ export async function performSync(): Promise<void> {
   const startTime = Date.now();
   s.syncStatus.syncInProgress = true;
   s.syncStatus.lastSyncError = null;
-  publishSyncState();
+  syncProgress('starting', 0, 'Starting sync...');
 
   try {
-    // Phase 1: Sync users
-    console.log('[notion] Sync phase 1: users');
+    // Phase 1: Sync users (0-10%)
+    syncProgress('users', 0, 'Fetching workspace users...');
     await syncUsers();
+    syncProgress('users', 10, 'Users synced');
 
-    // Phase 2: Sync pages and databases via search
-    console.log('[notion] Sync phase 2: pages & databases');
+    // Phase 2: Sync pages and databases via search (10-60%)
+    syncProgress('pages', 10, 'Discovering pages and databases...');
     await syncSearchItems();
 
-    // Phase 2.5: Sync database rows (time-budgeted to avoid Rust async timeout)
-    // console.log('[notion] Sync phase 2.5: database rows');
-    // await syncDatabaseRows(startTime, CONTENT_SYNC_TIME_BUDGET_MS);
-
-    // Phase 3: Sync page content (block text, time-budgeted to avoid Rust async timeout)
+    // Phase 3: Sync page content (60-90%)
     if (s.config.contentSyncEnabled) {
-      console.log('[notion] Sync phase 3: page content');
+      syncProgress('content', 60, 'Fetching page content...');
       await syncContent(startTime, CONTENT_SYNC_TIME_BUDGET_MS);
     }
 
-    // Phase 4: Sync unsynced summaries to the server
-    console.log('[notion] Sync phase 4: sync summaries to server');
-    // syncSummariesToServer();
-
-    // Phase 5: Ingest synced documents into knowledge graph
-    console.log('[notion] Sync phase 5: ingest documents into knowledge graph');
+    // Phase 4: Ingest into knowledge graph (90-100%)
+    syncProgress('ingestion', 90, 'Ingesting documents into knowledge graph...');
     ingestNewDocuments();
 
-    // Update sync state
+    // Finalize
     const durationMs = Date.now() - startTime;
     const nowMs = Date.now();
     s.syncStatus.nextSyncTime = nowMs + s.config.syncIntervalMinutes * 60 * 1000;
     s.syncStatus.lastSyncDurationMs = durationMs;
 
-    // Only advance lastSyncTime if we actually have items in the DB.
-    // This prevents the incremental sync from skipping everything on the
-    // next run if the first sync stored 0 items (e.g. due to errors).
     const counts = getEntityCounts();
     if (counts.pages > 0 || counts.databases > 0) {
       s.syncStatus.lastSyncTime = nowMs;
     }
 
-    // Update counts
     s.syncStatus.totalPages = counts.pages;
     s.syncStatus.totalDatabases = counts.databases;
     s.syncStatus.pagesWithContent = counts.pagesWithContent;
     s.syncStatus.pagesWithSummary = counts.pagesWithSummary;
     s.syncStatus.summariesTotal = counts.summariesTotal;
     s.syncStatus.summariesPending = counts.summariesPending;
-
     s.syncStatus.totalDatabaseRows = counts.databaseRows;
 
-    // Persist sync snapshot into memory during the sync lifecycle itself.
     insertNotionMemorySnapshot();
 
-    // console.log(
-    //   `[notion] Sync complete in ${durationMs}ms — ${counts.pages} pages, ${counts.databases} databases, ${counts.databaseRows} db rows`
-    // );
+    const secs = (durationMs / 1000).toFixed(1);
+    syncProgress('done', 100,
+      `Sync complete in ${secs}s — ${counts.pages} pages, ${counts.databases} databases, ${counts.pagesWithContent} with content`
+    );
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
     s.syncStatus.lastSyncError = errorMsg;
     s.syncStatus.lastSyncDurationMs = Date.now() - startTime;
-    console.error(`[notion] Sync failed: ${errorMsg}`);
+    syncProgress('error', 0, `Sync failed: ${errorMsg}`);
   } finally {
     s.syncStatus.syncInProgress = false;
+    s.syncStatus.syncPhase = null;
+    s.syncStatus.syncProgress = 0;
     publishSyncState();
   }
 }
@@ -247,9 +247,10 @@ async function syncUsers(): Promise<void> {
 
     hasMore = result.has_more;
     startCursor = (result.next_cursor as string | undefined) || undefined;
+    syncProgress('users', 5, `Fetched ${count} users...`);
   }
 
-  console.log(`[notion] Synced ${count} users`);
+  syncProgress('users', 10, `Synced ${count} users`);
 }
 
 // ---------------------------------------------------------------------------
@@ -273,8 +274,10 @@ async function syncSearchItems(): Promise<void> {
   let dbSkipped = 0;
   let errorCount = 0;
   let reachedOldItems = false;
+  let batchNum = 0;
 
   while (hasMore && !reachedOldItems) {
+    batchNum++;
     const body: Record<string, unknown> = {
       page_size: 100,
       sort: { direction: 'descending', timestamp: 'last_edited_time' },
@@ -286,17 +289,15 @@ async function syncSearchItems(): Promise<void> {
     for (const item of result.results) {
       const rec = item as Record<string, unknown>;
       const lastEdited = rec.last_edited_time as string;
-      if (!lastEdited) continue; // Skip partial objects without timestamps
+      if (!lastEdited) continue;
 
       const editedMs = new Date(lastEdited).getTime();
 
-      // Restrict to items updated in the last 30 days
       if (editedMs < cutoffMs) {
         reachedOldItems = true;
         break;
       }
 
-      // Incremental: stop when we reach items older than last sync
       if (!isFirstSync && editedMs <= lastSyncTime) {
         reachedOldItems = true;
         break;
@@ -305,7 +306,7 @@ async function syncSearchItems(): Promise<void> {
       const objectType = rec.object as string;
 
       if (objectType === 'page') {
-        const existing = getPageById?.(rec.id as string);
+        const existing = getPageById ? getPageById(rec.id as string) : null;
         if (existing && existing.last_edited_time === lastEdited) {
           pageSkipped++;
         } else {
@@ -318,7 +319,7 @@ async function syncSearchItems(): Promise<void> {
           }
         }
       } else if (objectType === 'data_source' || objectType === 'database') {
-        const existing = getDatabaseById?.(rec.id as string);
+        const existing = getDatabaseById ? getDatabaseById(rec.id as string) : null;
         if (existing && existing.last_edited_time === lastEdited) {
           dbSkipped++;
         } else {
@@ -330,16 +331,20 @@ async function syncSearchItems(): Promise<void> {
             errorCount++;
           }
         }
-      } else {
-        console.log(`[notion] Unknown object type in search results: ${objectType}`);
       }
     }
 
     hasMore = result.has_more;
     startCursor = (result.next_cursor as string | undefined) || undefined;
+
+    // Progress: 10-50% range, estimate based on batches (cap at 50 batches)
+    const pct = 10 + Math.min(40, (batchNum / 50) * 40);
+    const total = pageCount + pageSkipped;
+    syncProgress('pages', pct, `Discovered ${total} pages, ${dbCount} databases (batch ${batchNum})...`);
   }
 
-  // Explicitly fetch data_sources (API 2025-09-03: unfiltered search may not return them)
+  // Fetch data_sources explicitly (50-55%)
+  syncProgress('pages', 50, 'Fetching databases (data_sources)...');
   const dsResult = await syncDataSources(
     upsertDatabase,
     getDatabaseById,
@@ -351,14 +356,17 @@ async function syncSearchItems(): Promise<void> {
   dbSkipped += dsResult.skipped;
   errorCount += dsResult.errors;
 
-  // Record that sync happened (even if first sync was partial)
   state.set('last_search_sync', Date.now());
 
-  const skipMsg =
-    pageSkipped > 0 || dbSkipped > 0 ? ` (${pageSkipped} pages, ${dbSkipped} dbs unchanged)` : '';
-  const errorMsg = errorCount > 0 ? `, ${errorCount} errors` : '';
-  console.log(
-    `[notion] Synced ${pageCount} pages, ${dbCount} databases (last 30 days)${skipMsg}${errorMsg}`
+  // Update counts in state so they're visible immediately
+  const counts = getEntityCounts();
+  s.syncStatus.totalPages = counts.pages;
+  s.syncStatus.totalDatabases = counts.databases;
+
+  syncProgress('pages', 60,
+    `Synced ${pageCount} pages, ${dbCount} databases` +
+    (pageSkipped > 0 ? ` (${pageSkipped} unchanged)` : '') +
+    (errorCount > 0 ? `, ${errorCount} errors` : '')
   );
 }
 
@@ -696,7 +704,7 @@ function ingestNewDocuments(): void {
   let ingested = 0;
 
   for (const page of pages) {
-    const content = page.content_text || '';
+    const content = (page.content_text || '').trim();
     if (content.length === 0) {
       emptyPageIds.push(page.id);
       continue;
@@ -731,7 +739,7 @@ function ingestNewDocuments(): void {
   }
 
   for (const row of rows) {
-    const content = row.properties_text || '';
+    const content = (row.properties_text || '').trim();
     if (content.length === 0) {
       emptyRowIds.push(row.id);
       continue;

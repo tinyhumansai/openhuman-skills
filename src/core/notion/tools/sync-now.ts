@@ -31,7 +31,7 @@ export const syncNowTool: ToolDefinition = {
         });
       }
 
-      performSync();
+      await performSync();
 
       // Return results after sync completes
       return JSON.stringify({
