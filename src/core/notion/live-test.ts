@@ -501,11 +501,11 @@ async function main() {
   }
 
   // Test tryCache after sync
-  step('list-pages (tryCache=true)...');
+  step('list-pages (tryCache=false)...');
   {
     const { data, error, elapsedMs } = await callToolSafe('list-pages', {
       page_size: 10,
-      tryCache: true,
+      tryCache: false,
     });
     if (error) fail(error);
     else {
@@ -514,9 +514,9 @@ async function main() {
     }
   }
 
-  step('list-databases (tryCache=true)...');
+  step('list-databases (tryCache=false)...');
   {
-    const { data, error, elapsedMs } = await callToolSafe('list-databases', { tryCache: true });
+    const { data, error, elapsedMs } = await callToolSafe('list-databases', { tryCache: false });
     if (error) fail(error);
     else {
       const dbs = data?.databases || data?.results || [];
@@ -524,9 +524,9 @@ async function main() {
     }
   }
 
-  step('list-users (tryCache=true)...');
+  step('list-users (tryCache=false)...');
   {
-    const { data, error, elapsedMs } = await callToolSafe('list-users', { tryCache: true });
+    const { data, error, elapsedMs } = await callToolSafe('list-users', { tryCache: false });
     if (error) fail(error);
     else {
       const users = data?.users || [];
