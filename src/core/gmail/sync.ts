@@ -23,11 +23,17 @@ import type { GmailMessage } from './types';
 /** Number of days to look back for emails. */
 const SYNC_WINDOW_DAYS = 30;
 
-/** Max emails to fetch per API page. */
-const PAGE_SIZE = 20;
+/** Max emails to fetch per list API page (Gmail max is 500). */
+const PAGE_SIZE = 100;
 
-/** Max pages to fetch per sync (20 emails/page × 10 pages = 200 emails). */
+/** Max pages to fetch per sync (100 ids/page × 10 pages = 1000 emails). */
 const MAX_PAGES = 10;
+
+/** Hard cap on total emails to sync. */
+const MAX_EMAILS = 1000;
+
+/** Batch size for messages.get (Gmail batch API supports up to 100). */
+const BATCH_SIZE = 50;
 
 // ---------------------------------------------------------------------------
 // Types
@@ -99,27 +105,176 @@ function fetchMessagePage(
 }
 
 /**
- * Fetch full message details and upsert into DB.
- * Uses emailExists (SELECT 1) instead of fetching the full row for the skip check.
- * Returns true if a new email was synced, false if skipped (already exists).
+ * Fetch multiple messages in a single HTTP request using Gmail's batch API.
+ * Sends a multipart/mixed request to /batch/gmail/v1 with up to BATCH_SIZE
+ * individual messages.get requests. Returns parsed message objects.
+ *
+ * Falls back to individual fetches if the batch API fails (e.g., via proxy).
  */
-function syncMessage(msgId: string): boolean {
-  if (emailExists(msgId)) return false;
+function batchFetchMessages(msgIds: string[]): GmailMessage[] {
+  if (msgIds.length === 0) return [];
 
-  const msgResponse = gmailFetch(`/users/me/messages/${msgId}`);
-  if (msgResponse.success && msgResponse.data) {
-    const s = getGmailSkillState();
-    upsertEmail(msgResponse.data as GmailMessage, !s.config.showSensitiveMessages);
-    s.syncStatus.totalEmails++;
-    publishSkillState();
-    return true;
+  const boundary = 'batch_gmail_sync_' + Date.now();
+  const parts = msgIds.map((id, i) => {
+    return (
+      '--' +
+      boundary +
+      '\r\n' +
+      'Content-Type: application/http\r\n' +
+      'Content-ID: <item' +
+      i +
+      '>\r\n' +
+      '\r\n' +
+      'GET /gmail/v1/users/me/messages/' +
+      id +
+      '?format=full\r\n' +
+      '\r\n'
+    );
+  });
+  const body = parts.join('') + '--' + boundary + '--\r\n';
+
+  const response = gmailFetch<string>('/batch', {
+    method: 'POST',
+    headers: { 'Content-Type': 'multipart/mixed; boundary=' + boundary },
+    body,
+    timeout: 60,
+    rawBatch: true,
+  });
+
+  if (!response.success || !response.data) {
+    console.warn(
+      '[gmail-sync] Batch API failed, falling back to individual fetches:',
+      response.error ? response.error.message : 'unknown'
+    );
+    return fetchMessagesIndividually(msgIds);
   }
-  return false;
+
+  const messages = parseBatchResponse(response.data as unknown as string);
+
+  // If batch returned fewer messages than requested, fetch missing ones individually
+  if (messages.length < msgIds.length) {
+    const fetchedIds = new Set(messages.map((m) => m.id));
+    const missingIds = msgIds.filter((id) => !fetchedIds.has(id));
+    if (missingIds.length > 0) {
+      console.log('[gmail-sync] Batch missed ' + missingIds.length + ' messages, fetching individually');
+      const fallback = fetchMessagesIndividually(missingIds);
+      for (const msg of fallback) messages.push(msg);
+    }
+  }
+
+  return messages;
+}
+
+/** Fetch messages one by one (fallback when batch fails). */
+function fetchMessagesIndividually(msgIds: string[]): GmailMessage[] {
+  const messages: GmailMessage[] = [];
+  for (const id of msgIds) {
+    const resp = gmailFetch('/users/me/messages/' + id);
+    if (resp.success && resp.data) {
+      messages.push(resp.data as GmailMessage);
+    }
+  }
+  return messages;
+}
+
+/**
+ * Parse a multipart/mixed batch response into individual message objects.
+ * Each part contains an HTTP response with a JSON body.
+ */
+function parseBatchResponse(raw: string): GmailMessage[] {
+  const messages: GmailMessage[] = [];
+
+  // Find the boundary from the response (first line is --boundary)
+  const firstLine = raw.split('\r\n')[0] || raw.split('\n')[0] || '';
+  const bnd = firstLine.trim();
+  if (!bnd.startsWith('--')) return messages;
+
+  const parts = raw.split(bnd);
+  for (const part of parts) {
+    if (part.trim() === '' || part.trim() === '--') continue;
+
+    // Find the JSON body — the last { ... } block in each part
+    const jsonMatch = part.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) continue;
+
+    try {
+      const msg = JSON.parse(jsonMatch[0]) as Record<string, unknown>;
+      if (msg.error) {
+        console.warn('[gmail-sync] Batch item error:', JSON.stringify(msg.error).slice(0, 100));
+        continue;
+      }
+      if (msg.id) {
+        messages.push(msg as unknown as GmailMessage);
+      }
+    } catch {
+      // Skip unparseable parts
+    }
+  }
+
+  return messages;
+}
+
+/**
+ * Upsert a message and immediately ingest it into memory (pipeline approach).
+ * Returns true if the message was new.
+ */
+function syncAndIngestMessage(msg: GmailMessage, redactSensitive: boolean): boolean {
+  // Skip spam and trash
+  const labelIds = Array.isArray(msg.labelIds) ? msg.labelIds : [];
+  if (labelIds.includes('SPAM') || labelIds.includes('TRASH')) {
+    return false;
+  }
+
+  try {
+    upsertEmail(msg, redactSensitive);
+  } catch (e) {
+    console.error('[gmail-sync] FAIL upsert ' + msg.id + ': ' + e);
+    return false;
+  }
+
+  // Immediately ingest into memory
+  const content = (msg.snippet || '').trim();
+  // Extract subject from headers
+  let subj = '';
+  const payload = msg.payload as unknown as Record<string, unknown> | undefined;
+  if (payload && Array.isArray(payload.headers)) {
+    for (const h of payload.headers as Array<{ name: string; value: string }>) {
+      if (h.name.toLowerCase() === 'subject') {
+        subj = h.value;
+        break;
+      }
+    }
+  }
+
+  // Extract body text for ingestion (snippet is usually enough for embedding)
+  // Full body extraction happens via upsertEmail → DB, but for memory we use snippet
+  if (content.length >= MIN_CONTENT_LENGTH) {
+    try {
+      memory.insert({
+        title: subj || 'Email ' + msg.id,
+        content,
+        sourceType: 'email',
+        documentId: 'gmail-email-' + msg.id,
+        metadata: {
+          source: 'gmail',
+          type: 'email',
+          emailId: msg.id,
+          threadId: msg.threadId,
+        },
+        createdAt: msg.internalDate ? parseInt(msg.internalDate as string, 10) / 1000 : undefined,
+      });
+    } catch (e) {
+      // Non-fatal — email is still in DB
+      console.error('[gmail-sync] FAIL ingest ' + msg.id + ': ' + e);
+    }
+  }
+
+  return true;
 }
 
 /**
  * Shared pagination loop used by both initial and incremental sync.
- * Fetches pages of message IDs then syncs each message individually.
+ * Pipeline approach: list IDs → batch fetch → upsert + ingest immediately.
  * Returns { newEmails, skipped }.
  */
 function runSyncPages(
@@ -131,28 +286,61 @@ function runSyncPages(
   let newEmails = 0;
   let skipped = 0;
   let page = 0;
+  let totalFetched = 0;
+  const s = getGmailSkillState();
+  const redact = !s.config.showSensitiveMessages;
 
   do {
     page++;
-    log?.(`Fetching page ${page}...`, Math.min(5 + page * 8, 80));
+    log?.('Fetching message IDs (page ' + page + ')...', Math.min(5 + page * 5, 40));
 
     const result = fetchMessagePage(query, pageToken);
     if (result.messages.length === 0) break;
 
     pageToken = result.nextPageToken;
 
-    // Sync messages in parallel (5 concurrent) to avoid sequential proxy round-trips
-    const CONCURRENCY = 5;
-    for (let i = 0; i < result.messages.length; i += CONCURRENCY) {
-      const batch = result.messages.slice(i, i + CONCURRENCY);
-      const results = batch.map(msgRef => syncMessage(msgRef.id));
-      for (const wasNew of results) {
-        if (wasNew) newEmails++;
-        else skipped++;
+    // Filter out messages we already have
+    const newIds: string[] = [];
+    for (const msgRef of result.messages) {
+      if (emailExists(msgRef.id)) {
+        skipped++;
+      } else {
+        newIds.push(msgRef.id);
       }
     }
 
-    log?.(`Page ${page}: ${newEmails} new, ${skipped} skipped`, Math.min(10 + page * 10, 90));
+    totalFetched += result.messages.length;
+    log?.(
+      'Page ' + page + ': ' + newIds.length + ' new, ' + skipped + ' skipped (total: ' + totalFetched + ')',
+      Math.min(10 + page * 8, 70)
+    );
+
+    // Batch-fetch new messages in chunks, upsert + ingest each immediately
+    for (let i = 0; i < newIds.length; i += BATCH_SIZE) {
+      const chunk = newIds.slice(i, i + BATCH_SIZE);
+      console.log('[gmail-sync] Batch fetching ' + chunk.length + ' messages...');
+
+      const messages = batchFetchMessages(chunk);
+      for (const msg of messages) {
+        if (syncAndIngestMessage(msg, redact)) {
+          s.syncStatus.totalEmails++;
+          newEmails++;
+        }
+      }
+
+      publishSkillState();
+    }
+
+    log?.(
+      'Page ' + page + ' done: ' + newEmails + ' synced, ' + skipped + ' skipped',
+      Math.min(40 + page * 6, 85)
+    );
+
+    // Hard cap
+    if (totalFetched >= MAX_EMAILS) {
+      console.log('[gmail-sync] Reached ' + MAX_EMAILS + ' email cap, stopping');
+      break;
+    }
   } while (pageToken && page < maxPages);
 
   return { newEmails, skipped };
@@ -195,7 +383,7 @@ export function performInitialSync(onProgress?: SyncProgressCallback): void {
     const afterDate = gmailDateStr(SYNC_WINDOW_DAYS, true);
     log(`Starting initial sync (emails after ${afterDate})...`, 0);
 
-    const { newEmails, skipped } = runSyncPages(`after:${afterDate}`, MAX_PAGES, log);
+    const { newEmails, skipped } = runSyncPages(`after:${afterDate} -in:spam -in:trash`, MAX_PAGES, log);
 
     const now = Date.now();
     state.set('initialSyncCompleted', true);
@@ -273,7 +461,7 @@ export function onSync(): void {
     const lastSyncTime = getLastSyncTime();
     const thirtyDaysAgoMs = Date.now() - SYNC_WINDOW_DAYS * 24 * 60 * 60 * 1000;
     const effectiveMs = lastSyncTime ? Math.max(lastSyncTime, thirtyDaysAgoMs) : thirtyDaysAgoMs;
-    const query = `after:${gmailDateStr(effectiveMs)}`;
+    const query = `after:${gmailDateStr(effectiveMs)} -in:spam -in:trash`;
 
     const { newEmails, skipped } = runSyncPages(query, MAX_PAGES);
 

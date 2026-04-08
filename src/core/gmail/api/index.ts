@@ -139,11 +139,13 @@ export function gmailFetch<T = unknown>(
     body?: string;
     headers?: Record<string, string>;
     timeout?: number;
+    rawBatch?: boolean;
   } = {}
 ): GmailApiResponse<T> {
   const cleanPath = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
   const method = options.method || 'GET';
   const timeout = options.timeout || 10;
+  const isBatch = cleanPath === '/batch';
 
   // Determine whether to use direct API calls (with a resolved access token)
   // or the OAuth proxy (for encrypted/managed credentials without a local token).
@@ -176,13 +178,15 @@ export function gmailFetch<T = unknown>(
         });
       } else {
         // Direct API call with resolved access token
-        const url = `${GMAIL_BASE_URL}${cleanPath}`;
+        const url = isBatch
+          ? 'https://www.googleapis.com/batch/gmail/v1'
+          : `${GMAIL_BASE_URL}${cleanPath}`;
         console.log('[gmail] gmailFetch (direct):', method, url);
         response = net.fetch(url, {
           method,
           headers: {
             Authorization: `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
+            ...(isBatch ? {} : { 'Content-Type': 'application/json' }),
             ...(options.headers || {}),
           },
           body: options.body,
@@ -231,6 +235,11 @@ export function gmailFetch<T = unknown>(
       }
 
       if (response.status >= 200 && response.status < 300) {
+        // Batch responses are multipart/mixed — return raw body without JSON parsing
+        if (options.rawBatch) {
+          s.lastApiError = null;
+          return { success: true, data: response.body as unknown as T };
+        }
         const data: T | undefined = response.body ? (JSON.parse(response.body) as T) : undefined;
         s.lastApiError = null;
         return { success: true, data };
