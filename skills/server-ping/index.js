@@ -635,11 +635,10 @@ var __skill_bundle = (() => {
   };
  }
  async function onSetupSubmit(args) {
-  var _a, _b, _c;
   const { stepId, values } = args;
   const s = globalThis.getSkillState();
   if (stepId === "server-config") {
-   const url = ((_a = values.serverUrl) != null ? _a : "").trim();
+   const url = (values.serverUrl || "").trim();
    if (!url) {
     return {
      status: "error",
@@ -706,8 +705,8 @@ var __skill_bundle = (() => {
    };
   }
   if (stepId === "notification-config") {
-   s.config.notifyOnDown = (_b = values.notifyOnDown) != null ? _b : true;
-   s.config.notifyOnRecover = (_c = values.notifyOnRecover) != null ? _c : true;
+   s.config.notifyOnDown = values.notifyOnDown != null ? values.notifyOnDown : true;
+   s.config.notifyOnRecover = values.notifyOnRecover != null ? values.notifyOnRecover : true;
    state.set("config", s.config);
    data.write("config.json", JSON.stringify(s.config, null, 2));
    console.log(`[server-ping] Setup complete \u2014 monitoring ${s.config.serverUrl}`);
@@ -755,7 +754,7 @@ var __skill_bundle = (() => {
   name: "get-ping-stats",
   description: "Get current ping statistics including uptime, total pings, failures, and latest latency.",
   input_schema: { type: "object", properties: {} },
-  async execute() {
+  execute() {
    const s = globalThis.getSkillState();
    const uptimePct = s.pingCount > 0 ? Math.round((s.pingCount - s.failCount) / s.pingCount * 1e4) / 100 : 100;
    const latest = db.get("SELECT latency_ms, status, timestamp FROM ping_log ORDER BY id DESC LIMIT 1", []);
@@ -767,7 +766,7 @@ var __skill_bundle = (() => {
     consecutiveFailures: s.consecutiveFails,
     uptimePercent: uptimePct,
     lastPing: latest ? { latencyMs: latest.latency_ms, status: latest.status, at: latest.timestamp } : null,
-    avgLatencyMs: (avgLatency == null ? void 0 : avgLatency.avg_ms) ? Math.round(avgLatency.avg_ms) : null,
+    avgLatencyMs: avgLatency && avgLatency.avg_ms ? Math.round(avgLatency.avg_ms) : null,
     platform: platform.os()
    });
   }
@@ -786,7 +785,7 @@ var __skill_bundle = (() => {
     }
    }
   },
-  async execute(args) {
+  execute(args) {
    const limit = Math.min(Math.max(parseInt(args.limit) || 20, 1), 100);
    const rows = db.all("SELECT timestamp, url, status, latency_ms, success, error FROM ping_log ORDER BY id DESC LIMIT ?", [limit]);
    return JSON.stringify({ count: rows.length, history: rows });
@@ -798,9 +797,10 @@ var __skill_bundle = (() => {
   name: "ping-now",
   description: "Trigger an immediate ping to the configured server and return the result.",
   input_schema: { type: "object", properties: {} },
-  async execute() {
-   var _a;
-   await ((_a = globalThis.doPing) == null ? void 0 : _a.call(globalThis));
+  execute() {
+   const _g3 = globalThis;
+   if (_g3.doPing)
+    _g3.doPing();
    const s = globalThis.getSkillState();
    const latest = db.get("SELECT timestamp, status, latency_ms, success, error FROM ping_log ORDER BY id DESC LIMIT 1", []);
    return JSON.stringify({ triggered: true, pingNumber: s.pingCount, result: latest });
@@ -812,7 +812,7 @@ var __skill_bundle = (() => {
   name: "list-peer-skills",
   description: "List all other running skills in the system (demonstrates inter-skill communication).",
   input_schema: { type: "object", properties: {} },
-  async execute() {
+  execute() {
    try {
     const peers = skills.list();
     return JSON.stringify({ skills: peers });
@@ -831,9 +831,8 @@ var __skill_bundle = (() => {
    properties: { url: { type: "string", description: "New server URL to monitor" } },
    required: ["url"]
   },
-  async execute(args) {
-   var _a, _b;
-   const url = ((_a = args.url) != null ? _a : "").trim();
+  execute(args) {
+   const url = (args.url || "").trim();
    if (!url || !url.startsWith("http")) {
     return JSON.stringify({ error: "Invalid URL \u2014 must start with http:// or https://" });
    }
@@ -842,7 +841,9 @@ var __skill_bundle = (() => {
    s.config.serverUrl = url;
    state.set("config", s.config);
    console.log(`[server-ping] Server URL changed: ${oldUrl} -> ${url}`);
-   (_b = globalThis.publishState) == null ? void 0 : _b.call(globalThis);
+   const _g3 = globalThis;
+   if (_g3.publishState)
+    _g3.publishState();
    return JSON.stringify({ success: true, oldUrl, newUrl: url });
   }
  };
@@ -852,10 +853,10 @@ var __skill_bundle = (() => {
   name: "read-config",
   description: "Read the current skill configuration from the data directory (demonstrates data file I/O).",
   input_schema: { type: "object", properties: {} },
-  async execute() {
+  execute() {
    try {
     const raw = data.read("config.json");
-    return raw != null ? raw : JSON.stringify({ error: "No config file found" });
+    return raw || JSON.stringify({ error: "No config file found" });
    } catch (e) {
     return JSON.stringify({ error: `Failed to read config: ${e}` });
    }
@@ -867,17 +868,16 @@ var __skill_bundle = (() => {
   return globalThis.getSkillState();
  }
  async function init() {
-  var _a, _b, _c, _d, _e, _f, _g3;
   console.log(`[server-ping] Initializing on ${platform.os()}`);
   globalThis.initializeServerPingSchema();
   const s = getSkillState2();
   const saved = state.get("config");
   if (saved) {
-   s.config.serverUrl = (_a = saved.serverUrl) != null ? _a : s.config.serverUrl;
-   s.config.pingIntervalSec = (_b = saved.pingIntervalSec) != null ? _b : s.config.pingIntervalSec;
-   s.config.notifyOnDown = (_c = saved.notifyOnDown) != null ? _c : s.config.notifyOnDown;
-   s.config.notifyOnRecover = (_d = saved.notifyOnRecover) != null ? _d : s.config.notifyOnRecover;
-   s.config.verboseLogging = (_e = saved.verboseLogging) != null ? _e : s.config.verboseLogging;
+   s.config.serverUrl = saved.serverUrl != null ? saved.serverUrl : s.config.serverUrl;
+   s.config.pingIntervalSec = saved.pingIntervalSec != null ? saved.pingIntervalSec : s.config.pingIntervalSec;
+   s.config.notifyOnDown = saved.notifyOnDown != null ? saved.notifyOnDown : s.config.notifyOnDown;
+   s.config.notifyOnRecover = saved.notifyOnRecover != null ? saved.notifyOnRecover : s.config.notifyOnRecover;
+   s.config.verboseLogging = saved.verboseLogging != null ? saved.verboseLogging : s.config.verboseLogging;
   }
   if (!s.config.serverUrl) {
    const envUrl = platform.env("BACKEND_URL") || platform.env("BACKEND_URL");
@@ -888,8 +888,8 @@ var __skill_bundle = (() => {
   }
   const counters = state.get("counters");
   if (counters) {
-   s.pingCount = (_f = counters.pingCount) != null ? _f : 0;
-   s.failCount = (_g3 = counters.failCount) != null ? _g3 : 0;
+   s.pingCount = counters.pingCount || 0;
+   s.failCount = counters.failCount || 0;
   }
   console.log(`[server-ping] Config loaded \u2014 target: ${s.config.serverUrl}`);
  }
