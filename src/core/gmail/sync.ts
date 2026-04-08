@@ -254,7 +254,7 @@ function syncAndIngestMessage(msg: GmailMessage, redactSensitive: boolean): bool
         title: subj || 'Email ' + msg.id,
         content,
         sourceType: 'email',
-        documentId: 'gmail-email-' + msg.id,
+        documentId: (msg.internalDate || Date.now()) + '-gmail-email-' + msg.id,
         metadata: {
           source: 'gmail',
           type: 'email',
@@ -550,7 +550,7 @@ function ingestNewEmails(): void {
         title: email.subject || `Email ${email.id}`,
         content,
         sourceType: 'email',
-        documentId: `gmail-email-${email.id}`,
+        documentId: `${email.date || Date.now()}-gmail-email-${email.id}`,
         metadata: {
           source: 'gmail',
           type: 'email',
