@@ -574,10 +574,14 @@ async function syncContent(startTime: number, budgetMs: number): Promise<void> {
   const pages = getPagesNeedingContent(batchSize, cutoffIso);
   let synced = 0;
   let failed = 0;
+  const total = pages.length;
+
+  syncProgress('content', 60, `Fetching content for ${total} pages...`);
 
   for (const page of pages) {
     if (Date.now() - startTime > budgetMs) {
-      console.log('[notion] Content sync time budget reached, deferring remaining pages');
+      syncProgress('content', 60 + (synced / Math.max(total, 1)) * 30,
+        `Content budget reached — ${synced}/${total} pages fetched, deferring rest`);
       break;
     }
     try {
@@ -585,15 +589,18 @@ async function syncContent(startTime: number, budgetMs: number): Promise<void> {
       updatePageContent(page.id, text);
       synced++;
     } catch (e) {
-      // Individual page failures are logged but don't abort the batch
       console.error(`[notion] Failed to sync content for page ${page.id}: ${e}`);
       failed++;
     }
+
+    // Progress: 60-90% range
+    const pct = 60 + ((synced + failed) / Math.max(total, 1)) * 30;
+    if ((synced + failed) % 5 === 0 || synced + failed === total) {
+      syncProgress('content', pct, `Content: ${synced}/${total} pages fetched${failed > 0 ? `, ${failed} failed` : ''}`);
+    }
   }
 
-  console.log(
-    `[notion] Content sync: ${synced} pages updated${failed > 0 ? `, ${failed} failed` : ''}`
-  );
+  syncProgress('content', 90, `Content sync: ${synced} pages updated${failed > 0 ? `, ${failed} failed` : ''}`);
 }
 
 // ---------------------------------------------------------------------------
@@ -695,7 +702,12 @@ function ingestNewDocuments(): void {
   const pages = getUnsubmittedPages(INGEST_QUERY_LIMIT);
   const rows = getUnsubmittedRows(INGEST_QUERY_LIMIT);
 
-  if (pages.length === 0 && rows.length === 0) return;
+  if (pages.length === 0 && rows.length === 0) {
+    syncProgress('ingestion', 95, 'No new documents to ingest');
+    return;
+  }
+
+  syncProgress('ingestion', 90, `Ingesting ${pages.length} pages, ${rows.length} rows into knowledge graph...`);
 
   const emptyPageIds: string[] = [];
   const emptyRowIds: string[] = [];
@@ -816,5 +828,8 @@ function publishSyncState(): void {
     summariesPending: s.syncStatus.summariesPending,
     lastSyncError: s.syncStatus.lastSyncError,
     lastSyncDurationMs: s.syncStatus.lastSyncDurationMs,
+    syncPhase: s.syncStatus.syncPhase,
+    syncProgress: s.syncStatus.syncProgress,
+    syncMessage: s.syncStatus.syncMessage,
   });
 }

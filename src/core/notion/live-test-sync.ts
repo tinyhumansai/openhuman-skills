@@ -149,7 +149,7 @@ async function main() {
   try { await setSetupComplete(SKILL_ID, true); ok(); } catch (e: any) { fail(e.message); }
 
   // Wait for init to settle
-  await new Promise(r => setTimeout(r, 2000));
+  await new Promise(r => setTimeout(r, 3000));
 
   // ── Pre-sync verification ─────────────────────────────────────────────
 
@@ -168,8 +168,8 @@ async function main() {
     if (error) fail(error);
     else {
       info('connected', data.connected);
-      info('total_pages', data.total_pages);
-      info('total_databases', data.total_databases);
+      info('pages', data.totals ? data.totals.pages : 0);
+      info('databases', data.totals ? data.totals.databases : 0);
       info('last_sync_time', data.last_sync_time || 'never');
       ok();
     }
@@ -207,11 +207,15 @@ async function main() {
       const pages = (s.totalPages as number) || 0;
       const dbs = (s.totalDatabases as number) || 0;
       const withContent = (s.pagesWithContent as number) || 0;
+      const phase = (s.syncPhase as string) || '';
+      const progress = (s.syncProgress as number) || 0;
+      const message = (s.syncMessage as string) || '';
       const elapsed = ((Date.now() - syncStartedAt) / 1000).toFixed(0);
 
-      if (pages !== lastPagesCount || !inProgress) {
+      if (pages !== lastPagesCount || !inProgress || message) {
+        const bar = progress > 0 ? ` [${progress}%]` : '';
         console.log(
-          `${C.dim}    [${elapsed}s] pages=${pages} databases=${dbs} withContent=${withContent} inProgress=${inProgress}${C.reset}`
+          `${C.dim}    [${elapsed}s]${bar} ${message || `pages=${pages} dbs=${dbs} content=${withContent}`}${C.reset}`
         );
         lastPagesCount = pages;
       }
@@ -272,11 +276,14 @@ async function main() {
     const { data, error } = await callTool('sync-status');
     if (error) fail(error);
     else {
-      info('total_pages', data.total_pages);
-      info('total_databases', data.total_databases);
-      info('pages_with_content', data.pages_with_content);
-      info('pages_with_summary', data.pages_with_summary);
-      info('content_sync_enabled', data.content_sync_enabled);
+      const t = data.totals || {};
+      info('pages', t.pages);
+      info('databases', t.databases);
+      info('pages_with_content', t.pages_with_content);
+      info('sync_phase', data.sync_phase || '(idle)');
+      info('sync_progress', data.sync_progress);
+      info('sync_message', data.sync_message || '(none)');
+      info('last_sync_error', data.last_sync_error || '(none)');
       ok();
     }
   }
