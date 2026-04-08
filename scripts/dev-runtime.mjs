@@ -75,6 +75,28 @@ if (!existsSync(SKILLS_DIR)) {
 }
 
 // ---------------------------------------------------------------------------
+// Build skills
+// ---------------------------------------------------------------------------
+
+console.log(`\x1b[36m  Building skills...\x1b[0m`);
+try {
+  execSync('yarn build', { cwd: rootDir, stdio: 'inherit' });
+  console.log(`\x1b[32m  Skills build complete.\x1b[0m\n`);
+} catch (err) {
+  console.error(`\x1b[31m  Skills build failed.\x1b[0m`);
+  process.exit(1);
+}
+
+console.log(`\x1b[36m  Building runtime (cargo build)...\x1b[0m`);
+try {
+  execSync('cargo build', { cwd: resolve(rootDir, 'openhuman'), stdio: 'inherit' });
+  console.log(`\x1b[32m  Runtime build complete.\x1b[0m\n`);
+} catch (err) {
+  console.error(`\x1b[31m  Runtime build failed.\x1b[0m`);
+  process.exit(1);
+}
+
+// ---------------------------------------------------------------------------
 // Kill existing process on the port
 // ---------------------------------------------------------------------------
 
