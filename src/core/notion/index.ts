@@ -5,7 +5,7 @@
 import { notionApi } from './api/index';
 import { getEntityCounts, getLocalPages } from './db/helpers';
 import { initializeNotionSchema } from './db/schema';
-import { formatUserSummary, isNotionConnected, notionFetch } from './helpers';
+import { formatUserSummary, isNotionConnected } from './helpers';
 import { getNotionSkillState } from './state';
 import type { NotionSkillConfig } from './state';
 import { performSync } from './sync';
