@@ -17,13 +17,16 @@ function withLogging(tool: ToolDefinition): ToolDefinition {
     ...tool,
     async execute(args: Record<string, unknown>): Promise<string> {
       const argKeys = Object.keys(args || {});
-      const argSummary = argKeys.length > 0
-        ? argKeys.map(k => {
-            const v = args[k];
-            if (typeof v === 'string' && v.length > 50) return `${k}=<${v.length} chars>`;
-            return `${k}=${JSON.stringify(v)}`;
-          }).join(', ')
-        : '(none)';
+      const argSummary =
+        argKeys.length > 0
+          ? argKeys
+              .map(k => {
+                const v = args[k];
+                if (typeof v === 'string' && v.length > 50) return `${k}=<${v.length} chars>`;
+                return `${k}=${JSON.stringify(v)}`;
+              })
+              .join(', ')
+          : '(none)';
       console.log(`[gmail][tool:${toolName}] called with ${argSummary}`);
 
       const t0 = Date.now();
@@ -35,7 +38,9 @@ function withLogging(tool: ToolDefinition): ToolDefinition {
         try {
           const parsed = JSON.parse(text);
           if (parsed.error) errMsg = ` error="${String(parsed.error).slice(0, 100)}"`;
-        } catch { /* not JSON */ }
+        } catch {
+          /* not JSON */
+        }
         console.log(`[gmail][tool:${toolName}] OK ${ms}ms (${len}b)${errMsg}`);
         return text;
       } catch (e) {

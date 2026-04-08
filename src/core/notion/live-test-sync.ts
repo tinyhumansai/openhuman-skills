@@ -84,7 +84,8 @@ async function callTool(
     if (!text) return { data: null, elapsedMs };
     try {
       const parsed = JSON.parse(text);
-      if (parsed.error && typeof parsed.error === 'string') return { error: parsed.error, elapsedMs };
+      if (parsed.error && typeof parsed.error === 'string')
+        return { error: parsed.error, elapsedMs };
       return { data: parsed, elapsedMs };
     } catch {
       return { data: text, elapsedMs };
@@ -103,7 +104,9 @@ const INTEGRATION_ID = (process.env.NOTION_INTEGRATION_ID || '').trim();
 const CLIENT_KEY = (process.env.NOTION_CLIENT_KEY_SHARE || '').trim();
 
 if (!JWT_TOKEN || !INTEGRATION_ID || !CLIENT_KEY) {
-  console.error(`\n${C.red}  Missing env vars: JWT_TOKEN, NOTION_INTEGRATION_ID, NOTION_CLIENT_KEY_SHARE${C.reset}\n`);
+  console.error(
+    `\n${C.red}  Missing env vars: JWT_TOKEN, NOTION_INTEGRATION_ID, NOTION_CLIENT_KEY_SHARE${C.reset}\n`
+  );
   process.exit(1);
 }
 
@@ -113,14 +116,21 @@ if (!JWT_TOKEN || !INTEGRATION_ID || !CLIENT_KEY) {
 
 async function main() {
   console.log(`\n${C.bold}  Notion Sync — Live Test${C.reset}`);
-  console.log(`${C.dim}    Tip: run the skills runtime with RUST_LOG=info to see skill logs${C.reset}`);
+  console.log(
+    `${C.dim}    Tip: run the skills runtime with RUST_LOG=info to see skill logs${C.reset}`
+  );
 
   // ── Setup ──────────────────────────────────────────────────────────────
 
   header('1. Setup');
 
   step('Stopping any existing instance...');
-  try { await stopSkill(SKILL_ID); ok(); } catch { ok('(was not running)'); }
+  try {
+    await stopSkill(SKILL_ID);
+    ok();
+  } catch {
+    ok('(was not running)');
+  }
 
   step('Starting notion skill...');
   try {
@@ -146,7 +156,12 @@ async function main() {
   }
 
   step('Marking setup complete...');
-  try { await setSetupComplete(SKILL_ID, true); ok(); } catch (e: any) { fail(e.message); }
+  try {
+    await setSetupComplete(SKILL_ID, true);
+    ok();
+  } catch (e: any) {
+    fail(e.message);
+  }
 
   // Wait for init to settle
   await new Promise(r => setTimeout(r, 3000));
@@ -158,7 +173,10 @@ async function main() {
   step('Testing API connectivity (list-users page_size=1)...');
   {
     const { data, error, elapsedMs } = await callTool('list-users', { page_size: 1 }, 30_000);
-    if (error) { fail(`${error} (${elapsedMs}ms)`); process.exit(1); }
+    if (error) {
+      fail(`${error} (${elapsedMs}ms)`);
+      process.exit(1);
+    }
     ok(`${data.count} user(s) (${elapsedMs}ms)`);
   }
 
@@ -181,7 +199,7 @@ async function main() {
 
   step('Triggering sync (skill/sync RPC)...');
   try {
-    const result = await skillRpc(SKILL_ID, 'skill/sync', {}) as any;
+    const result = (await skillRpc(SKILL_ID, 'skill/sync', {})) as any;
     ok(result && result.message ? result.message : JSON.stringify(result));
   } catch (e: any) {
     fail(e.message);
@@ -294,7 +312,10 @@ async function main() {
 
   step('list-pages (tryCache=true)...');
   {
-    const { data, error, elapsedMs } = await callTool('list-pages', { page_size: 5, tryCache: true });
+    const { data, error, elapsedMs } = await callTool('list-pages', {
+      page_size: 5,
+      tryCache: true,
+    });
     if (error) fail(error);
     else {
       ok(`${data.count} pages (${elapsedMs}ms, source=${data.source})`);
@@ -305,7 +326,10 @@ async function main() {
 
   step('list-databases (tryCache=true)...');
   {
-    const { data, error, elapsedMs } = await callTool('list-databases', { page_size: 5, tryCache: true });
+    const { data, error, elapsedMs } = await callTool('list-databases', {
+      page_size: 5,
+      tryCache: true,
+    });
     if (error) fail(error);
     else {
       ok(`${data.count} databases (${elapsedMs}ms, source=${data.source})`);
@@ -326,7 +350,12 @@ async function main() {
   header('7. Cleanup');
 
   step('Stopping skill...');
-  try { await stopSkill(SKILL_ID); ok(); } catch (e: any) { fail(e.message); }
+  try {
+    await stopSkill(SKILL_ID);
+    ok();
+  } catch (e: any) {
+    fail(e.message);
+  }
 
   console.log(`\n${C.green}${C.bold}  Done.${C.reset}\n`);
   process.exit(0);

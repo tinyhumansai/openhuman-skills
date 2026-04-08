@@ -516,14 +516,14 @@ Skills using OAuth (managed mode) make API calls via `oauth.fetch()`, which prox
 
 The Rust event loop matches these exact RPC method strings — use them in test harness calls:
 
-| Method | What it does |
-|--------|-------------|
-| `oauth/complete` | Inject OAuth credential + client key share |
-| `auth/complete` | Inject self-hosted credential with validation |
-| `skill/sync` | Fire-and-forget background sync |
-| `skill/ping` | Health check |
-| `oauth/revoked` | Clear OAuth credential |
-| `auth/revoked` | Clear auth credential |
+| Method           | What it does                                  |
+| ---------------- | --------------------------------------------- |
+| `oauth/complete` | Inject OAuth credential + client key share    |
+| `auth/complete`  | Inject self-hosted credential with validation |
+| `skill/sync`     | Fire-and-forget background sync               |
+| `skill/ping`     | Health check                                  |
+| `oauth/revoked`  | Clear OAuth credential                        |
+| `auth/revoked`   | Clear auth credential                         |
 
 ## Build Process
 

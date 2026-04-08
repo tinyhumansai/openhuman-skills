@@ -53,7 +53,7 @@ function initNotionSkillState(): NotionSkillState {
       workspaceName: '',
       syncIntervalMinutes: 20,
       contentSyncEnabled: true,
-      maxPagesPerContentSync: 50,
+      maxPagesPerContentSync: 500,
     },
     syncStatus: {
       syncInProgress: false,

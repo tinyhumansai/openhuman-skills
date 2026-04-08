@@ -224,9 +224,15 @@ export async function performInitialSync(onProgress?: SyncProgressCallback): Pro
     publishSkillState();
     // Publish email metadata (no body_text to avoid breaking JSON transport)
     const emails = getEmails().map(e => ({
-      id: e.id, subject: e.subject, sender_email: e.sender_email,
-      sender_name: e.sender_name, date: e.date, snippet: e.snippet,
-      is_read: e.is_read, is_starred: e.is_starred, labels: e.labels,
+      id: e.id,
+      subject: e.subject,
+      sender_email: e.sender_email,
+      sender_name: e.sender_name,
+      date: e.date,
+      snippet: e.snippet,
+      is_read: e.is_read,
+      is_starred: e.is_starred,
+      labels: e.labels,
     }));
     state.setPartial({ emails });
   }
@@ -298,9 +304,15 @@ export async function onSync(): Promise<void> {
     syncGmailMetadataToBackend();
     // Publish email metadata (no body_text to avoid breaking JSON transport)
     const emails = getEmails().map(e => ({
-      id: e.id, subject: e.subject, sender_email: e.sender_email,
-      sender_name: e.sender_name, date: e.date, snippet: e.snippet,
-      is_read: e.is_read, is_starred: e.is_starred, labels: e.labels,
+      id: e.id,
+      subject: e.subject,
+      sender_email: e.sender_email,
+      sender_name: e.sender_name,
+      date: e.date,
+      snippet: e.snippet,
+      is_read: e.is_read,
+      is_starred: e.is_starred,
+      labels: e.labels,
     }));
     state.setPartial({ emails });
   }

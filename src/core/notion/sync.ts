@@ -71,7 +71,7 @@ export async function performSync(): Promise<void> {
     // Phase 3: Sync page content (60-90%)
     if (s.config.contentSyncEnabled) {
       syncProgress('content', 60, 'Fetching page content...');
-      await syncContent(startTime, CONTENT_SYNC_TIME_BUDGET_MS);
+      await syncContent();
     }
 
     // Phase 4: Ingest into knowledge graph (90-100%)
@@ -100,7 +100,9 @@ export async function performSync(): Promise<void> {
     insertNotionMemorySnapshot();
 
     const secs = (durationMs / 1000).toFixed(1);
-    syncProgress('done', 100,
+    syncProgress(
+      'done',
+      100,
       `Sync complete in ${secs}s — ${counts.pages} pages, ${counts.databases} databases, ${counts.pagesWithContent} with content`
     );
   } catch (error) {
@@ -340,7 +342,11 @@ async function syncSearchItems(): Promise<void> {
     // Progress: 10-50% range, estimate based on batches (cap at 50 batches)
     const pct = 10 + Math.min(40, (batchNum / 50) * 40);
     const total = pageCount + pageSkipped;
-    syncProgress('pages', pct, `Discovered ${total} pages, ${dbCount} databases (batch ${batchNum})...`);
+    syncProgress(
+      'pages',
+      pct,
+      `Discovered ${total} pages, ${dbCount} databases (batch ${batchNum})...`
+    );
   }
 
   // Fetch data_sources explicitly (50-55%)
@@ -363,10 +369,12 @@ async function syncSearchItems(): Promise<void> {
   s.syncStatus.totalPages = counts.pages;
   s.syncStatus.totalDatabases = counts.databases;
 
-  syncProgress('pages', 60,
+  syncProgress(
+    'pages',
+    60,
     `Synced ${pageCount} pages, ${dbCount} databases` +
-    (pageSkipped > 0 ? ` (${pageSkipped} unchanged)` : '') +
-    (errorCount > 0 ? `, ${errorCount} errors` : '')
+      (pageSkipped > 0 ? ` (${pageSkipped} unchanged)` : '') +
+      (errorCount > 0 ? `, ${errorCount} errors` : '')
   );
 }
 
@@ -437,12 +445,6 @@ async function syncDataSources(
 /** Max rows to sync per database per sync cycle */
 // const MAX_ROWS_PER_DATABASE = 200;
 
-/**
- * Maximum ms for phases 3+ (content sync, submit) to prevent the Rust async
- * operation timeout (~120s). Mirrors the google-drive sync time budget pattern.
- * Budget is measured from the overall sync startTime.
- */
-const CONTENT_SYNC_TIME_BUDGET_MS = 18_000;
 
 // async function syncDatabaseRows(startTime: number, budgetMs: number): Promise<void> {
 //   // Get all locally synced databases
@@ -567,7 +569,7 @@ const CONTENT_SYNC_TIME_BUDGET_MS = 18_000;
 // Phase 3: Sync page content (block text extraction)
 // ---------------------------------------------------------------------------
 
-async function syncContent(startTime: number, budgetMs: number): Promise<void> {
+async function syncContent(): Promise<void> {
   const s = getNotionSkillState();
   const batchSize = s.config.maxPagesPerContentSync;
   const cutoffIso = new Date(Date.now() - THIRTY_DAYS_MS).toISOString();
@@ -575,15 +577,16 @@ async function syncContent(startTime: number, budgetMs: number): Promise<void> {
   let synced = 0;
   let failed = 0;
   const total = pages.length;
+  const contentStart = Date.now();
+
+  if (total === 0) {
+    syncProgress('content', 90, 'No pages need content sync');
+    return;
+  }
 
   syncProgress('content', 60, `Fetching content for ${total} pages...`);
 
   for (const page of pages) {
-    if (Date.now() - startTime > budgetMs) {
-      syncProgress('content', 60 + (synced / Math.max(total, 1)) * 30,
-        `Content budget reached — ${synced}/${total} pages fetched, deferring rest`);
-      break;
-    }
     try {
       const text = await fetchBlockTreeText(page.id, 2);
       updatePageContent(page.id, text);
@@ -593,14 +596,24 @@ async function syncContent(startTime: number, budgetMs: number): Promise<void> {
       failed++;
     }
 
-    // Progress: 60-90% range
-    const pct = 60 + ((synced + failed) / Math.max(total, 1)) * 30;
-    if ((synced + failed) % 5 === 0 || synced + failed === total) {
-      syncProgress('content', pct, `Content: ${synced}/${total} pages fetched${failed > 0 ? `, ${failed} failed` : ''}`);
+    // Progress: 60-90% range, update every 10 pages or on last page
+    if ((synced + failed) % 10 === 0 || synced + failed === total) {
+      const pct = 60 + ((synced + failed) / Math.max(total, 1)) * 30;
+      const elapsed = ((Date.now() - contentStart) / 1000).toFixed(0);
+      syncProgress(
+        'content',
+        pct,
+        `Content: ${synced}/${total} pages (${elapsed}s${failed > 0 ? `, ${failed} failed` : ''})`
+      );
     }
   }
 
-  syncProgress('content', 90, `Content sync: ${synced} pages updated${failed > 0 ? `, ${failed} failed` : ''}`);
+  const totalElapsed = ((Date.now() - contentStart) / 1000).toFixed(1);
+  syncProgress(
+    'content',
+    90,
+    `Content sync: ${synced} pages in ${totalElapsed}s${failed > 0 ? `, ${failed} failed` : ''}`
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -714,7 +727,11 @@ function ingestNewDocuments(): void {
     return;
   }
 
-  syncProgress('ingestion', 90, `Ingesting ${pages.length} pages, ${rows.length} rows into knowledge graph...`);
+  syncProgress(
+    'ingestion',
+    90,
+    `Ingesting ${pages.length} pages, ${rows.length} rows into knowledge graph...`
+  );
 
   const emptyPageIds: string[] = [];
   const emptyRowIds: string[] = [];

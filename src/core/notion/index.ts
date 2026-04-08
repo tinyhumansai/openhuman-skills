@@ -390,12 +390,8 @@ async function publishState(): Promise<void> {
 
   // Fetch recent page summaries from local DB (metadata only — no content_text
   // to avoid raw newlines breaking JSON serialization in the state transport)
-  let pages: Array<{
-    id: string;
-    title: string;
-    url: string | null;
-    last_edited_time: string;
-  }> = [];
+  let pages: Array<{ id: string; title: string; url: string | null; last_edited_time: string }> =
+    [];
   if (isConnected) {
     try {
       const localPages = getLocalPages({ limit: 100 });
