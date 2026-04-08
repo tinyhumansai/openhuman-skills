@@ -103,7 +103,7 @@ const proxyEndpoints: DirectProxyEndpoint[] = [
   { label: 'users', path: '/v1/users/?page_size=2' },
   { label: 'search-pages', path: '/v1/search', method: 'POST', body: { page_size: 2, filter: { property: 'object', value: 'page' } } },
   { label: 'search-dbs', path: '/v1/search', method: 'POST', body: { page_size: 2, filter: { property: 'object', value: 'data_source' } } },
-  { label: 'search', path: '/v1/search', method: 'POST', body: { query: 'test', page_size: 2 } },
+  { label: 'search', path: '/v1/search', method: 'POST', body: { query: 'test', page_size: 100 } },
 ];
 
 async function directProxyCall(
@@ -142,10 +142,10 @@ async function directProxyCall(
 type Scenario = [string, Record<string, unknown>];
 
 const scenarios: Scenario[] = [
-  ['list-users', { page_size: 2 }],
-  ['list-pages', { page_size: 2 }],
-  ['list-databases', { page_size: 2 }],
-  ['search', { query: 'test', page_size: 2 }],
+  ['list-users', { page_size: 100 }],
+  ['list-pages', { page_size: 100 }],
+  ['list-databases', { page_size: 100 }],
+  ['search', { query: 'test', page_size: 100 }],
   ['sync-status', {}],
 ];
 
@@ -179,19 +179,25 @@ async function main() {
 
   try { await stopSkill(SKILL_ID); } catch { /* not running */ }
 
+  let t0 = Date.now();
   process.stdout.write(`  Starting skill... `);
   const snap = await startSkill(SKILL_ID);
-  console.log(`${C.green}OK${C.reset} (tools=${snap.tools.length})`);
+  console.log(`${C.green}OK${C.reset} (tools=${snap.tools.length}) ${C.dim}${Date.now() - t0}ms${C.reset}`);
 
-  process.stdout.write(`  Authenticating... `);
+  t0 = Date.now();
+  process.stdout.write(`  oauthComplete... `);
   await oauthComplete(SKILL_ID, {
     credentialId: INTEGRATION_ID,
     provider: 'notion',
     grantedScopes: [],
     clientKeyShare: CLIENT_KEY,
   });
+  console.log(`${C.green}OK${C.reset} ${C.dim}${Date.now() - t0}ms${C.reset}`);
+
+  t0 = Date.now();
+  process.stdout.write(`  setSetupComplete... `);
   await setSetupComplete(SKILL_ID, true);
-  console.log(`${C.green}OK${C.reset}`);
+  console.log(`${C.green}OK${C.reset} ${C.dim}${Date.now() - t0}ms${C.reset}`);
 
   // Wait for init
   await new Promise(r => setTimeout(r, 2000));

@@ -249,7 +249,7 @@ async function syncUsers(): Promise<void> {
 
     hasMore = result.has_more;
     startCursor = (result.next_cursor as string | undefined) || undefined;
-    syncProgress('users', 5, `Fetched ${count} users...`);
+    syncProgress('users', Math.min(9, 2 + count), `Fetched ${count} users...`);
   }
 
   syncProgress('users', 10, `Synced ${count} users`);
@@ -338,6 +338,11 @@ async function syncSearchItems(): Promise<void> {
 
     hasMore = result.has_more;
     startCursor = (result.next_cursor as string | undefined) || undefined;
+
+    // Update counts in state after every batch so polling sees progress
+    const batchCounts = getEntityCounts();
+    s.syncStatus.totalPages = batchCounts.pages;
+    s.syncStatus.totalDatabases = batchCounts.databases;
 
     // Progress: 10-50% range, estimate based on batches (cap at 50 batches)
     const pct = 10 + Math.min(40, (batchNum / 50) * 40);
@@ -432,6 +437,7 @@ async function syncDataSources(
 
     hasMore = result.has_more;
     startCursor = (result.next_cursor as string | undefined) || undefined;
+    syncProgress('pages', 52, `Data sources: ${count} synced, ${skipped} unchanged...`);
   }
 
   return { count, skipped, errors };
@@ -596,16 +602,14 @@ async function syncContent(): Promise<void> {
       failed++;
     }
 
-    // Progress: 60-90% range, update every 10 pages or on last page
-    if ((synced + failed) % 10 === 0 || synced + failed === total) {
-      const pct = 60 + ((synced + failed) / Math.max(total, 1)) * 30;
-      const elapsed = ((Date.now() - contentStart) / 1000).toFixed(0);
-      syncProgress(
-        'content',
-        pct,
-        `Content: ${synced}/${total} pages (${elapsed}s${failed > 0 ? `, ${failed} failed` : ''})`
-      );
-    }
+    // Progress: 60-90% range, update after every page
+    const pct = 60 + ((synced + failed) / Math.max(total, 1)) * 30;
+    const elapsed = ((Date.now() - contentStart) / 1000).toFixed(0);
+    syncProgress(
+      'content',
+      pct,
+      `Content: ${synced}/${total} pages (${elapsed}s${failed > 0 ? `, ${failed} failed` : ''})`
+    );
   }
 
   const totalElapsed = ((Date.now() - contentStart) / 1000).toFixed(1);

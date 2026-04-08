@@ -1,18 +1,17 @@
 // Tool: notion-query-database
 import { notionApi } from '../api/index';
-import { formatApiError, formatPageSummary, supportsMultiSourceDatabases } from '../helpers';
+import { formatApiError, formatPageSummary } from '../helpers';
 
 export const queryDatabaseTool: ToolDefinition = {
   name: 'query-database',
   description:
-    'Query a database with optional filters and sorts. Returns database rows/pages. Automatically handles API version compatibility.',
+    'Query a database with optional filters and sorts. Returns database rows/pages.',
   input_schema: {
     type: 'object',
     properties: {
       database_id: {
         type: 'string',
-        description:
-          'The database ID to query. Can be either a legacy database ID or a new data source ID - the tool will handle both automatically',
+        description: 'The database ID to query',
       },
       filter: {
         type: 'string',
@@ -52,31 +51,17 @@ export const queryDatabaseTool: ToolDefinition = {
         }
       }
 
-      // Query the database using the compatibility layer
       const result = await notionApi.queryDataSource(databaseId, body);
 
       const rows = result.results.map((page: Record<string, unknown>) => {
         return { ...formatPageSummary(page), properties: page.properties };
       });
 
-      // Add API version info for debugging if multi-source is supported
-      const metadata: Record<string, unknown> = {
+      return JSON.stringify({
         count: rows.length,
         has_more: result.has_more,
         rows,
-      };
-
-      // Add additional metadata about API capabilities
-      const supportsMultiSource = await supportsMultiSourceDatabases();
-      if (supportsMultiSource) {
-        metadata._api_info = {
-          version: '2025-09-03',
-          supports_multi_source: true,
-          note: 'Using enhanced API with data source support',
-        };
-      }
-
-      return JSON.stringify(metadata);
+      });
     } catch (e) {
       const error = formatApiError(e);
       console.error(`[notion][query-database] Error querying database ${args.database_id}:`, e);
@@ -84,19 +69,9 @@ export const queryDatabaseTool: ToolDefinition = {
       return JSON.stringify({
         error,
         database_id: args.database_id,
-        troubleshooting: {
-          common_solutions: [
-            'Ensure the database is shared with your Notion integration',
-            'Check that the database_id is correct',
-            'Verify your integration has the necessary permissions',
-            'If using a new database, it may need time to sync with the API',
-          ],
-          api_transition_note: 'This tool automatically handles both legacy and new API versions',
-        },
       });
     }
   },
 };
 
-// Export for testing and debugging
 export { queryDatabaseTool as default };

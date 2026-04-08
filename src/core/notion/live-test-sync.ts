@@ -170,9 +170,9 @@ async function main() {
 
   header('2. Pre-Sync Verification');
 
-  step('Testing API connectivity (list-users page_size=1)...');
+  step('Testing API connectivity (list-users)...');
   {
-    const { data, error, elapsedMs } = await callTool('list-users', { page_size: 1 }, 30_000);
+    const { data, error, elapsedMs } = await callTool('list-users', { page_size: 100 }, 30_000);
     if (error) {
       fail(`${error} (${elapsedMs}ms)`);
       process.exit(1);

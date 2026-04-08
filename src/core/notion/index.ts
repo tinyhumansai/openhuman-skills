@@ -5,7 +5,7 @@
 import { notionApi } from './api/index';
 import { getEntityCounts, getLocalPages } from './db/helpers';
 import { initializeNotionSchema } from './db/schema';
-import { formatUserSummary, isNotionConnected, notionFetch, resetApiVersionCache } from './helpers';
+import { formatUserSummary, isNotionConnected, notionFetch } from './helpers';
 import { getNotionSkillState } from './state';
 import type { NotionSkillConfig } from './state';
 import { performSync } from './sync';
@@ -191,12 +191,12 @@ async function onAuthComplete(args: {
 
   // Test the token against Notion API
   try {
-    const response = await net.fetch('https://api.notion.com/v1/users?page_size=1', {
+    const response = await net.fetch('https://api.notion.com/v1/users/me', {
       method: 'GET',
       headers: {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
-        'Notion-Version': '2022-06-28',
+        'Notion-Version': '2026-03-11',
       },
       timeout: 15,
     });
@@ -246,7 +246,7 @@ async function onAuthComplete(args: {
 
   // Persist config and reset API version cache (new credential may have different access)
   state.set('config', s.config);
-  resetApiVersionCache();
+
 
   // Register sync cron
   const cronExpr = `0 */${s.config.syncIntervalMinutes} * * * *`;
@@ -267,7 +267,7 @@ async function onAuthRevoked(args: { mode?: string }): Promise<void> {
   state.setPartial({ profile: null });
   state.delete('config');
   cron.unregister('notion-sync');
-  resetApiVersionCache();
+
   publishState();
 }
 
@@ -446,7 +446,7 @@ async function onPing(): Promise<PingResult> {
   try {
     // Use notionFetch so transient Cloudflare 52x errors are retried automatically
     // before reporting a failure (up to MAX_RETRIES times with exponential backoff).
-    await notionFetch('/users?page_size=1');
+    await notionFetch('/users/me');
     console.log('[notion] onPing: ok');
     return { ok: true };
   } catch (err) {
