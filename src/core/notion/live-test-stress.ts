@@ -136,7 +136,7 @@ async function directProxyCall(
         'Notion-Version': '2025-09-03',
       },
       body: ep.body ? JSON.stringify(ep.body) : undefined,
-      signal: AbortSignal.timeout(TIMEOUT_MS),
+      signal: AbortSignal.timeout ? AbortSignal.timeout(TIMEOUT_MS) : undefined,
     });
     const elapsedMs = Date.now() - t0;
     const text = await resp.text();
