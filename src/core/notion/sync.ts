@@ -4,11 +4,13 @@ import { syncIntegrationMetadata } from '../../shared/integration-metadata';
 import { notionApi } from './api/index';
 import {
   getDatabaseById,
+  getDatabaseRowById,
   getEntityCounts,
   getLocalPages,
   getLocalSummaries,
   getPageById,
   markPagesSubmitted,
+  markRowsSubmitted,
   updatePageContent,
   upsertDatabase,
   upsertDatabaseRow,
@@ -419,6 +421,18 @@ function syncDataSources(): void {
 
         for (const row of rowResult.results) {
           const rowRec = row as Record<string, unknown>;
+          const rowLastEdited = rowRec.last_edited_time as string;
+
+          // Skip if row is unchanged and already ingested
+          const existingRow = getDatabaseRowById(rowRec.id as string);
+          if (
+            existingRow &&
+            existingRow.last_edited_time === rowLastEdited &&
+            existingRow.backend_submitted === 1
+          ) {
+            continue;
+          }
+
           try {
             upsertDatabaseRow(rowRec, dbId);
             rowCount++;
@@ -434,7 +448,12 @@ function syncDataSources(): void {
                   title: rowTitle + ' (' + dbTitle + ')',
                   content,
                   sourceType: 'doc',
-                  documentId: (rowRec.last_edited_time ? new Date(rowRec.last_edited_time as string).getTime() : Date.now()) + '-notion-dbrow-' + (rowRec.id as string),
+                  documentId:
+                    (rowLastEdited
+                      ? new Date(rowLastEdited).getTime()
+                      : Date.now()) +
+                    '-notion-dbrow-' +
+                    (rowRec.id as string),
                   metadata: {
                     source: 'notion',
                     type: 'database_row',
@@ -452,12 +471,16 @@ function syncDataSources(): void {
                     ? new Date(rowRec.last_edited_time as string).getTime() / 1000
                     : undefined,
                 });
+                markRowsSubmitted([rowRec.id as string]);
                 rowIngested++;
               } catch (e) {
                 console.error(
                   `[notion][sync] FAIL ingest row "${rowTitle}" (${rowRec.id}) in db "${dbTitle}": ${e}`
                 );
               }
+            } else {
+              // Mark as submitted even if too short to ingest
+              markRowsSubmitted([rowRec.id as string]);
             }
           } catch (e) {
             console.error(`[notion][sync] FAIL upsert row ${rowRec.id} in db ${dbId}: ${e}`);

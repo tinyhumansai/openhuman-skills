@@ -6,6 +6,7 @@ import { gmailFetch, isGmailConnected } from './api';
 import { loadGmailProfile } from './api/helpers';
 import {
   emailExists,
+  getEmailById,
   getEmailCount,
   getEmails,
   getUnsubmittedEmails,
@@ -225,6 +226,12 @@ function syncAndIngestMessage(msg: GmailMessage, redactSensitive: boolean): bool
     return false;
   }
 
+  // Skip if email is already in DB and already ingested
+  const existing = getEmailById(msg.id);
+  if (existing && existing.backend_submitted === 1) {
+    return false;
+  }
+
   try {
     upsertEmail(msg, redactSensitive);
   } catch (e) {
@@ -263,10 +270,14 @@ function syncAndIngestMessage(msg: GmailMessage, redactSensitive: boolean): bool
         },
         createdAt: msg.internalDate ? parseInt(msg.internalDate as string, 10) / 1000 : undefined,
       });
+      markEmailsSubmitted([msg.id]);
     } catch (e) {
       // Non-fatal — email is still in DB
       console.error('[gmail-sync] FAIL ingest ' + msg.id + ': ' + e);
     }
+  } else {
+    // Mark as submitted even if too short to ingest
+    markEmailsSubmitted([msg.id]);
   }
 
   return true;

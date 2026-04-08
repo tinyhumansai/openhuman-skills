@@ -121,6 +121,7 @@ export interface DatabaseEmail {
   labels: string;
   size_estimate: number;
   is_sensitive: number;
+  backend_submitted: number;
   history_id: string;
   internal_date: string;
   created_at: number;
