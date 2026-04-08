@@ -1058,11 +1058,10 @@ export function getLocalUsers(): LocalUser[] {
 // ---------------------------------------------------------------------------
 
 /**
- * Get pages that have not yet been submitted to the backend.
- * Only returns non-archived pages with content. Oldest first for
- * chronological submission order.
+ * Get pages that have not yet been ingested into memory.
+ * Only returns non-archived pages with content. Oldest first.
  */
-export function getUnsubmittedPages(limit = 500): LocalPage[] {
+export function getUningestedPages(limit = 500): LocalPage[] {
   const cid = credId();
   return db.all(
     `SELECT * FROM pages
@@ -1074,10 +1073,10 @@ export function getUnsubmittedPages(limit = 500): LocalPage[] {
 }
 
 /**
- * Get database rows that have not yet been submitted to the backend.
+ * Get database rows that have not yet been ingested into memory.
  * Only returns non-archived rows with text content. Oldest first.
  */
-export function getUnsubmittedRows(limit = 500): LocalDatabaseRow[] {
+export function getUningestedRows(limit = 500): LocalDatabaseRow[] {
   const cid = credId();
   return db.all(
     `SELECT * FROM database_rows
@@ -1089,25 +1088,25 @@ export function getUnsubmittedRows(limit = 500): LocalDatabaseRow[] {
 }
 
 /**
- * Mark a batch of page IDs as submitted to the backend.
+ * Mark a batch of page IDs as ingested into memory.
  */
-export function markPagesSubmitted(ids: string[]): void {
+export function markPagesIngested(ids: string[]): void {
   if (ids.length === 0) return;
   const cid = credId();
   for (let i = 0; i < ids.length; i += 99) {
     const batch = ids.slice(i, i + 99);
     const placeholders = batch.map(() => '?').join(',');
-    db.exec(
-      `UPDATE pages SET ingested = 1 WHERE credential_id = ? AND id IN (${placeholders})`,
-      [cid, ...batch]
-    );
+    db.exec(`UPDATE pages SET ingested = 1 WHERE credential_id = ? AND id IN (${placeholders})`, [
+      cid,
+      ...batch,
+    ]);
   }
 }
 
 /**
- * Mark a batch of database row IDs as submitted to the backend.
+ * Mark a batch of database row IDs as ingested into memory.
  */
-export function markRowsSubmitted(ids: string[]): void {
+export function markRowsIngested(ids: string[]): void {
   if (ids.length === 0) return;
   const cid = credId();
   for (let i = 0; i < ids.length; i += 99) {
@@ -1120,13 +1119,13 @@ export function markRowsSubmitted(ids: string[]): void {
   }
 }
 
-// Register backend submission helpers on globalThis for bundled/IIFE/test harness access
+// Register ingestion helpers on globalThis for bundled/IIFE/test harness access
 if (typeof globalThis !== 'undefined') {
   const g = globalThis as Record<string, unknown>;
-  g.getUnsubmittedPages = getUnsubmittedPages;
-  g.getUnsubmittedRows = getUnsubmittedRows;
-  g.markPagesSubmitted = markPagesSubmitted;
-  g.markRowsSubmitted = markRowsSubmitted;
+  g.getUningestedPages = getUningestedPages;
+  g.getUningestedRows = getUningestedRows;
+  g.markPagesIngested = markPagesIngested;
+  g.markRowsIngested = markRowsIngested;
 }
 
 // ---------------------------------------------------------------------------

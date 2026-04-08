@@ -151,10 +151,7 @@ export function initializeGmailSchema(): void {
   );
   db.exec('CREATE INDEX IF NOT EXISTS idx_emails_labels ON emails (credential_id, labels)', []);
   db.exec('CREATE INDEX IF NOT EXISTS idx_emails_is_read ON emails (credential_id, is_read)', []);
-  db.exec(
-    'CREATE INDEX IF NOT EXISTS idx_emails_ingested ON emails (credential_id, ingested)',
-    []
-  );
+  db.exec('CREATE INDEX IF NOT EXISTS idx_emails_ingested ON emails (credential_id, ingested)', []);
   db.exec(
     'CREATE INDEX IF NOT EXISTS idx_emails_is_sensitive ON emails (credential_id, is_sensitive)',
     []

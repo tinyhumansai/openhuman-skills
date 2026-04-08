@@ -154,10 +154,12 @@ function batchFetchMessages(msgIds: string[]): GmailMessage[] {
 
   // If batch returned fewer messages than requested, fetch missing ones individually
   if (messages.length < msgIds.length) {
-    const fetchedIds = new Set(messages.map((m) => m.id));
-    const missingIds = msgIds.filter((id) => !fetchedIds.has(id));
+    const fetchedIds = new Set(messages.map(m => m.id));
+    const missingIds = msgIds.filter(id => !fetchedIds.has(id));
     if (missingIds.length > 0) {
-      console.log('[gmail-sync] Batch missed ' + missingIds.length + ' messages, fetching individually');
+      console.log(
+        '[gmail-sync] Batch missed ' + missingIds.length + ' messages, fetching individually'
+      );
       const fallback = fetchMessagesIndividually(missingIds);
       for (const msg of fallback) messages.push(msg);
     }
@@ -262,12 +264,7 @@ function syncAndIngestMessage(msg: GmailMessage, redactSensitive: boolean): bool
         content,
         sourceType: 'email',
         documentId: (msg.internalDate || Date.now()) + '-gmail-email-' + msg.id,
-        metadata: {
-          source: 'gmail',
-          type: 'email',
-          emailId: msg.id,
-          threadId: msg.threadId,
-        },
+        metadata: { source: 'gmail', type: 'email', emailId: msg.id, threadId: msg.threadId },
         createdAt: msg.internalDate ? parseInt(msg.internalDate as string, 10) / 1000 : undefined,
       });
       markEmailsIngested([msg.id]);
@@ -322,7 +319,15 @@ function runSyncPages(
 
     totalFetched += result.messages.length;
     log?.(
-      'Page ' + page + ': ' + newIds.length + ' new, ' + skipped + ' skipped (total: ' + totalFetched + ')',
+      'Page ' +
+        page +
+        ': ' +
+        newIds.length +
+        ' new, ' +
+        skipped +
+        ' skipped (total: ' +
+        totalFetched +
+        ')',
       Math.min(10 + page * 8, 70)
     );
 
@@ -394,7 +399,11 @@ export function performInitialSync(onProgress?: SyncProgressCallback): void {
     const afterDate = gmailDateStr(SYNC_WINDOW_DAYS, true);
     log(`Starting initial sync (emails after ${afterDate})...`, 0);
 
-    const { newEmails, skipped } = runSyncPages(`after:${afterDate} -in:spam -in:trash`, MAX_PAGES, log);
+    const { newEmails, skipped } = runSyncPages(
+      `after:${afterDate} -in:spam -in:trash`,
+      MAX_PAGES,
+      log
+    );
 
     const now = Date.now();
     state.set('initialSyncCompleted', true);
@@ -532,13 +541,13 @@ const INGEST_QUERY_LIMIT = 500;
 const MIN_CONTENT_LENGTH = 50;
 
 /**
- * Ingest un-submitted emails into the knowledge graph.
+ * Ingest un-ingested emails into the knowledge graph.
  * Each email is sent via memory.insert() which routes through the Rust
  * ingestion pipeline (upsert → GLiNER entity/relation extraction → graph).
- * Sensitive emails are marked as submitted without being ingested.
+ * Sensitive emails are marked as ingested so they're skipped.
  */
 function ingestNewEmails(): void {
-  // Mark sensitive emails as submitted so they never enter the ingestion queue
+  // Mark sensitive emails so they never enter the ingestion queue
   markSensitiveAsIngested();
 
   const emails = getUningestedEmails(INGEST_QUERY_LIMIT);
@@ -546,13 +555,13 @@ function ingestNewEmails(): void {
 
   emitSyncProgress(`Ingesting ${emails.length} emails into knowledge graph...`, 92);
 
-  const submittedIds: string[] = [];
-  let ingested = 0;
+  const ingestedIds: string[] = [];
+  let ingestedCount = 0;
 
   for (const email of emails) {
     const content = (email.body_text || email.snippet || '').trim();
     if (content.length < MIN_CONTENT_LENGTH) {
-      submittedIds.push(email.id);
+      ingestedIds.push(email.id);
       continue;
     }
 
@@ -579,17 +588,17 @@ function ingestNewEmails(): void {
         createdAt: email.date ? email.date / 1000 : undefined,
         updatedAt: email.updated_at ? email.updated_at / 1000 : undefined,
       });
-      submittedIds.push(email.id);
-      ingested++;
+      ingestedIds.push(email.id);
+      ingestedCount++;
     } catch (e) {
       console.error(`[gmail] Failed to ingest email ${email.id}: ${e}`);
     }
   }
 
-  if (submittedIds.length > 0) markEmailsIngested(submittedIds);
+  if (ingestedIds.length > 0) markEmailsIngested(ingestedIds);
 
-  if (ingested > 0) {
-    console.log(`[gmail] Ingested ${ingested} email(s) into knowledge graph`);
+  if (ingestedCount > 0) {
+    console.log(`[gmail] Ingested ${ingestedCount} email(s) into knowledge graph`);
   }
 }
 

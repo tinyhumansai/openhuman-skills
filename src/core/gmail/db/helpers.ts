@@ -405,10 +405,10 @@ export function markEmailsIngested(ids: string[]): void {
   for (let i = 0; i < ids.length; i += 99) {
     const batch = ids.slice(i, i + 99);
     const placeholders = batch.map(() => '?').join(',');
-    db.exec(
-      `UPDATE emails SET ingested = 1 WHERE credential_id = ? AND id IN (${placeholders})`,
-      [cid, ...batch]
-    );
+    db.exec(`UPDATE emails SET ingested = 1 WHERE credential_id = ? AND id IN (${placeholders})`, [
+      cid,
+      ...batch,
+    ]);
   }
 }
 

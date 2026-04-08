@@ -27,7 +27,7 @@ export function initializeNotionSchema(): void {
       content_text TEXT,
       content_synced_at INTEGER,
       page_entities TEXT,
-      backend_submitted INTEGER NOT NULL DEFAULT 0,
+      ingested INTEGER NOT NULL DEFAULT 0,
       synced_at INTEGER NOT NULL,
       PRIMARY KEY (credential_id, id)
     )`,
@@ -47,7 +47,7 @@ export function initializeNotionSchema(): void {
       created_time TEXT NOT NULL,
       last_edited_time TEXT NOT NULL,
       archived INTEGER NOT NULL DEFAULT 0,
-      backend_submitted INTEGER NOT NULL DEFAULT 0,
+      ingested INTEGER NOT NULL DEFAULT 0,
       synced_at INTEGER NOT NULL,
       PRIMARY KEY (credential_id, id)
     )`,
@@ -85,7 +85,7 @@ export function initializeNotionSchema(): void {
       created_time TEXT NOT NULL,
       last_edited_time TEXT NOT NULL,
       archived INTEGER NOT NULL DEFAULT 0,
-      backend_submitted INTEGER NOT NULL DEFAULT 0,
+      ingested INTEGER NOT NULL DEFAULT 0,
       synced_at INTEGER NOT NULL,
       PRIMARY KEY (credential_id, id),
       FOREIGN KEY (credential_id, database_id) REFERENCES databases(credential_id, id)
@@ -127,10 +127,10 @@ export function initializeNotionSchema(): void {
   migrateAddColumn('database_rows', 'credential_id', "TEXT NOT NULL DEFAULT ''");
   migrateAddColumn('summaries', 'credential_id', "TEXT NOT NULL DEFAULT ''");
 
-  // Migrate: add backend_submitted to content tables
-  migrateAddColumn('pages', 'backend_submitted', 'INTEGER NOT NULL DEFAULT 0');
-  migrateAddColumn('databases', 'backend_submitted', 'INTEGER NOT NULL DEFAULT 0');
-  migrateAddColumn('database_rows', 'backend_submitted', 'INTEGER NOT NULL DEFAULT 0');
+  // Migrate: add ingested to content tables
+  migrateAddColumn('pages', 'ingested', 'INTEGER NOT NULL DEFAULT 0');
+  migrateAddColumn('databases', 'ingested', 'INTEGER NOT NULL DEFAULT 0');
+  migrateAddColumn('database_rows', 'ingested', 'INTEGER NOT NULL DEFAULT 0');
 
   // Migrate: add page_entities column if it doesn't exist (for existing installs)
   migrateAddColumn('pages', 'page_entities', 'TEXT');
@@ -157,7 +157,7 @@ export function initializeNotionSchema(): void {
       content_text TEXT,
       content_synced_at INTEGER,
       page_entities TEXT,
-      backend_submitted INTEGER NOT NULL DEFAULT 0,
+      ingested INTEGER NOT NULL DEFAULT 0,
       synced_at INTEGER NOT NULL,
       PRIMARY KEY (credential_id, id)
     )`
@@ -175,7 +175,7 @@ export function initializeNotionSchema(): void {
       created_time TEXT NOT NULL,
       last_edited_time TEXT NOT NULL,
       archived INTEGER NOT NULL DEFAULT 0,
-      backend_submitted INTEGER NOT NULL DEFAULT 0,
+      ingested INTEGER NOT NULL DEFAULT 0,
       synced_at INTEGER NOT NULL,
       PRIMARY KEY (credential_id, id)
     )`
@@ -209,7 +209,7 @@ export function initializeNotionSchema(): void {
       created_time TEXT NOT NULL,
       last_edited_time TEXT NOT NULL,
       archived INTEGER NOT NULL DEFAULT 0,
-      backend_submitted INTEGER NOT NULL DEFAULT 0,
+      ingested INTEGER NOT NULL DEFAULT 0,
       synced_at INTEGER NOT NULL,
       PRIMARY KEY (credential_id, id),
       FOREIGN KEY (credential_id, database_id) REFERENCES databases(credential_id, id)
@@ -227,17 +227,14 @@ export function initializeNotionSchema(): void {
   db.exec('CREATE INDEX IF NOT EXISTS idx_db_rows_cred ON database_rows(credential_id)', []);
   db.exec('CREATE INDEX IF NOT EXISTS idx_summaries_cred ON summaries(credential_id)', []);
 
-  // backend_submitted indexes for submission queries
+  // ingested indexes for submission queries
+  db.exec('CREATE INDEX IF NOT EXISTS idx_pages_ingested ON pages(credential_id, ingested)', []);
   db.exec(
-    'CREATE INDEX IF NOT EXISTS idx_pages_backend_submitted ON pages(credential_id, backend_submitted)',
+    'CREATE INDEX IF NOT EXISTS idx_databases_ingested ON databases(credential_id, ingested)',
     []
   );
   db.exec(
-    'CREATE INDEX IF NOT EXISTS idx_databases_backend_submitted ON databases(credential_id, backend_submitted)',
-    []
-  );
-  db.exec(
-    'CREATE INDEX IF NOT EXISTS idx_db_rows_backend_submitted ON database_rows(credential_id, backend_submitted)',
+    'CREATE INDEX IF NOT EXISTS idx_db_rows_ingested ON database_rows(credential_id, ingested)',
     []
   );
 

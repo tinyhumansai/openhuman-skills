@@ -86,7 +86,7 @@ async function getState(): Promise<Record<string, unknown> | null> {
 
 function timed<T>(fn: () => Promise<T>): Promise<[T, number]> {
   const t0 = Date.now();
-  return fn().then((r) => [r, Date.now() - t0]);
+  return fn().then(r => [r, Date.now() - t0]);
 }
 
 // ---------------------------------------------------------------------------
@@ -146,14 +146,18 @@ async function main() {
   const [, setupMs] = await timed(() => setSetupComplete(SKILL_ID, true));
   ok(`${setupMs}ms`);
 
-  await new Promise((r) => setTimeout(r, 1500));
+  await new Promise(r => setTimeout(r, 1500));
 
   // ── 2. Pre-sync check ────────────────────────────────────────────────
 
   header('2. Pre-Sync');
 
   step('get-profile...');
-  const { data: profile, error: profileErr, ms: profileMs } = await callTool('get-profile', {}, 30_000);
+  const {
+    data: profile,
+    error: profileErr,
+    ms: profileMs,
+  } = await callTool('get-profile', {}, 30_000);
   if (profileErr) {
     fail(`${profileErr} (${profileMs}ms)`);
   } else {
@@ -184,7 +188,7 @@ async function main() {
   let stale = 0;
 
   while (Date.now() - t0 < 5 * 60 * 1000) {
-    await new Promise((r) => setTimeout(r, 2000));
+    await new Promise(r => setTimeout(r, 2000));
 
     const s = await getState();
     if (!s) {
@@ -287,7 +291,7 @@ async function main() {
   process.exit(0);
 }
 
-main().catch((e) => {
+main().catch(e => {
   console.error(`\n${C.red}Fatal: ${e.message}${C.reset}`);
   process.exit(1);
 });

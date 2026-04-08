@@ -9,8 +9,8 @@ import {
   getLocalPages,
   getLocalSummaries,
   getPageById,
-  markPagesSubmitted,
-  markRowsSubmitted,
+  markPagesIngested,
+  markRowsIngested,
   updatePageContent,
   upsertDatabase,
   upsertDatabaseRow,
@@ -260,17 +260,17 @@ function syncPipeline(): void {
                     ? new Date(rec.last_edited_time as string).getTime() / 1000
                     : undefined,
                 });
-                markPagesSubmitted([rec.id as string]);
+                markPagesIngested([rec.id as string]);
                 ingested++;
                 console.log(
                   `[notion][sync] ✓ page #${pageCount} "${pageTitle}" — ${trimmed.length}ch, ingested (${fetchMs}ms)`
                 );
               } catch (e) {
                 console.error(`[notion][sync] FAIL ingest page "${pageTitle}" (${rec.id}): ${e}`);
-                markPagesSubmitted([rec.id as string]);
+                markPagesIngested([rec.id as string]);
               }
             } else {
-              markPagesSubmitted([rec.id as string]);
+              markPagesIngested([rec.id as string]);
               console.log(
                 `[notion][sync] ✓ page #${pageCount} "${pageTitle}" — ${trimmed.length}ch (too short, skipped ingest) (${fetchMs}ms)`
               );
@@ -428,7 +428,7 @@ function syncDataSources(): void {
           if (
             existingRow &&
             existingRow.last_edited_time === rowLastEdited &&
-            existingRow.backend_submitted === 1
+            existingRow.ingested === 1
           ) {
             continue;
           }
@@ -449,9 +449,7 @@ function syncDataSources(): void {
                   content,
                   sourceType: 'doc',
                   documentId:
-                    (rowLastEdited
-                      ? new Date(rowLastEdited).getTime()
-                      : Date.now()) +
+                    (rowLastEdited ? new Date(rowLastEdited).getTime() : Date.now()) +
                     '-notion-dbrow-' +
                     (rowRec.id as string),
                   metadata: {
@@ -471,7 +469,7 @@ function syncDataSources(): void {
                     ? new Date(rowRec.last_edited_time as string).getTime() / 1000
                     : undefined,
                 });
-                markRowsSubmitted([rowRec.id as string]);
+                markRowsIngested([rowRec.id as string]);
                 rowIngested++;
               } catch (e) {
                 console.error(
@@ -480,7 +478,7 @@ function syncDataSources(): void {
               }
             } else {
               // Mark as submitted even if too short to ingest
-              markRowsSubmitted([rowRec.id as string]);
+              markRowsIngested([rowRec.id as string]);
             }
           } catch (e) {
             console.error(`[notion][sync] FAIL upsert row ${rowRec.id} in db ${dbId}: ${e}`);
