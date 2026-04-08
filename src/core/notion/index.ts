@@ -388,13 +388,13 @@ async function publishState(): Promise<void> {
   const s = getNotionSkillState();
   const isConnected = isNotionConnected();
 
-  // Fetch recent pages from local DB (populated after sync)
+  // Fetch recent page summaries from local DB (metadata only — no content_text
+  // to avoid raw newlines breaking JSON serialization in the state transport)
   let pages: Array<{
     id: string;
     title: string;
     url: string | null;
     last_edited_time: string;
-    content_text: string | null;
   }> = [];
   if (isConnected) {
     try {
@@ -404,7 +404,6 @@ async function publishState(): Promise<void> {
         title: p.title,
         url: p.url,
         last_edited_time: p.last_edited_time,
-        content_text: p.content_text,
       }));
     } catch (e) {
       console.error('[notion] publishState: failed to load local pages:', e);
