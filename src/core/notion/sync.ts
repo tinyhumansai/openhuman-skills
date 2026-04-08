@@ -11,6 +11,7 @@ import {
   markPagesSubmitted,
   updatePageContent,
   upsertDatabase,
+  upsertDatabaseRow,
   upsertPage,
   upsertUser,
 } from './db/helpers';
@@ -340,10 +341,14 @@ function syncDataSources(): void {
 
   let startCursor: string | undefined;
   let hasMore = true;
-  let count = 0;
+  let dbCount = 0;
   let skipped = 0;
+  let rowCount = 0;
+  let rowIngested = 0;
   let reachedOldItems = false;
+  const syncedDbIds: string[] = [];
 
+  // Step 1: Discover and upsert all data_sources
   while (hasMore && !reachedOldItems) {
     const searchBody: Record<string, unknown> = {
       page_size: 100,
@@ -376,7 +381,8 @@ function syncDataSources(): void {
       } else {
         try {
           upsertDatabase(rec);
-          count++;
+          dbCount++;
+          syncedDbIds.push(rec.id as string);
         } catch (e) {
           console.error(`[notion] Failed to upsert data_source ${rec.id}: ${e}`);
         }
@@ -385,14 +391,170 @@ function syncDataSources(): void {
 
     hasMore = result.has_more;
     startCursor = (result.next_cursor as string | undefined) || undefined;
-    syncProgress('databases', 92, `Data sources: ${count} synced, ${skipped} unchanged...`);
+    syncProgress('databases', 91, `Data sources: ${dbCount} synced, ${skipped} unchanged...`);
+  }
+
+  syncProgress(
+    'databases',
+    92,
+    `Data sources: ${dbCount} synced${skipped > 0 ? `, ${skipped} unchanged` : ''}. Fetching rows...`
+  );
+
+  // Step 2: Query rows for each synced database and ingest
+  for (let i = 0; i < syncedDbIds.length; i++) {
+    const dbId = syncedDbIds[i];
+    const dbInfo = getDatabaseById(dbId);
+    const dbTitle = dbInfo ? dbInfo.title : dbId;
+    let dbRowCount = 0;
+
+    try {
+      let rowCursor: string | undefined;
+      let rowHasMore = true;
+
+      while (rowHasMore) {
+        const queryBody: Record<string, unknown> = { page_size: 100 };
+        if (rowCursor) queryBody.start_cursor = rowCursor;
+
+        const rowResult = notionApi.queryDataSource(dbId, queryBody);
+
+        for (const row of rowResult.results) {
+          const rowRec = row as Record<string, unknown>;
+          try {
+            upsertDatabaseRow(rowRec, dbId);
+            rowCount++;
+            dbRowCount++;
+
+            // Build text content from properties for ingestion
+            const content = buildRowContent(rowRec);
+            const rowTitle = extractRowTitle(rowRec);
+
+            if (content.length >= MIN_CONTENT_LENGTH) {
+              try {
+                memory.insert({
+                  title: rowTitle + ' (' + dbTitle + ')',
+                  content,
+                  sourceType: 'doc',
+                  documentId: 'notion-dbrow-' + (rowRec.id as string),
+                  metadata: {
+                    source: 'notion',
+                    type: 'database_row',
+                    databaseId: dbId,
+                    databaseTitle: dbTitle,
+                    rowId: rowRec.id,
+                    url: rowRec.url,
+                    createdTime: rowRec.created_time,
+                    lastEditedTime: rowRec.last_edited_time,
+                  },
+                  createdAt: rowRec.created_time
+                    ? new Date(rowRec.created_time as string).getTime() / 1000
+                    : undefined,
+                  updatedAt: rowRec.last_edited_time
+                    ? new Date(rowRec.last_edited_time as string).getTime() / 1000
+                    : undefined,
+                });
+                rowIngested++;
+              } catch (e) {
+                console.error(
+                  `[notion][sync] FAIL ingest row "${rowTitle}" (${rowRec.id}) in db "${dbTitle}": ${e}`
+                );
+              }
+            }
+          } catch (e) {
+            console.error(`[notion][sync] FAIL upsert row ${rowRec.id} in db ${dbId}: ${e}`);
+          }
+        }
+
+        rowHasMore = rowResult.has_more;
+        rowCursor = (rowResult.next_cursor as string | undefined) || undefined;
+      }
+
+      console.log(
+        `[notion][sync] \u2713 db "${dbTitle}" \u2014 ${dbRowCount} rows fetched, ${rowIngested} ingested`
+      );
+    } catch (e) {
+      console.error(`[notion][sync] FAIL query db "${dbTitle}" (${dbId}): ${e}`);
+    }
+
+    const pct = 92 + Math.min(3, ((i + 1) / syncedDbIds.length) * 3);
+    syncProgress('databases', pct, `DB ${i + 1}/${syncedDbIds.length}: ${rowCount} rows total`);
   }
 
   syncProgress(
     'databases',
     95,
-    `Data sources: ${count} synced${skipped > 0 ? `, ${skipped} unchanged` : ''}`
+    `Data sources done: ${dbCount} dbs, ${rowCount} rows (${rowIngested} ingested)${skipped > 0 ? `, ${skipped} unchanged` : ''}`
   );
+}
+
+// ---------------------------------------------------------------------------
+// Row content helpers
+// ---------------------------------------------------------------------------
+
+/** Extract the title from a database row's properties. */
+function extractRowTitle(rowRec: Record<string, unknown>): string {
+  const props = rowRec.properties as Record<string, unknown> | undefined;
+  if (props) {
+    for (const key of Object.keys(props)) {
+      const prop = props[key] as Record<string, unknown>;
+      if (prop.type === 'title' && Array.isArray(prop.title)) {
+        const texts = prop.title as Array<Record<string, unknown>>;
+        const t = texts.map((rt) => (rt.plain_text as string) || '').join('');
+        if (t) return t;
+      }
+    }
+  }
+  return (rowRec.id as string) || '';
+}
+
+/** Build a text representation of a database row's properties for memory ingestion. */
+function buildRowContent(rowRec: Record<string, unknown>): string {
+  const props = rowRec.properties as Record<string, unknown> | undefined;
+  if (!props) return '';
+
+  const parts: string[] = [];
+  for (const [key, propVal] of Object.entries(props)) {
+    const prop = propVal as Record<string, unknown>;
+    const propType = prop.type as string;
+
+    if (propType === 'title' || propType === 'rich_text') {
+      const arr = prop[propType];
+      if (Array.isArray(arr)) {
+        const t = arr.map((rt: Record<string, unknown>) => (rt.plain_text as string) || '').join('');
+        if (t) parts.push(key + ': ' + t);
+      }
+    } else if (propType === 'number' && prop.number != null) {
+      parts.push(key + ': ' + prop.number);
+    } else if (propType === 'select') {
+      const sel = prop.select as Record<string, unknown> | null;
+      if (sel && sel.name) parts.push(key + ': ' + (sel.name as string));
+    } else if (propType === 'multi_select' && Array.isArray(prop.multi_select)) {
+      const names = (prop.multi_select as Array<Record<string, unknown>>)
+        .map((ms) => ms.name as string)
+        .filter(Boolean);
+      if (names.length) parts.push(key + ': ' + names.join(', '));
+    } else if (propType === 'date') {
+      const dt = prop.date as Record<string, unknown> | null;
+      if (dt && dt.start) parts.push(key + ': ' + (dt.start as string));
+    } else if (propType === 'checkbox') {
+      parts.push(key + ': ' + (prop.checkbox ? 'yes' : 'no'));
+    } else if (propType === 'url' && prop.url) {
+      parts.push(key + ': ' + (prop.url as string));
+    } else if (propType === 'email' && prop.email) {
+      parts.push(key + ': ' + (prop.email as string));
+    } else if (propType === 'phone_number' && prop.phone_number) {
+      parts.push(key + ': ' + (prop.phone_number as string));
+    } else if (propType === 'status') {
+      const st = prop.status as Record<string, unknown> | null;
+      if (st && st.name) parts.push(key + ': ' + (st.name as string));
+    } else if (propType === 'people' && Array.isArray(prop.people)) {
+      const names = (prop.people as Array<Record<string, unknown>>)
+        .map((p) => (p.name as string) || '')
+        .filter(Boolean);
+      if (names.length) parts.push(key + ': ' + names.join(', '));
+    }
+  }
+
+  return parts.join('\n');
 }
 
 // ---------------------------------------------------------------------------
