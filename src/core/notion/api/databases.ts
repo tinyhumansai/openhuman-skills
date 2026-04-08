@@ -127,9 +127,9 @@ export async function updateDatabase(
 export async function listAllDatabases(pageSize: number = 20): Promise<SearchResponse> {
   const apiVersion = await detectApiVersion();
 
-  // The search endpoint always uses 'database' as the filter value,
-  // regardless of API version. 'data_source' is only used for query endpoints.
-  const filter = { property: 'object', value: 'database' };
+  // API 2025-09-03 uses 'data_source' as the search filter value; legacy uses 'database'.
+  const filterValue = apiVersion === '2022-06-28' ? 'database' : 'data_source';
+  const filter = { property: 'object', value: filterValue };
 
   try {
     return await apiFetch<SearchResponse>('/search', {
@@ -138,7 +138,7 @@ export async function listAllDatabases(pageSize: number = 20): Promise<SearchRes
       apiVersion,
     });
   } catch (error) {
-    // If new API search fails, try legacy database search
+    // If new API search fails, try legacy fallback
     if (apiVersion !== '2022-06-28') {
       console.log(`[notion][databases] New API search failed, trying legacy database search`);
       return await apiFetch<SearchResponse>('/search', {

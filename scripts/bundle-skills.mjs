@@ -138,7 +138,7 @@ for (const skillName of skills) {
       format: 'iife',
       globalName: '__skill_bundle',
       platform: 'neutral',
-      target: 'es2020',
+      target: 'es2019', // QuickJS doesn't support ?. and ?? (ES2020) — use es2019
       minify: false,
       sourcemap: false,
       treeShaking: true,

@@ -45,8 +45,8 @@ export const searchTool: ToolDefinition = {
       query: { type: 'string', description: 'Search query (optional, returns recent if empty)' },
       filter: {
         type: 'string',
-        enum: ['page', 'database'],
-        description: 'Filter results by type: page or database',
+        enum: ['page', 'database', 'data_source'],
+        description: 'Filter results by type: page or database (data_source)',
       },
       sort_direction: {
         type: 'string',
@@ -69,7 +69,9 @@ export const searchTool: ToolDefinition = {
       const body: SearchRequest = { page_size: pageSize };
       if (query) body.query = query;
       if (filter) {
-        body.filter = { property: 'object', value: filter === 'database' ? 'database' : 'page' };
+        // Map 'database' to 'data_source' for the new Notion API (2025-09-03)
+        const filterValue = filter === 'database' || filter === 'data_source' ? 'data_source' : 'page';
+        body.filter = { property: 'object', value: filterValue };
       }
       body.sort = {
         direction: sortDirection === 'ascending' ? 'ascending' : 'descending',

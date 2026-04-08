@@ -11,8 +11,8 @@ import { getDatabaseTool } from './get-database';
 import { getPageTool } from './get-page';
 import { getPageContentTool } from './get-page-content';
 import { getUserTool } from './get-user';
-import { listAllDatabasesTool } from './list-all-databases';
-import { listAllPagesTool } from './list-all-pages';
+import { listDatabasesTool } from './list-all-databases';
+import { listPagesTool } from './list-all-pages';
 import { listCommentsTool } from './list-comments';
 import { listUsersTool } from './list-users';
 import { queryDatabaseTool } from './query-database';
@@ -38,8 +38,8 @@ export const tools: ToolDefinition[] = [
   getPageTool,
   getPageContentTool,
   getUserTool,
-  listAllDatabasesTool,
-  listAllPagesTool,
+  listDatabasesTool,
+  listPagesTool,
   listCommentsTool,
   listUsersTool,
   queryDatabaseTool,

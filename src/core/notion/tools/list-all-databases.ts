@@ -1,13 +1,13 @@
-// Tool: notion-list-all-databases
+// Tool: notion-list-databases
 import { notionApi } from '../api/index';
 import { formatApiError, formatDatabaseSummary } from '../helpers';
 import { getLocalDatabases } from '../db/helpers';
 import { isCacheFresh } from './cache';
 
-export const listAllDatabasesTool: ToolDefinition = {
-  name: 'list-all-databases',
+export const listDatabasesTool: ToolDefinition = {
+  name: 'list-databases',
   description:
-    'List all databases in the workspace. Set tryCache=true to use locally synced databases when available (faster).',
+    'List databases in the workspace. Returns one page of results. Set tryCache=true to use locally synced databases when available (faster).',
   input_schema: {
     type: 'object',
     properties: {
@@ -23,7 +23,6 @@ export const listAllDatabasesTool: ToolDefinition = {
       const pageSize = Math.min((args.page_size as number) || 20, 100);
       const tryCache = args.tryCache === true;
 
-      // Try local cache if requested
       if (tryCache && isCacheFresh()) {
         const localDbs = getLocalDatabases({ limit: pageSize });
         if (localDbs.length > 0) {
@@ -44,7 +43,6 @@ export const listAllDatabasesTool: ToolDefinition = {
         }
       }
 
-      // Fetch from API
       const result = await notionApi.listAllDatabases(pageSize);
       const databases = result.results.map((item: Record<string, unknown>) =>
         formatDatabaseSummary(item)

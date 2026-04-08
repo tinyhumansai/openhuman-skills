@@ -130,26 +130,28 @@ const SKILL_ID = 'notion';
 async function callToolSafe(
   toolName: string,
   args: Record<string, unknown> = {}
-): Promise<{ data?: any; error?: string }> {
+): Promise<{ data?: any; error?: string; elapsedMs?: number }> {
+  const t0 = Date.now();
   try {
     const result = await callToolRaw(SKILL_ID, toolName, args, 15_000);
+    const elapsedMs = Date.now() - t0;
     if (result.is_error) {
-      return { error: result.content?.[0]?.text || 'unknown error' };
+      return { error: result.content?.[0]?.text || 'unknown error', elapsedMs };
     }
     const text = result.content?.[0]?.text;
-    if (!text) return { data: null };
+    if (!text) return { data: null, elapsedMs };
     try {
       const parsed = JSON.parse(text);
       // Surface tool-level errors (tools catch exceptions and return {error: "..."})
       if (parsed.error && typeof parsed.error === 'string') {
-        return { error: parsed.error };
+        return { error: parsed.error, elapsedMs };
       }
-      return { data: parsed };
+      return { data: parsed, elapsedMs };
     } catch {
-      return { data: text };
+      return { data: text, elapsedMs };
     }
   } catch (e: any) {
-    return { error: e.message };
+    return { error: e.message, elapsedMs: Date.now() - t0 };
   }
 }
 
@@ -454,13 +456,13 @@ async function main() {
 
   header('7. Exercise Tools');
 
-  step('list-users (auto-paginated)...');
+  step('list-users...');
   {
-    const { data, error } = await callToolSafe('list-users', {});
+    const { data, error, elapsedMs } = await callToolSafe('list-users', {});
     if (error) fail(error);
     else {
       const users = data?.users || data?.results || [];
-      ok(`${users.length} users`);
+      ok(`${users.length} users (${elapsedMs}ms, source=${data?.source})`);
       for (const u of users.slice(0, 5)) info('user', u.name || u.id);
       if (users.length > 5) info('', `...and ${users.length - 5} more`);
     }
@@ -468,31 +470,62 @@ async function main() {
 
   step('search (query="test")...');
   {
-    const { data, error } = await callToolSafe('search', { query: 'test' });
+    const { data, error, elapsedMs } = await callToolSafe('search', { query: 'test' });
     if (error) fail(error);
-    else ok(`${(data?.results || data?.pages || []).length} results`);
+    else ok(`${(data?.results || data?.pages || []).length} results (${elapsedMs}ms)`);
   }
 
-  step('list-all-pages (from API)...');
+  step('list-pages...');
   {
-    const { data, error } = await callToolSafe('list-all-pages', { page_size: 20 });
+    const { data, error, elapsedMs } = await callToolSafe('list-pages', { page_size: 10 });
     if (error) fail(error);
     else {
       const pages = data?.pages || data?.results || [];
-      ok(`${pages.length} pages`);
+      ok(`${pages.length} pages (${elapsedMs}ms, source=${data?.source})`);
       for (const p of pages.slice(0, 5)) info('page', `${p.title || p.id} — ${p.url || ''}`);
       if (pages.length > 5) info('', `...and ${pages.length - 5} more`);
     }
   }
 
-  step('list-all-databases (from API)...');
+  step('list-databases...');
   {
-    const { data, error } = await callToolSafe('list-all-databases', {});
+    const { data, error, elapsedMs } = await callToolSafe('list-databases', {});
     if (error) fail(error);
     else {
       const dbs = data?.databases || data?.results || [];
-      ok(`${dbs.length} databases`);
+      ok(`${dbs.length} databases (${elapsedMs}ms, source=${data?.source})`);
       for (const d of dbs.slice(0, 5)) info('db', `${d.title || d.id}`);
+    }
+  }
+
+  // Test tryCache after sync
+  step('list-pages (tryCache=true)...');
+  {
+    const { data, error, elapsedMs } = await callToolSafe('list-pages', { page_size: 10, tryCache: true });
+    if (error) fail(error);
+    else {
+      const pages = data?.pages || data?.results || [];
+      ok(`${pages.length} pages (${elapsedMs}ms, source=${data?.source})`);
+    }
+  }
+
+  step('list-databases (tryCache=true)...');
+  {
+    const { data, error, elapsedMs } = await callToolSafe('list-databases', { tryCache: true });
+    if (error) fail(error);
+    else {
+      const dbs = data?.databases || data?.results || [];
+      ok(`${dbs.length} databases (${elapsedMs}ms, source=${data?.source})`);
+    }
+  }
+
+  step('list-users (tryCache=true)...');
+  {
+    const { data, error, elapsedMs } = await callToolSafe('list-users', { tryCache: true });
+    if (error) fail(error);
+    else {
+      const users = data?.users || [];
+      ok(`${users.length} users (${elapsedMs}ms, source=${data?.source})`);
     }
   }
 

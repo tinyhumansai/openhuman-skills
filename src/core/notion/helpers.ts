@@ -22,9 +22,11 @@ const CLOUDFLARE_RETRYABLE = new Set([520, 521, 522, 523, 524, 525, 526, 527]);
 const LEGACY_API_VERSION = '2022-06-28';
 const CURRENT_API_VERSION = '2025-09-03';
 
-/** Cached API version preference to avoid repeated detection.
- *  Default to legacy to skip the slow detection probe via oauth.fetch. */
-let cachedApiVersion: string | null = LEGACY_API_VERSION;
+/** Cached API version preference.
+ *  Default to current (2025-09-03) — the backend proxy hardcodes this version
+ *  in its forwarded headers. The working backend live-test confirms all endpoints
+ *  work correctly with it (data_source filter, etc.). */
+let cachedApiVersion: string | null = CURRENT_API_VERSION;
 
 /** Async sleep for backoff waits. */
 function sleep(ms: number): Promise<void> {
@@ -84,9 +86,12 @@ export async function notionFetch<T>(
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     let response: { status: number; headers: Record<string, string>; body: string };
 
+    const t0 = Date.now();
+
     if (notionAuth.type === 'token') {
       // Direct Notion API call with token (self_hosted API token or OAuth accessToken)
       const url = `https://api.notion.com/v1${path}`;
+      console.log(`[notion][fetch] ${method} ${url} (direct, attempt ${attempt})`);
       response = await net.fetch(url, {
         method,
         headers: {
@@ -100,6 +105,7 @@ export async function notionFetch<T>(
     } else {
       // Server-side OAuth proxy — the proxy validates against an allowlist of
       // full paths (e.g. /v1/users, /v1/search), so we must include the /v1 prefix.
+      console.log(`[notion][fetch] ${method} /v1${path} (proxy, attempt ${attempt})`);
       response = await oauth.fetch(`/v1${path}`, {
         method,
         headers: {
@@ -110,6 +116,10 @@ export async function notionFetch<T>(
         timeout: 30,
       });
     }
+
+    const elapsed = Date.now() - t0;
+    const bodyLen = response.body ? response.body.length : 0;
+    console.log(`[notion][fetch] ${method} ${path} status=${response.status} (${elapsed}ms, ${bodyLen}b)`);
 
     // -- 429 Rate Limit: back off and retry ----------------------------------
     if (response.status === 429 && attempt < MAX_RETRIES) {

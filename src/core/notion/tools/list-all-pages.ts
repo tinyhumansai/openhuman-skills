@@ -1,14 +1,13 @@
-// Tool: notion-list-all-pages
-// Fetches pages from the Notion search API, with optional local cache.
+// Tool: notion-list-pages
 import { notionApi } from '../api/index';
 import { formatApiError, formatPageSummary } from '../helpers';
 import { getLocalPages } from '../db/helpers';
 import { isCacheFresh } from './cache';
 
-export const listAllPagesTool: ToolDefinition = {
-  name: 'list-all-pages',
+export const listPagesTool: ToolDefinition = {
+  name: 'list-pages',
   description:
-    'List pages in the workspace. Set tryCache=true to use locally synced pages when available (faster).',
+    'List pages in the workspace. Returns one page of results. Set tryCache=true to use locally synced pages when available (faster).',
   input_schema: {
     type: 'object',
     properties: {
@@ -27,7 +26,6 @@ export const listAllPagesTool: ToolDefinition = {
       const pageSize = Math.min((args.page_size as number) || 20, 100);
       const tryCache = args.tryCache === true;
 
-      // Try local cache if requested
       if (tryCache && isCacheFresh()) {
         const localPages = getLocalPages({ limit: pageSize, includeArchived: false });
         if (localPages.length > 0) {
@@ -49,16 +47,13 @@ export const listAllPagesTool: ToolDefinition = {
         }
       }
 
-      // Fetch from API
       const result = await notionApi.search({
         filter: { property: 'object', value: 'page' },
         sort: { direction: 'descending', timestamp: 'last_edited_time' },
         page_size: pageSize,
       });
 
-      const pages = (result.results as Record<string, unknown>[]).map(item =>
-        formatPageSummary(item)
-      );
+      const pages = (result.results as Record<string, unknown>[]).map(formatPageSummary);
       return JSON.stringify({ count: pages.length, has_more: result.has_more, pages, source: 'api' });
     } catch (e) {
       return JSON.stringify({ error: formatApiError(e) });
