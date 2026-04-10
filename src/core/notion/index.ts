@@ -64,18 +64,48 @@ function init(): void {
   publishState();
 }
 
-function start(): void {
+// Credentials shape passed in by the Rust host. Both fields may be null on
+// first start (before the user has connected). Re-invoked from the host after
+// oauth/complete and auth/complete so the skill always sees the latest creds.
+interface NotionStartArgs {
+  oauth?: Record<string, unknown> | null;
+  auth?: Record<string, unknown> | null;
+}
+
+function start(args?: NotionStartArgs): void {
   const s = getNotionSkillState();
 
-  if (!isNotionConnected()) {
-    console.log('[notion] No credential — skill inactive until auth completes');
+  // The skill is "started" the moment we have a credential — either from the
+  // bag the host hands us, or from the bridges (oauth.getCredential / auth)
+  // which were already populated by the runtime. We tolerate both so re-calls
+  // from oauth/complete and the initial spawn behave identically.
+  const hasCredFromArgs = !!(args && (args.oauth || args.auth));
+  const connected = hasCredFromArgs || isNotionConnected();
+
+  if (!connected) {
+    console.log('[notion] start(): no credential yet — waiting for auth');
+    publishState();
     return;
   }
 
-  // Register sync cron schedule
+  // Pick up account label from the freshly delivered credential bag if we
+  // didn't have it stashed already (e.g. first time after OAuth handoff).
+  if (args && args.oauth) {
+    const oauthCred = args.oauth as { credentialId?: string; accountLabel?: string };
+    if (oauthCred.credentialId) s.config.credentialId = oauthCred.credentialId;
+    if (oauthCred.accountLabel && !s.config.workspaceName) {
+      s.config.workspaceName = oauthCred.accountLabel;
+    }
+    state.set('config', s.config);
+  }
+
+  // Register sync cron schedule. Always unregister first so re-calls from
+  // oauth/auth complete don't pile up duplicate timers.
+  cron.unregister('notion-sync');
   const cronExpr = `0 */${s.config.syncIntervalMinutes} * * * *`;
   cron.register('notion-sync', cronExpr);
-  console.log(`[notion] Scheduled sync every ${s.config.syncIntervalMinutes} minutes`);
+  console.log(`[notion] start(): scheduled sync every ${s.config.syncIntervalMinutes} minutes`);
+  publishState();
 }
 
 function stop(): void {
@@ -119,26 +149,6 @@ function onSessionEnd(args: { sessionId: string }): void {
 // ---------------------------------------------------------------------------
 // OAuth lifecycle
 // ---------------------------------------------------------------------------
-
-function onOAuthComplete(args: OAuthCompleteArgs): OAuthCompleteResult | void {
-  const s = getNotionSkillState();
-  s.config.credentialId = args.credentialId;
-  console.log(
-    `[notion] OAuth complete — credential: ${args.credentialId}, account: ${args.accountLabel || '(unknown)'}`
-  );
-
-  if (args.accountLabel) {
-    s.config.workspaceName = args.accountLabel;
-  }
-
-  state.set('config', s.config);
-
-  // Start sync schedule
-  const cronExpr = `0 */${s.config.syncIntervalMinutes} * * * *`;
-  cron.register('notion-sync', cronExpr);
-
-  publishState();
-}
 
 function onOAuthRevoked(args: OAuthRevokedArgs): void {
   console.log(`[notion] OAuth revoked — reason: ${args.reason}`);
@@ -244,13 +254,9 @@ function onAuthComplete(args: { mode: string; credentials: Record<string, unknow
     };
   }
 
-  // Persist config and reset API version cache (new credential may have different access)
+  // Persist config — cron registration happens in start() which the host
+  // invokes immediately after this validation returns success.
   state.set('config', s.config);
-
-  // Register sync cron
-  const cronExpr = `0 */${s.config.syncIntervalMinutes} * * * *`;
-  cron.register('notion-sync', cronExpr);
-
   publishState();
 
   return { status: 'complete', message: 'Connected to Notion!' };
@@ -465,7 +471,6 @@ const skill: Skill = {
   onCronTrigger,
   onSessionStart,
   onSessionEnd,
-  onOAuthComplete,
   onOAuthRevoked,
   onAuthComplete,
   onAuthRevoked,

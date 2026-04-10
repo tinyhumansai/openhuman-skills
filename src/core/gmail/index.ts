@@ -47,17 +47,52 @@ function init(): void {
   console.log(`[gmail] Initialized. Connected: ${isConnected}`);
 }
 
-function start(): void {
-  console.log('[gmail] Starting skill...');
+// Credentials shape passed in by the Rust host. Both fields may be null on
+// first start (before the user has connected). Re-invoked from the host after
+// oauth/complete and auth/complete so the skill always sees the latest creds.
+interface GmailStartArgs {
+  oauth?: Record<string, unknown> | null;
+  auth?: Record<string, unknown> | null;
+}
+
+function start(args?: GmailStartArgs): void {
+  console.log('[gmail] start() called');
   const s = getGmailSkillState();
-  if (isGmailConnected() && s.config.syncEnabled) {
-    // Register periodic sync via cron without blocking startup on full sync.
-    const cronExpr = `0 */${s.config.syncIntervalMinutes} * * * *`;
-    cron.register('gmail-sync', cronExpr);
-    publishSkillState();
-  } else {
-    console.log('[gmail] Not connected or sync disabled');
+
+  // Pick up the freshest credential bag — either from the args the host hands
+  // us, or fall back to the bridges (which restore_*_credential populated).
+  const hasCredFromArgs = !!(args && (args.oauth || args.auth));
+  const connected = hasCredFromArgs || isGmailConnected();
+
+  if (args && args.oauth) {
+    const oauthCred = args.oauth as { credentialId?: string; accountLabel?: string };
+    if (oauthCred.credentialId) s.config.credentialId = oauthCred.credentialId;
+    if (oauthCred.accountLabel && !s.config.userEmail) {
+      s.config.userEmail = oauthCred.accountLabel;
+    }
+    state.set('config', s.config);
   }
+
+  if (!connected) {
+    console.log('[gmail] start(): no credential yet — waiting for auth');
+    publishSkillState();
+    return;
+  }
+
+  if (!s.config.syncEnabled) {
+    console.log('[gmail] start(): connected but sync disabled');
+    cron.unregister('gmail-sync');
+    publishSkillState();
+    return;
+  }
+
+  // Always unregister first so re-calls from oauth/auth complete don't pile up
+  // duplicate timers.
+  cron.unregister('gmail-sync');
+  const cronExpr = `0 */${s.config.syncIntervalMinutes} * * * *`;
+  cron.register('gmail-sync', cronExpr);
+  console.log(`[gmail] start(): scheduled sync every ${s.config.syncIntervalMinutes} minutes`);
+  publishSkillState();
 }
 
 function stop(): void {
@@ -89,20 +124,6 @@ function onSessionEnd(args: { sessionId: string }): void {
 // ---------------------------------------------------------------------------
 // OAuth lifecycle hooks
 // ---------------------------------------------------------------------------
-
-function onOAuthComplete(args: OAuthCompleteArgs): OAuthCompleteResult | void {
-  console.log(`[gmail] OAuth complete for provider: ${args.provider}`);
-  const s = getGmailSkillState();
-
-  s.config.credentialId = args.credentialId;
-  if (args.accountLabel) {
-    s.config.userEmail = args.accountLabel;
-  }
-
-  state.set('config', s.config);
-
-  publishSkillState();
-}
 
 function onOAuthRevoked(args: OAuthRevokedArgs): void {
   console.log(`[gmail] OAuth revoked: ${args.reason}`);
@@ -310,14 +331,9 @@ function onAuthComplete(args: { mode: string; credentials: Record<string, unknow
     }
   }
 
-  // Save config and start sync
+  // Save config — cron registration happens in start() which the host invokes
+  // immediately after this validation returns success.
   state.set('config', s.config);
-
-  if (s.config.syncEnabled) {
-    const cronExpr = `0 */${s.config.syncIntervalMinutes} * * * *`;
-    cron.register('gmail-sync', cronExpr);
-  }
-
   publishSkillState();
 
   return { status: 'complete', message: 'Connected to Gmail!' };
@@ -515,7 +531,6 @@ const skill: Skill = {
   onCronTrigger,
   onSessionStart,
   onSessionEnd,
-  onOAuthComplete,
   onOAuthRevoked,
   onAuthComplete,
   onAuthRevoked,
