@@ -159,7 +159,6 @@ const scenarios: Scenario[] = [
   ['list-pages', { page_size: 100 }],
   ['list-databases', { page_size: 100 }],
   ['search', { query: 'test', page_size: 100 }],
-  ['sync-status', {}],
 ];
 
 // ---------------------------------------------------------------------------

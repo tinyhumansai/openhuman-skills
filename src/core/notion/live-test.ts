@@ -373,18 +373,6 @@ async function main() {
 
   header('5b. Raw API Verification');
 
-  // Use sync-status (local-only, no API call) to verify the skill is responsive
-  step('sync-status (no API call)...');
-  {
-    const { data, error } = await callToolSafe('sync-status', {});
-    if (error) fail(error);
-    else {
-      ok();
-      info('connected', data?.connected);
-      info('last_sync_error', data?.last_sync_error ?? '(none)');
-    }
-  }
-
   // Test API calls with shorter timeout — these go through oauth.fetch proxy
   step('list-users (API via proxy, 15s timeout)...');
   {

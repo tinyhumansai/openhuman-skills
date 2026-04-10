@@ -161,14 +161,6 @@ async function main() {
   }
   ok(`${users.count} users (${userMs}ms)`);
 
-  step('sync-status...');
-  const { data: ss, ms: ssMs } = await callTool('sync-status');
-  if (ss) {
-    info('pages', ss.totals ? ss.totals.pages : 0);
-    info('databases', ss.totals ? ss.totals.databases : 0);
-  }
-  ok(`${ssMs}ms`);
-
   // ── 3. Trigger sync ──────────────────────────────────────────────────
 
   header('3. Sync');

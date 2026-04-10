@@ -17,9 +17,6 @@ import { listCommentsTool } from './list-comments';
 import { listUsersTool } from './list-users';
 import { queryDatabaseTool } from './query-database';
 import { searchTool } from './search';
-import { summarizePagesTool } from './summarize-pages';
-import { syncNowTool } from './sync-now';
-import { syncStatusTool } from './sync-status';
 import { updateBlockTool } from './update-block';
 import { updateDatabaseTool } from './update-database';
 import { updatePageTool } from './update-page';
@@ -93,9 +90,6 @@ const rawTools: ToolDefinition[] = [
   listUsersTool,
   queryDatabaseTool,
   searchTool,
-  summarizePagesTool,
-  syncNowTool,
-  syncStatusTool,
   updateBlockTool,
   updateDatabaseTool,
   updatePageTool,
