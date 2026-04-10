@@ -1,0 +1,233 @@
+// notion/start.ts
+//
+// The single activation entry point for the Notion skill. The Rust host calls
+// `start({ oauth, auth, validate? })`:
+//
+//   - on instance spawn (with credentials read from disk)
+//   - immediately after `oauth/complete` once the OAuth credential is persisted
+//   - immediately after `auth/complete` for self_hosted / text auth modes,
+//     with `validate: true` so we hit the Notion API and surface field-level
+//     errors before any cron is registered
+//
+// start() owns:
+//   1. picking up account metadata from the credential bag
+//   2. (optional) validating credentials against the upstream API
+//   3. registering the periodic sync cron
+//   4. publishing connection state to the host
+import { notionApi } from './api/index';
+import { isNotionConnected } from './helpers';
+import { publishState } from './publish-state';
+import { getNotionSkillState } from './state';
+
+// Lifecycle types come from the canonical contract in `types/skill.d.ts`
+// (`SkillStartArgs` / `SkillStartResult`). Both are global ambient types so
+// no import is needed — we reference them directly below.
+
+// Validate the OAuth credential by hitting the Notion API through the proxy
+// (`oauth.fetch`, exposed via notionApi). The proxy uses whatever credential
+// the runtime currently has injected into the `oauth` bridge — that's the
+// fresh credential the host injected before calling start().
+function validateNotionOAuth(): Extract<SkillStartResult, { status: 'error' }> | null {
+  try {
+    const user = notionApi.getUser('me') as Record<string, unknown>;
+    // Best-effort: stash workspace/user name from the bot user record. We
+    // overwrite unconditionally so a re-auth against a different workspace
+    // refreshes the stored label instead of keeping the previous one.
+    const name = user.name as string | undefined;
+    if (name) {
+      getNotionSkillState().config.workspaceName = name;
+    }
+    return null;
+  } catch (err) {
+    return {
+      status: 'error',
+      errors: [
+        { field: 'oauth', message: `Notion OAuth credential rejected by API: ${String(err)}` },
+      ],
+    };
+  }
+}
+
+// Hit the Notion API directly with the token from a self_hosted/text auth
+// credential. Returns null on success (and stashes the discovered workspace
+// name into state); returns a populated StartResult on failure.
+function validateNotionAuthDirect(auth: {
+  mode?: string;
+  credentials?: Record<string, unknown>;
+}): Extract<SkillStartResult, { status: 'error' }> | null {
+  const creds = auth.credentials || {};
+  const token = (creds.api_token || creds.content || creds.access_token) as string | undefined;
+  if (!token) {
+    return { status: 'error', errors: [{ field: 'api_token', message: 'API token is required.' }] };
+  }
+
+  try {
+    const response = net.fetch('https://api.notion.com/v1/users/me', {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        'Notion-Version': '2026-03-11',
+      },
+      timeout: 15,
+    });
+
+    if (response.status === 401 || response.status === 403) {
+      return {
+        status: 'error',
+        errors: [
+          {
+            field: 'api_token',
+            message: 'Invalid token. Check that your integration token is correct.',
+          },
+        ],
+      };
+    }
+
+    if (response.status >= 400) {
+      return {
+        status: 'error',
+        errors: [
+          {
+            field: 'api_token',
+            message: `Notion API returned error ${response.status}. Please check your token.`,
+          },
+        ],
+      };
+    }
+
+    // Token is valid — extract workspace info from the bot user record.
+    // The `/v1/users/me` endpoint returns a single user object, not a
+    // `results` array. Handle both shapes defensively in case Notion ever
+    // wraps it differently for some integration types.
+    try {
+      const data = JSON.parse(response.body) as {
+        type?: string;
+        name?: string;
+        results?: Array<{ name?: string; type?: string }>;
+      };
+      let botUser: { name?: string; type?: string } | undefined;
+      if (data.type) {
+        botUser = { name: data.name, type: data.type };
+      } else if (data.results) {
+        botUser = data.results.find(u => u.type === 'bot');
+      }
+      if (botUser && botUser.name) {
+        getNotionSkillState().config.workspaceName = botUser.name;
+      }
+    } catch {
+      // Non-critical: workspace name extraction failed
+    }
+
+    return null;
+  } catch (err) {
+    return {
+      status: 'error',
+      errors: [{ field: 'api_token', message: `Could not reach Notion API: ${String(err)}` }],
+    };
+  }
+}
+
+/** Auth modes Notion explicitly supports — see manifest.json `setup.auth.modes`. */
+const SUPPORTED_AUTH_MODES = new Set(['managed', 'self_hosted']);
+
+export function start(args?: SkillStartArgs): SkillStartResult {
+  const s = getNotionSkillState();
+
+  // Stash incoming oauth metadata in temporaries — we only commit them to
+  // s.config (and persist via state.set) *after* any requested validation
+  // succeeds, so a rejected OAuth credential never overwrites the previously
+  // stored workspace identity.
+  let tempOauthCredentialId: string | undefined;
+  let tempOauthAccountLabel: string | undefined;
+  if (args && args.oauth) {
+    const oauthCred = args.oauth as { credentialId?: string; accountLabel?: string };
+    tempOauthCredentialId = oauthCred.credentialId;
+    tempOauthAccountLabel = oauthCred.accountLabel;
+  }
+
+  // Validation phase — only when host explicitly asks (auth/oauth handshake).
+  // We validate OAuth and direct-token (self_hosted) creds the same way:
+  // hit the Notion API and confirm the credential is accepted. If validation
+  // fails we bail out *before* registering cron so a bad credential never
+  // schedules background work.
+  //
+  // Auth `mode === 'managed'` is the OAuth handoff arriving via auth/complete
+  // — its credentials live in the `oauth` bridge by the time start() runs,
+  // so it goes through the OAuth validator just like a pure oauth/complete.
+  if (args && args.validate) {
+    const auth = args.auth as
+      | { mode?: string; credentials?: Record<string, unknown> }
+      | null
+      | undefined;
+
+    let validationError;
+    if (auth) {
+      // `auth` was provided — its mode dictates the validator. Reject any
+      // mode that isn't on the supported list (or is missing entirely)
+      // before scheduling work, so unknown modes can't slip past validation.
+      if (!auth.mode || !SUPPORTED_AUTH_MODES.has(auth.mode)) {
+        validationError = {
+          status: 'error' as const,
+          errors: [
+            {
+              field: 'mode',
+              message: auth.mode
+                ? `Unsupported auth mode: ${auth.mode}`
+                : 'Missing auth mode — expected managed or self_hosted.',
+            },
+          ],
+        };
+      } else if (auth.mode === 'managed') {
+        validationError = validateNotionOAuth();
+      } else {
+        // self_hosted (the only other supported mode at present)
+        validationError = validateNotionAuthDirect(auth);
+      }
+    } else if (args.oauth) {
+      // Pure oauth/complete handoff — no `auth` bag, credential lives in
+      // the oauth bridge.
+      validationError = validateNotionOAuth();
+    }
+
+    if (validationError) {
+      console.log('[notion] start(): validation failed');
+      return validationError;
+    }
+  }
+
+  // Validation passed (or wasn't requested) — now it's safe to commit the
+  // oauth metadata onto s.config and persist it. We do this *after* the
+  // validation block so a rejected credential is never written to disk.
+  if (tempOauthCredentialId || tempOauthAccountLabel) {
+    if (tempOauthCredentialId) s.config.credentialId = tempOauthCredentialId;
+    if (tempOauthAccountLabel) s.config.workspaceName = tempOauthAccountLabel;
+    state.set('config', s.config);
+  } else if (args && args.validate) {
+    // Direct-token validators may have stashed a workspace name discovered
+    // during validation — persist whatever they found.
+    state.set('config', s.config);
+  }
+
+  // The skill activates the moment we have a credential — either from the
+  // bag the host hands us, or from the bridges (oauth.getCredential / auth)
+  // which were already populated by the runtime. We tolerate both so re-calls
+  // from oauth/auth complete and the initial spawn behave identically.
+  const hasCredFromArgs = !!(args && (args.oauth || args.auth));
+  const connected = hasCredFromArgs || isNotionConnected();
+
+  if (!connected) {
+    console.log('[notion] start(): no credential yet — waiting for auth');
+    publishState();
+    return { status: 'complete' };
+  }
+
+  // Register sync cron schedule. Always unregister first so re-calls from
+  // oauth/auth complete don't pile up duplicate timers.
+  cron.unregister('notion-sync');
+  const cronExpr = `0 */${s.config.syncIntervalMinutes} * * * *`;
+  cron.register('notion-sync', cronExpr);
+  console.log(`[notion] start(): scheduled sync every ${s.config.syncIntervalMinutes} minutes`);
+  publishState();
+  return { status: 'complete', message: 'Connected to Notion!' };
+}

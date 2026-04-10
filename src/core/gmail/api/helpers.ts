@@ -17,7 +17,9 @@ export function loadGmailProfile(): void {
       historyId: profile.historyId,
     };
 
-    if (!s.config.userEmail) {
+    // Always refresh — re-auth against a different Google account should
+    // replace the stored email rather than keep the previous one.
+    if (profile.emailAddress && s.config.userEmail !== profile.emailAddress) {
       s.config.userEmail = profile.emailAddress;
       state.set('config', s.config);
     }

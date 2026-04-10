@@ -3,9 +3,11 @@
 // Supports pages, databases, blocks, users, comments, and local search.
 // Authentication is handled via the platform OAuth bridge.
 import { notionApi } from './api/index';
-import { getEntityCounts, getLocalPages } from './db/helpers';
+import { getEntityCounts } from './db/helpers';
 import { initializeNotionSchema } from './db/schema';
 import { formatUserSummary, isNotionConnected } from './helpers';
+import { publishState } from './publish-state';
+import { start } from './start';
 import { getNotionSkillState } from './state';
 import type { NotionSkillConfig } from './state';
 import { performSync } from './sync';
@@ -64,20 +66,6 @@ function init(): void {
   publishState();
 }
 
-function start(): void {
-  const s = getNotionSkillState();
-
-  if (!isNotionConnected()) {
-    console.log('[notion] No credential — skill inactive until auth completes');
-    return;
-  }
-
-  // Register sync cron schedule
-  const cronExpr = `0 */${s.config.syncIntervalMinutes} * * * *`;
-  cron.register('notion-sync', cronExpr);
-  console.log(`[notion] Scheduled sync every ${s.config.syncIntervalMinutes} minutes`);
-}
-
 function stop(): void {
   console.log('[notion] Stopping');
   const s = getNotionSkillState();
@@ -120,26 +108,6 @@ function onSessionEnd(args: { sessionId: string }): void {
 // OAuth lifecycle
 // ---------------------------------------------------------------------------
 
-function onOAuthComplete(args: OAuthCompleteArgs): OAuthCompleteResult | void {
-  const s = getNotionSkillState();
-  s.config.credentialId = args.credentialId;
-  console.log(
-    `[notion] OAuth complete — credential: ${args.credentialId}, account: ${args.accountLabel || '(unknown)'}`
-  );
-
-  if (args.accountLabel) {
-    s.config.workspaceName = args.accountLabel;
-  }
-
-  state.set('config', s.config);
-
-  // Start sync schedule
-  const cronExpr = `0 */${s.config.syncIntervalMinutes} * * * *`;
-  cron.register('notion-sync', cronExpr);
-
-  publishState();
-}
-
 function onOAuthRevoked(args: OAuthRevokedArgs): void {
   console.log(`[notion] OAuth revoked — reason: ${args.reason}`);
   const s = getNotionSkillState();
@@ -164,97 +132,8 @@ function onDisconnect(): void {
 }
 
 // ---------------------------------------------------------------------------
-// Advanced auth lifecycle (self_hosted / text modes)
+// Auth revoke (self_hosted / text modes)
 // ---------------------------------------------------------------------------
-
-function onAuthComplete(args: { mode: string; credentials: Record<string, unknown> }): {
-  status: string;
-  errors?: Array<{ field: string; message: string }>;
-  message?: string;
-} {
-  console.log(`[notion] onAuthComplete — mode: ${args.mode}`);
-  const s = getNotionSkillState();
-
-  if (args.mode === 'managed') {
-    // Managed mode is handled by onOAuthComplete — just return success
-    return { status: 'complete' };
-  }
-
-  // For self_hosted: validate the API token by making a test call
-  const token = (args.credentials.api_token ||
-    args.credentials.content ||
-    args.credentials.access_token) as string | undefined;
-
-  if (!token) {
-    return { status: 'error', errors: [{ field: 'api_token', message: 'API token is required.' }] };
-  }
-
-  // Test the token against Notion API
-  try {
-    const response = net.fetch('https://api.notion.com/v1/users/me', {
-      method: 'GET',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-        'Notion-Version': '2026-03-11',
-      },
-      timeout: 15,
-    });
-
-    if (response.status === 401 || response.status === 403) {
-      return {
-        status: 'error',
-        errors: [
-          {
-            field: 'api_token',
-            message: 'Invalid token. Check that your integration token is correct.',
-          },
-        ],
-      };
-    }
-
-    if (response.status >= 400) {
-      return {
-        status: 'error',
-        errors: [
-          {
-            field: 'api_token',
-            message: `Notion API returned error ${response.status}. Please check your token.`,
-          },
-        ],
-      };
-    }
-
-    // Token is valid — extract workspace info from the bot user
-    try {
-      const data = JSON.parse(response.body) as {
-        results?: Array<{ name?: string; type?: string }>;
-      };
-      const botUser = data.results ? data.results.find(u => u.type === 'bot') : undefined;
-      if (botUser && botUser.name) {
-        s.config.workspaceName = botUser.name;
-      }
-    } catch {
-      // Non-critical: workspace name extraction failed
-    }
-  } catch (err) {
-    return {
-      status: 'error',
-      errors: [{ field: 'api_token', message: `Could not reach Notion API: ${String(err)}` }],
-    };
-  }
-
-  // Persist config and reset API version cache (new credential may have different access)
-  state.set('config', s.config);
-
-  // Register sync cron
-  const cronExpr = `0 */${s.config.syncIntervalMinutes} * * * *`;
-  cron.register('notion-sync', cronExpr);
-
-  publishState();
-
-  return { status: 'complete', message: 'Connected to Notion!' };
-}
 
 function onAuthRevoked(args: { mode?: string }): void {
   console.log(`[notion] Auth revoked — mode: ${args.mode || 'unknown'}`);
@@ -380,55 +259,6 @@ function onSetOption(args: { name: string; value: unknown }): void {
 }
 
 // ---------------------------------------------------------------------------
-// State publishing
-// ---------------------------------------------------------------------------
-
-function publishState(): void {
-  const s = getNotionSkillState();
-  const isConnected = isNotionConnected();
-
-  // Fetch recent page summaries from local DB (metadata only — no content_text
-  // to avoid raw newlines breaking JSON serialization in the state transport)
-  let pages: Array<{ id: string; title: string; url: string | null; last_edited_time: string }> =
-    [];
-  if (isConnected) {
-    try {
-      const localPages = getLocalPages({ limit: 100 });
-      pages = localPages.map(p => ({
-        id: p.id,
-        title: p.title,
-        url: p.url,
-        last_edited_time: p.last_edited_time,
-      }));
-    } catch (e) {
-      console.error('[notion] publishState: failed to load local pages:', e);
-    }
-  }
-
-  state.setPartial({
-    // Standard SkillHostConnectionState fields
-    connection_status: isConnected ? 'connected' : 'disconnected',
-    auth_status: isConnected ? 'authenticated' : 'not_authenticated',
-    connection_error: s.syncStatus.lastSyncError || null,
-    auth_error: null,
-    is_initialized: isConnected,
-    // Skill-specific fields
-    workspaceName: s.config.workspaceName || null,
-    syncInProgress: s.syncStatus.syncInProgress,
-    lastSyncTime: s.syncStatus.lastSyncTime
-      ? new Date(s.syncStatus.lastSyncTime).toISOString()
-      : null,
-    totalPages: s.syncStatus.totalPages,
-    totalDatabases: s.syncStatus.totalDatabases,
-    totalDatabaseRows: s.syncStatus.totalDatabaseRows,
-    pagesWithContent: s.syncStatus.pagesWithContent,
-    pagesWithSummary: s.syncStatus.pagesWithSummary,
-    lastSyncError: s.syncStatus.lastSyncError,
-    pages,
-  });
-}
-
-// ---------------------------------------------------------------------------
 // Tool definitions
 // ---------------------------------------------------------------------------
 
@@ -465,9 +295,7 @@ const skill: Skill = {
   onCronTrigger,
   onSessionStart,
   onSessionEnd,
-  onOAuthComplete,
   onOAuthRevoked,
-  onAuthComplete,
   onAuthRevoked,
   onSetupStart,
   onSetupSubmit,
