@@ -50,20 +50,189 @@ function init(): void {
 // Credentials shape passed in by the Rust host. Both fields may be null on
 // first start (before the user has connected). Re-invoked from the host after
 // oauth/complete and auth/complete so the skill always sees the latest creds.
+//
+// `validate: true` is set when the host wants start() to actually hit the
+// upstream API and confirm the credentials work — used during the auth
+// handshake so the user gets inline error feedback. Routine restarts (skill
+// spawn, oauth/complete) leave it false to avoid an extra network round-trip.
 interface GmailStartArgs {
   oauth?: Record<string, unknown> | null;
   auth?: Record<string, unknown> | null;
+  validate?: boolean;
 }
 
-function start(args?: GmailStartArgs): void {
+type StartResult =
+  | { status: 'complete'; message?: string }
+  | { status: 'error'; errors: Array<{ field: string; message: string }> };
+
+// Validate Gmail self_hosted credentials by exchanging the refresh token for
+// an access token, then using it to hit the Gmail profile API. Returns null
+// on success (and stashes the discovered email into config); returns a
+// populated StartResult on failure.
+function validateGmailSelfHosted(creds: Record<string, unknown>):
+  | { status: 'error'; errors: Array<{ field: string; message: string }> }
+  | null {
+  const s = getGmailSkillState();
+  const clientId = creds.client_id as string | undefined;
+  const clientSecret = creds.client_secret as string | undefined;
+  const refreshToken = creds.refresh_token as string | undefined;
+
+  if (!clientId || !clientSecret || !refreshToken) {
+    return {
+      status: 'error',
+      errors: [{ field: 'refresh_token', message: 'All three fields are required.' }],
+    };
+  }
+
+  try {
+    const body = `client_id=${encodeURIComponent(clientId)}&client_secret=${encodeURIComponent(clientSecret)}&refresh_token=${encodeURIComponent(refreshToken)}&grant_type=refresh_token`;
+    const response = net.fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body,
+      timeout: 15,
+    });
+
+    if (response.status !== 200) {
+      let errorMsg = 'Invalid credentials.';
+      try {
+        const parsed = JSON.parse(response.body) as { error_description?: string };
+        if (parsed.error_description) errorMsg = parsed.error_description;
+      } catch {
+        /* use default */
+      }
+      return { status: 'error', errors: [{ field: 'refresh_token', message: errorMsg }] };
+    }
+
+    const tokenData = JSON.parse(response.body) as { access_token: string };
+    const profileResp = net.fetch('https://gmail.googleapis.com/gmail/v1/users/me/profile', {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${tokenData.access_token}`,
+        'Content-Type': 'application/json',
+      },
+      timeout: 10,
+    });
+
+    if (profileResp.status !== 200) {
+      return {
+        status: 'error',
+        errors: [
+          {
+            field: 'client_id',
+            message:
+              'Token is valid but Gmail API access failed. Ensure Gmail API is enabled in your Google Cloud project.',
+          },
+        ],
+      };
+    }
+
+    try {
+      const profile = JSON.parse(profileResp.body) as { emailAddress?: string };
+      if (profile.emailAddress) s.config.userEmail = profile.emailAddress;
+    } catch {
+      /* non-critical */
+    }
+    return null;
+  } catch (err) {
+    return {
+      status: 'error',
+      errors: [{ field: 'client_id', message: `Could not reach Google API: ${String(err)}` }],
+    };
+  }
+}
+
+// Validate a free-form text credential (raw access token or JSON blob).
+function validateGmailText(creds: Record<string, unknown>):
+  | { status: 'error'; errors: Array<{ field: string; message: string }> }
+  | null {
+  const s = getGmailSkillState();
+  const content = (creds.content || '') as string;
+  if (!content.trim()) {
+    return {
+      status: 'error',
+      errors: [{ field: 'content', message: 'Credential content is required.' }],
+    };
+  }
+
+  let token = content.trim();
+  try {
+    const parsed = JSON.parse(content) as Record<string, unknown>;
+    if (parsed.access_token) {
+      token = parsed.access_token as string;
+    } else if (parsed.private_key) {
+      return {
+        status: 'error',
+        errors: [
+          {
+            field: 'content',
+            message:
+              'Service account JSON with private_key is not yet supported. Use a refresh token or access token instead.',
+          },
+        ],
+      };
+    }
+  } catch {
+    // Not JSON — treat as raw token
+  }
+
+  try {
+    const profileResp = net.fetch('https://gmail.googleapis.com/gmail/v1/users/me/profile', {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      timeout: 10,
+    });
+
+    if (profileResp.status === 401 || profileResp.status === 403) {
+      return {
+        status: 'error',
+        errors: [{ field: 'content', message: 'Invalid or expired token.' }],
+      };
+    }
+
+    if (profileResp.status !== 200) {
+      const bodyPreview = profileResp.body ? profileResp.body.slice(0, 200) : '';
+      return {
+        status: 'error',
+        errors: [
+          {
+            field: 'content',
+            message: `Gmail API returned ${profileResp.status}. ${bodyPreview}`.trim(),
+          },
+        ],
+      };
+    }
+
+    try {
+      const profile = JSON.parse(profileResp.body) as { emailAddress?: string };
+      if (profile.emailAddress) s.config.userEmail = profile.emailAddress;
+    } catch {
+      /* non-critical */
+    }
+    return null;
+  } catch (err) {
+    return {
+      status: 'error',
+      errors: [{ field: 'content', message: `Could not reach Gmail API: ${String(err)}` }],
+    };
+  }
+}
+
+function validateGmailAuth(auth: { mode?: string; credentials?: Record<string, unknown> }):
+  | { status: 'error'; errors: Array<{ field: string; message: string }> }
+  | null {
+  if (auth.mode === 'managed') return null; // OAuth flow already vouched for the token
+  const creds = auth.credentials || {};
+  if (auth.mode === 'self_hosted') return validateGmailSelfHosted(creds);
+  if (auth.mode === 'text') return validateGmailText(creds);
+  return null;
+}
+
+function start(args?: GmailStartArgs): StartResult {
   console.log('[gmail] start() called');
   const s = getGmailSkillState();
 
-  // Pick up the freshest credential bag — either from the args the host hands
-  // us, or fall back to the bridges (which restore_*_credential populated).
-  const hasCredFromArgs = !!(args && (args.oauth || args.auth));
-  const connected = hasCredFromArgs || isGmailConnected();
-
+  // Pick up oauth metadata if present (credentialId / userEmail).
   if (args && args.oauth) {
     const oauthCred = args.oauth as { credentialId?: string; accountLabel?: string };
     if (oauthCred.credentialId) s.config.credentialId = oauthCred.credentialId;
@@ -73,17 +242,34 @@ function start(args?: GmailStartArgs): void {
     state.set('config', s.config);
   }
 
+  // Validation phase — only when host explicitly asks (auth handshake).
+  // If validation fails we bail out *before* registering cron so a bad
+  // credential never schedules background work.
+  if (args && args.validate && args.auth) {
+    const validationError = validateGmailAuth(
+      args.auth as { mode?: string; credentials?: Record<string, unknown> }
+    );
+    if (validationError) {
+      console.log('[gmail] start(): validation failed');
+      return validationError;
+    }
+    state.set('config', s.config);
+  }
+
+  const hasCredFromArgs = !!(args && (args.oauth || args.auth));
+  const connected = hasCredFromArgs || isGmailConnected();
+
   if (!connected) {
     console.log('[gmail] start(): no credential yet — waiting for auth');
     publishSkillState();
-    return;
+    return { status: 'complete' };
   }
 
   if (!s.config.syncEnabled) {
     console.log('[gmail] start(): connected but sync disabled');
     cron.unregister('gmail-sync');
     publishSkillState();
-    return;
+    return { status: 'complete' };
   }
 
   // Always unregister first so re-calls from oauth/auth complete don't pile up
@@ -93,6 +279,7 @@ function start(args?: GmailStartArgs): void {
   cron.register('gmail-sync', cronExpr);
   console.log(`[gmail] start(): scheduled sync every ${s.config.syncIntervalMinutes} minutes`);
   publishSkillState();
+  return { status: 'complete', message: 'Connected to Gmail!' };
 }
 
 function stop(): void {
@@ -167,177 +354,8 @@ function onDisconnect(): void {
 }
 
 // ---------------------------------------------------------------------------
-// Advanced auth lifecycle (self_hosted / text modes)
+// Auth revoke (self_hosted / text modes)
 // ---------------------------------------------------------------------------
-
-function onAuthComplete(args: { mode: string; credentials: Record<string, unknown> }): {
-  status: string;
-  errors?: Array<{ field: string; message: string }>;
-  message?: string;
-} {
-  console.log(`[gmail] onAuthComplete — mode: ${args.mode}`);
-  const s = getGmailSkillState();
-
-  if (args.mode === 'managed') {
-    return { status: 'complete' };
-  }
-
-  if (args.mode === 'self_hosted') {
-    const clientId = args.credentials.client_id as string | undefined;
-    const clientSecret = args.credentials.client_secret as string | undefined;
-    const refreshToken = args.credentials.refresh_token as string | undefined;
-
-    if (!clientId || !clientSecret || !refreshToken) {
-      return {
-        status: 'error',
-        errors: [{ field: 'refresh_token', message: 'All three fields are required.' }],
-      };
-    }
-
-    // Validate by exchanging refresh_token for access_token
-    try {
-      const body = `client_id=${encodeURIComponent(clientId)}&client_secret=${encodeURIComponent(clientSecret)}&refresh_token=${encodeURIComponent(refreshToken)}&grant_type=refresh_token`;
-      const response = net.fetch('https://oauth2.googleapis.com/token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body,
-        timeout: 15,
-      });
-
-      if (response.status !== 200) {
-        let errorMsg = 'Invalid credentials.';
-        try {
-          const parsed = JSON.parse(response.body) as { error_description?: string };
-          if (parsed.error_description) errorMsg = parsed.error_description;
-        } catch {
-          /* use default */
-        }
-        return { status: 'error', errors: [{ field: 'refresh_token', message: errorMsg }] };
-      }
-
-      // Token exchange succeeded — test Gmail API access
-      const tokenData = JSON.parse(response.body) as { access_token: string };
-      const profileResp = net.fetch('https://gmail.googleapis.com/gmail/v1/users/me/profile', {
-        method: 'GET',
-        headers: {
-          Authorization: `Bearer ${tokenData.access_token}`,
-          'Content-Type': 'application/json',
-        },
-        timeout: 10,
-      });
-
-      if (profileResp.status !== 200) {
-        return {
-          status: 'error',
-          errors: [
-            {
-              field: 'client_id',
-              message:
-                'Token is valid but Gmail API access failed. Ensure Gmail API is enabled in your Google Cloud project.',
-            },
-          ],
-        };
-      }
-
-      // Extract email from profile
-      try {
-        const profile = JSON.parse(profileResp.body) as { emailAddress?: string };
-        if (profile.emailAddress) {
-          s.config.userEmail = profile.emailAddress;
-        }
-      } catch {
-        /* non-critical */
-      }
-    } catch (err) {
-      return {
-        status: 'error',
-        errors: [{ field: 'client_id', message: `Could not reach Google API: ${String(err)}` }],
-      };
-    }
-  }
-
-  if (args.mode === 'text') {
-    const content = (args.credentials.content || '') as string;
-    if (!content.trim()) {
-      return {
-        status: 'error',
-        errors: [{ field: 'content', message: 'Credential content is required.' }],
-      };
-    }
-
-    // Try to validate — if it looks like a token, test it directly
-    let token = content.trim();
-    try {
-      const parsed = JSON.parse(content) as Record<string, unknown>;
-      if (parsed.access_token) {
-        token = parsed.access_token as string;
-      } else if (parsed.private_key) {
-        return {
-          status: 'error',
-          errors: [
-            {
-              field: 'content',
-              message:
-                'Service account JSON with private_key is not yet supported. Use a refresh token or access token instead.',
-            },
-          ],
-        };
-      }
-    } catch {
-      // Not JSON — treat as raw token
-    }
-
-    // Test the token against Gmail
-    try {
-      const profileResp = net.fetch('https://gmail.googleapis.com/gmail/v1/users/me/profile', {
-        method: 'GET',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        timeout: 10,
-      });
-
-      if (profileResp.status === 401 || profileResp.status === 403) {
-        return {
-          status: 'error',
-          errors: [{ field: 'content', message: 'Invalid or expired token.' }],
-        };
-      }
-
-      if (profileResp.status !== 200) {
-        const bodyPreview = profileResp.body ? profileResp.body.slice(0, 200) : '';
-        return {
-          status: 'error',
-          errors: [
-            {
-              field: 'content',
-              message: `Gmail API returned ${profileResp.status}. ${bodyPreview}`.trim(),
-            },
-          ],
-        };
-      }
-
-      try {
-        const profile = JSON.parse(profileResp.body) as { emailAddress?: string };
-        if (profile.emailAddress) {
-          s.config.userEmail = profile.emailAddress;
-        }
-      } catch {
-        /* non-critical */
-      }
-    } catch (err) {
-      return {
-        status: 'error',
-        errors: [{ field: 'content', message: `Could not reach Gmail API: ${String(err)}` }],
-      };
-    }
-  }
-
-  // Save config — cron registration happens in start() which the host invokes
-  // immediately after this validation returns success.
-  state.set('config', s.config);
-  publishSkillState();
-
-  return { status: 'complete', message: 'Connected to Gmail!' };
-}
 
 function onAuthRevoked(args: { mode?: string }): void {
   console.log(`[gmail] Auth revoked — mode: ${args.mode || 'unknown'}`);
@@ -532,7 +550,6 @@ const skill: Skill = {
   onSessionStart,
   onSessionEnd,
   onOAuthRevoked,
-  onAuthComplete,
   onAuthRevoked,
   onSetupStart,
   onSetupSubmit,

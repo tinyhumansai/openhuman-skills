@@ -1,6 +1,32 @@
 /** Accepts both sync and async — skills should prefer sync. */
 type MaybeAsync<T> = T | Promise<T>;
 
+/**
+ * Credentials bag passed to `start()` by the Rust host. The host reads
+ * `oauth_credential.json` and `auth_credential.json` from the skill's data
+ * directory and forwards them here, so start() always sees the canonical view.
+ *
+ * `validate: true` is set during the auth handshake (`auth/complete` RPC) so
+ * start() knows it should hit the upstream API to verify the credentials and
+ * return field-level errors. Routine restarts (skill spawn, oauth/complete)
+ * leave it falsy to skip the network round-trip.
+ */
+interface SkillStartArgs {
+  oauth?: Record<string, unknown> | null;
+  auth?: Record<string, unknown> | null;
+  validate?: boolean;
+}
+
+/**
+ * Result returned by `start()`. `complete` means the skill is now active (or
+ * intentionally idle waiting for credentials). `error` is only used when the
+ * host asked start() to validate credentials and they failed — the errors
+ * array is surfaced inline in the auth UI so the user can fix the input.
+ */
+type SkillStartResult =
+  | { status: 'complete'; message?: string }
+  | { status: 'error'; errors: Array<{ field: string; message: string }> };
+
 interface Skill {
   info: {
     id: string;
@@ -12,7 +38,14 @@ interface Skill {
   };
   tools: ToolDefinition[];
   init: () => MaybeAsync<void>;
-  start: () => MaybeAsync<void>;
+  /**
+   * The single activation entry point. Called by the host on instance spawn
+   * and re-called after `oauth/complete` and `auth/complete` so the skill
+   * always sees the freshest credentials. start() owns cron registration,
+   * connection state publishing, and (when `validate: true`) credential
+   * validation against the upstream API.
+   */
+  start: (args?: SkillStartArgs) => MaybeAsync<SkillStartResult | void>;
   stop: () => MaybeAsync<void>;
   onCronTrigger?: (scheduleId: string) => MaybeAsync<void>;
   onSetupStart?: () => MaybeAsync<SetupStartResult>;
@@ -21,16 +54,6 @@ interface Skill {
     values: Record<string, unknown>;
   }) => MaybeAsync<SetupSubmitResult>;
   onSetupCancel?: () => MaybeAsync<void>;
-  onOAuthComplete?: (args: OAuthCompleteArgs) => MaybeAsync<unknown>;
-  /** Called when advanced auth credentials are submitted (self_hosted / text modes). */
-  onAuthComplete?: (args: {
-    mode: string;
-    credentials: Record<string, unknown>;
-  }) => MaybeAsync<{
-    status: string;
-    errors?: Array<{ field: string; message: string }>;
-    message?: string;
-  }>;
   /** Called when advanced auth credentials are revoked. */
   onAuthRevoked?: (args: { mode?: string }) => MaybeAsync<void>;
   onDisconnect?: () => MaybeAsync<void>;
