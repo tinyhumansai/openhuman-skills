@@ -19,15 +19,9 @@ import { isGmailConnected } from './api/index';
 import { publishSkillState } from './publish-state';
 import { getGmailSkillState } from './state';
 
-export interface GmailStartArgs {
-  oauth?: Record<string, unknown> | null;
-  auth?: Record<string, unknown> | null;
-  validate?: boolean;
-}
-
-export type StartResult =
-  | { status: 'complete'; message?: string }
-  | { status: 'error'; errors: Array<{ field: string; message: string }> };
+// Lifecycle types come from the canonical contract in `types/skill.d.ts`
+// (`SkillStartArgs` / `SkillStartResult`). Both are global ambient types so
+// no import is needed — we reference them directly below.
 
 // Validate Gmail self_hosted credentials by exchanging the refresh token for
 // an access token, then using it to hit the Gmail profile API. Returns null
@@ -35,7 +29,7 @@ export type StartResult =
 // populated StartResult on failure.
 function validateGmailSelfHosted(
   creds: Record<string, unknown>
-): { status: 'error'; errors: Array<{ field: string; message: string }> } | null {
+): Extract<SkillStartResult, { status: 'error' }> | null {
   const s = getGmailSkillState();
   const clientId = creds.client_id as string | undefined;
   const clientSecret = creds.client_secret as string | undefined;
@@ -109,7 +103,7 @@ function validateGmailSelfHosted(
 // Validate a free-form text credential (raw access token or JSON blob).
 function validateGmailText(
   creds: Record<string, unknown>
-): { status: 'error'; errors: Array<{ field: string; message: string }> } | null {
+): Extract<SkillStartResult, { status: 'error' }> | null {
   const s = getGmailSkillState();
   const content = (creds.content || '') as string;
   if (!content.trim()) {
@@ -207,11 +201,14 @@ export function start(args?: GmailStartArgs): StartResult {
   console.log('[gmail] start() called');
   const s = getGmailSkillState();
 
-  // Pick up oauth metadata if present (credentialId / userEmail).
+  // Pick up oauth metadata if present (credentialId / userEmail). Always
+  // overwrite userEmail when the OAuth bag carries an accountLabel so a
+  // re-auth against a different Google account replaces the stored email
+  // instead of leaking the previous account's identity.
   if (args && args.oauth) {
     const oauthCred = args.oauth as { credentialId?: string; accountLabel?: string };
     if (oauthCred.credentialId) s.config.credentialId = oauthCred.credentialId;
-    if (oauthCred.accountLabel && !s.config.userEmail) {
+    if (oauthCred.accountLabel) {
       s.config.userEmail = oauthCred.accountLabel;
     }
     state.set('config', s.config);
@@ -239,6 +236,21 @@ export function start(args?: GmailStartArgs): StartResult {
       validationError = validateGmailText(auth.credentials || {});
     } else if (args.oauth || (auth && auth.mode === 'managed')) {
       validationError = validateGmailOAuth();
+    } else if (auth) {
+      // `auth` was provided but `mode` is missing or not one of the
+      // recognized values. Reject explicitly so we never fall through to
+      // `connected = true` with credentials we don't know how to use.
+      validationError = {
+        status: 'error' as const,
+        errors: [
+          {
+            field: 'mode',
+            message: auth.mode
+              ? `Unsupported auth mode: ${auth.mode}`
+              : 'Missing auth mode — expected self_hosted, text, or managed.',
+          },
+        ],
+      };
     }
 
     if (validationError) {

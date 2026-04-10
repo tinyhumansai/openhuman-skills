@@ -254,7 +254,10 @@ async function main() {
   t0 = Date.now();
   process.stdout.write(`  Verifying connection... `);
   const verify = await getSkillStatus(SKILL_ID);
-  const connState = (verify.state as { connection_status?: string } | undefined)?.connection_status;
+  const verifyState = verify && verify.state
+    ? (verify.state as { connection_status?: string })
+    : undefined;
+  const connState = verifyState ? verifyState.connection_status : undefined;
   if (connState !== 'connected') {
     console.log(`${C.red}FAIL${C.reset} ${C.dim}${Date.now() - t0}ms${C.reset}`);
     console.error(

@@ -240,7 +240,13 @@ function validateSetupFlow(skillDir, manifest) {
 function hasStartLifecycle(allContent) {
   if (/export\s+function\s+start\s*\(/.test(allContent)) return true;
   if (/export\s*\{[^}]*\bstart\b[^}]*\}/.test(allContent)) return true;
-  if (/from\s+['"]\.\/start['"]/.test(allContent)) return true;
+  // Re-exports / imports from `./start` only count when they actually
+  // mention `start` (as a named specifier or default import) or wildcard
+  // re-export everything from that module.
+  if (/import\s+(?:start\b|\{[^}]*\bstart\b[^}]*\})\s+from\s+['"]\.\/start['"]/.test(allContent))
+    return true;
+  if (/export\s*\{[^}]*\bstart\b[^}]*\}\s*from\s+['"]\.\/start['"]/.test(allContent)) return true;
+  if (/export\s*\*\s*from\s+['"]\.\/start['"]/.test(allContent)) return true;
   return false;
 }
 

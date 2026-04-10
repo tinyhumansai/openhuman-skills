@@ -19,29 +19,22 @@ import { isNotionConnected } from './helpers';
 import { publishState } from './publish-state';
 import { getNotionSkillState } from './state';
 
-export interface NotionStartArgs {
-  oauth?: Record<string, unknown> | null;
-  auth?: Record<string, unknown> | null;
-  validate?: boolean;
-}
-
-export type StartResult =
-  | { status: 'complete'; message?: string }
-  | { status: 'error'; errors: Array<{ field: string; message: string }> };
+// Lifecycle types come from the canonical contract in `types/skill.d.ts`
+// (`SkillStartArgs` / `SkillStartResult`). Both are global ambient types so
+// no import is needed — we reference them directly below.
 
 // Validate the OAuth credential by hitting the Notion API through the proxy
 // (`oauth.fetch`, exposed via notionApi). The proxy uses whatever credential
 // the runtime currently has injected into the `oauth` bridge — that's the
 // fresh credential the host injected before calling start().
-function validateNotionOAuth(): {
-  status: 'error';
-  errors: Array<{ field: string; message: string }>;
-} | null {
+function validateNotionOAuth(): Extract<SkillStartResult, { status: 'error' }> | null {
   try {
     const user = notionApi.getUser('me') as Record<string, unknown>;
-    // Best-effort: stash workspace/user name from the bot user record
+    // Best-effort: stash workspace/user name from the bot user record. We
+    // overwrite unconditionally so a re-auth against a different workspace
+    // refreshes the stored label instead of keeping the previous one.
     const name = user.name as string | undefined;
-    if (name && !getNotionSkillState().config.workspaceName) {
+    if (name) {
       getNotionSkillState().config.workspaceName = name;
     }
     return null;
@@ -61,7 +54,7 @@ function validateNotionOAuth(): {
 function validateNotionAuthDirect(auth: {
   mode?: string;
   credentials?: Record<string, unknown>;
-}): { status: 'error'; errors: Array<{ field: string; message: string }> } | null {
+}): Extract<SkillStartResult, { status: 'error' }> | null {
   const creds = auth.credentials || {};
   const token = (creds.api_token || creds.content || creds.access_token) as string | undefined;
   if (!token) {
@@ -103,12 +96,22 @@ function validateNotionAuthDirect(auth: {
       };
     }
 
-    // Token is valid — extract workspace info from the bot user record
+    // Token is valid — extract workspace info from the bot user record.
+    // The `/v1/users/me` endpoint returns a single user object, not a
+    // `results` array. Handle both shapes defensively in case Notion ever
+    // wraps it differently for some integration types.
     try {
       const data = JSON.parse(response.body) as {
+        type?: string;
+        name?: string;
         results?: Array<{ name?: string; type?: string }>;
       };
-      const botUser = data.results ? data.results.find(u => u.type === 'bot') : undefined;
+      let botUser: { name?: string; type?: string } | undefined;
+      if (data.type) {
+        botUser = { name: data.name, type: data.type };
+      } else if (data.results) {
+        botUser = data.results.find(u => u.type === 'bot');
+      }
       if (botUser && botUser.name) {
         getNotionSkillState().config.workspaceName = botUser.name;
       }
@@ -125,7 +128,7 @@ function validateNotionAuthDirect(auth: {
   }
 }
 
-export function start(args?: NotionStartArgs): StartResult {
+export function start(args?: SkillStartArgs): SkillStartResult {
   const s = getNotionSkillState();
 
   // Pick up account label from the freshly delivered credential bag if we
@@ -133,7 +136,9 @@ export function start(args?: NotionStartArgs): StartResult {
   if (args && args.oauth) {
     const oauthCred = args.oauth as { credentialId?: string; accountLabel?: string };
     if (oauthCred.credentialId) s.config.credentialId = oauthCred.credentialId;
-    if (oauthCred.accountLabel && !s.config.workspaceName) {
+    // Always overwrite — re-auth against a different workspace must replace
+    // the stored label rather than keep the previous account's name.
+    if (oauthCred.accountLabel) {
       s.config.workspaceName = oauthCred.accountLabel;
     }
     state.set('config', s.config);

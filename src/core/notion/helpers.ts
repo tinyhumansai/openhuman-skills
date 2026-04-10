@@ -86,6 +86,7 @@ export function notionFetch<T>(
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     let response: { status: number; headers: Record<string, string>; body: string };
+    let loggedPath = path;
 
     const t0 = Date.now();
 
@@ -111,6 +112,7 @@ export function notionFetch<T>(
       // gets a 400 "Invalid request URL" back, which oauth/complete then
       // surfaces as a validation failure.
       const proxyPath = `/v1${path}`;
+      loggedPath = proxyPath;
       console.log(`[notion][fetch] ${method} ${proxyPath} (oauth.fetch proxy, attempt ${attempt})`);
       response = oauth.fetch(proxyPath, {
         method,
@@ -123,7 +125,7 @@ export function notionFetch<T>(
     const elapsed = Date.now() - t0;
     const bodyLen = response.body ? response.body.length : 0;
     console.log(
-      `[notion][fetch] ${method} ${path} status=${response.status} (${elapsed}ms, ${bodyLen}b)`
+      `[notion][fetch] ${method} ${loggedPath} status=${response.status} (${elapsed}ms, ${bodyLen}b)`
     );
 
     // -- 429 Rate Limit: back off and retry ----------------------------------

@@ -33,8 +33,12 @@ export function publishSkillState(): void {
     userEmail: s.config.userEmail,
     syncEnabled: s.config.syncEnabled,
     syncInProgress: s.syncStatus.syncInProgress,
-    lastSyncTime: new Date(s.syncStatus.lastSyncTime).toISOString(),
-    nextSyncTime: new Date(s.syncStatus.nextSyncTime).toISOString(),
+    lastSyncTime: s.syncStatus.lastSyncTime
+      ? new Date(s.syncStatus.lastSyncTime).toISOString()
+      : null,
+    nextSyncTime: s.syncStatus.nextSyncTime
+      ? new Date(s.syncStatus.nextSyncTime).toISOString()
+      : null,
     totalEmails: s.syncStatus.totalEmails,
     newEmailsCount: s.syncStatus.newEmailsCount,
     activeSessions: s.activeSessions.length,
