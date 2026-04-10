@@ -180,10 +180,7 @@ function validateGmailText(
 // (`oauth.fetch`, exposed via gmailFetch / loadGmailProfile). The proxy uses
 // whatever credential the runtime currently has injected into the `oauth`
 // bridge — that's the fresh credential the host injected before calling start().
-function validateGmailOAuth(): {
-  status: 'error';
-  errors: Array<{ field: string; message: string }>;
-} | null {
+function validateGmailOAuth(): Extract<SkillStartResult, { status: 'error' }> | null {
   try {
     loadGmailProfile();
     return null;
@@ -197,7 +194,7 @@ function validateGmailOAuth(): {
   }
 }
 
-export function start(args?: GmailStartArgs): StartResult {
+export function start(args?: SkillStartArgs): SkillStartResult {
   console.log('[gmail] start() called');
   const s = getGmailSkillState();
 
