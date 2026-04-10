@@ -131,10 +131,7 @@ describe('Tools - without credentials', () => {
     assertNotNull(result);
     // Either the tool returns { success: false } or it throws (caught above
     // and surfaced as { error }). Both indicate the missing arg was rejected.
-    assert(
-      result.success === false || !!result.error,
-      'should reject missing message_id'
-    );
+    assert(result.success === false || !!result.error, 'should reject missing message_id');
   });
 
   afterAll(async () => {
