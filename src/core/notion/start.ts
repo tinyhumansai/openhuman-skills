@@ -14,7 +14,6 @@
 //   2. (optional) validating credentials against the upstream API
 //   3. registering the periodic sync cron
 //   4. publishing connection state to the host
-
 import { notionApi } from './api/index';
 import { isNotionConnected } from './helpers';
 import { publishState } from './publish-state';
@@ -34,9 +33,10 @@ export type StartResult =
 // (`oauth.fetch`, exposed via notionApi). The proxy uses whatever credential
 // the runtime currently has injected into the `oauth` bridge — that's the
 // fresh credential the host injected before calling start().
-function validateNotionOAuth():
-  | { status: 'error'; errors: Array<{ field: string; message: string }> }
-  | null {
+function validateNotionOAuth(): {
+  status: 'error';
+  errors: Array<{ field: string; message: string }>;
+} | null {
   try {
     const user = notionApi.getUser('me') as Record<string, unknown>;
     // Best-effort: stash workspace/user name from the bot user record
@@ -49,10 +49,7 @@ function validateNotionOAuth():
     return {
       status: 'error',
       errors: [
-        {
-          field: 'oauth',
-          message: `Notion OAuth credential rejected by API: ${String(err)}`,
-        },
+        { field: 'oauth', message: `Notion OAuth credential rejected by API: ${String(err)}` },
       ],
     };
   }
@@ -64,16 +61,11 @@ function validateNotionOAuth():
 function validateNotionAuthDirect(auth: {
   mode?: string;
   credentials?: Record<string, unknown>;
-}):
-  | { status: 'error'; errors: Array<{ field: string; message: string }> }
-  | null {
+}): { status: 'error'; errors: Array<{ field: string; message: string }> } | null {
   const creds = auth.credentials || {};
   const token = (creds.api_token || creds.content || creds.access_token) as string | undefined;
   if (!token) {
-    return {
-      status: 'error',
-      errors: [{ field: 'api_token', message: 'API token is required.' }],
-    };
+    return { status: 'error', errors: [{ field: 'api_token', message: 'API token is required.' }] };
   }
 
   try {

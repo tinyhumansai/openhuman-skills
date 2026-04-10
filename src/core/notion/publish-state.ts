@@ -4,7 +4,6 @@
 // transport. Centralized here so `start.ts`, `index.ts`, and option/sync
 // handlers all publish the same shape — and so we never accidentally
 // re-introduce a cycle by having `start.ts` import from `index.ts`.
-
 import { getLocalPages } from './db/helpers';
 import { isNotionConnected } from './helpers';
 import { getNotionSkillState } from './state';

@@ -14,7 +14,6 @@
 //   2. (optional) validating credentials against the upstream API
 //   3. registering the periodic sync cron (when sync is enabled)
 //   4. publishing connection state to the host
-
 import { loadGmailProfile } from './api/helpers';
 import { isGmailConnected } from './api/index';
 import { publishSkillState } from './publish-state';
@@ -34,9 +33,9 @@ export type StartResult =
 // an access token, then using it to hit the Gmail profile API. Returns null
 // on success (and stashes the discovered email into config); returns a
 // populated StartResult on failure.
-function validateGmailSelfHosted(creds: Record<string, unknown>):
-  | { status: 'error'; errors: Array<{ field: string; message: string }> }
-  | null {
+function validateGmailSelfHosted(
+  creds: Record<string, unknown>
+): { status: 'error'; errors: Array<{ field: string; message: string }> } | null {
   const s = getGmailSkillState();
   const clientId = creds.client_id as string | undefined;
   const clientSecret = creds.client_secret as string | undefined;
@@ -108,9 +107,9 @@ function validateGmailSelfHosted(creds: Record<string, unknown>):
 }
 
 // Validate a free-form text credential (raw access token or JSON blob).
-function validateGmailText(creds: Record<string, unknown>):
-  | { status: 'error'; errors: Array<{ field: string; message: string }> }
-  | null {
+function validateGmailText(
+  creds: Record<string, unknown>
+): { status: 'error'; errors: Array<{ field: string; message: string }> } | null {
   const s = getGmailSkillState();
   const content = (creds.content || '') as string;
   if (!content.trim()) {
@@ -187,9 +186,10 @@ function validateGmailText(creds: Record<string, unknown>):
 // (`oauth.fetch`, exposed via gmailFetch / loadGmailProfile). The proxy uses
 // whatever credential the runtime currently has injected into the `oauth`
 // bridge — that's the fresh credential the host injected before calling start().
-function validateGmailOAuth():
-  | { status: 'error'; errors: Array<{ field: string; message: string }> }
-  | null {
+function validateGmailOAuth(): {
+  status: 'error';
+  errors: Array<{ field: string; message: string }>;
+} | null {
   try {
     loadGmailProfile();
     return null;
@@ -197,10 +197,7 @@ function validateGmailOAuth():
     return {
       status: 'error',
       errors: [
-        {
-          field: 'oauth',
-          message: `Gmail OAuth credential rejected by API: ${String(err)}`,
-        },
+        { field: 'oauth', message: `Gmail OAuth credential rejected by API: ${String(err)}` },
       ],
     };
   }

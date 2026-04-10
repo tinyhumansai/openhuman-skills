@@ -4,7 +4,6 @@
 // transport. Centralized here so `start.ts`, `index.ts`, option handlers, and
 // the sync loop all publish the same shape — and so we never accidentally
 // re-introduce a cycle by having `start.ts` import from `index.ts`.
-
 import { isGmailConnected } from './api/index';
 import { getGmailSkillState } from './state';
 
