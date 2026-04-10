@@ -4,6 +4,8 @@ import { loadGmailProfile } from './api/helpers';
 import { isGmailConnected } from './api/index';
 import { getEmailCount } from './db/helpers';
 import { initializeGmailSchema } from './db/schema';
+import { publishSkillState } from './publish-state';
+import { start } from './start';
 import { getGmailSkillState } from './state';
 import { onSync } from './sync';
 import { tools } from './tools';
@@ -47,29 +49,11 @@ function init(): void {
   console.log(`[gmail] Initialized. Connected: ${isConnected}`);
 }
 
-// Credentials shape passed in by the Rust host. Both fields may be null on
-// first start (before the user has connected). Re-invoked from the host after
-// oauth/complete and auth/complete so the skill always sees the latest creds.
-//
-// `validate: true` is set when the host wants start() to actually hit the
-// upstream API and confirm the credentials work — used during the auth
-// handshake so the user gets inline error feedback. Routine restarts (skill
-// spawn, oauth/complete) leave it false to avoid an extra network round-trip.
-interface GmailStartArgs {
-  oauth?: Record<string, unknown> | null;
-  auth?: Record<string, unknown> | null;
-  validate?: boolean;
-}
-
-type StartResult =
-  | { status: 'complete'; message?: string }
-  | { status: 'error'; errors: Array<{ field: string; message: string }> };
-
 // Validate Gmail self_hosted credentials by exchanging the refresh token for
 // an access token, then using it to hit the Gmail profile API. Returns null
 // on success (and stashes the discovered email into config); returns a
 // populated StartResult on failure.
-function validateGmailSelfHosted(creds: Record<string, unknown>):
+function _unused_validateGmailSelfHosted(creds: Record<string, unknown>):
   | { status: 'error'; errors: Array<{ field: string; message: string }> }
   | null {
   const s = getGmailSkillState();

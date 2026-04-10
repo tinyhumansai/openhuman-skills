@@ -3,9 +3,11 @@
 // Supports pages, databases, blocks, users, comments, and local search.
 // Authentication is handled via the platform OAuth bridge.
 import { notionApi } from './api/index';
-import { getEntityCounts, getLocalPages } from './db/helpers';
+import { getEntityCounts } from './db/helpers';
 import { initializeNotionSchema } from './db/schema';
 import { formatUserSummary, isNotionConnected } from './helpers';
+import { publishState } from './publish-state';
+import { start } from './start';
 import { getNotionSkillState } from './state';
 import type { NotionSkillConfig } from './state';
 import { performSync } from './sync';
@@ -62,149 +64,6 @@ function init(): void {
   }
 
   publishState();
-}
-
-// Credentials shape passed in by the Rust host. Both fields may be null on
-// first start (before the user has connected). Re-invoked from the host after
-// oauth/complete and auth/complete so the skill always sees the latest creds.
-//
-// `validate: true` is set when the host wants start() to actually hit the
-// upstream API and confirm the credentials work — used during the auth
-// handshake so the user gets inline error feedback. Routine restarts (skill
-// spawn, oauth/complete) leave it false to avoid an extra network round-trip.
-interface NotionStartArgs {
-  oauth?: Record<string, unknown> | null;
-  auth?: Record<string, unknown> | null;
-  validate?: boolean;
-}
-
-type StartResult =
-  | { status: 'complete'; message?: string }
-  | { status: 'error'; errors: Array<{ field: string; message: string }> };
-
-// Hit the Notion API with the supplied auth credentials and confirm they work.
-// Returns null on success (and stashes the discovered workspace name into
-// state); returns a populated StartResult on failure.
-function validateNotionAuth(auth: { mode?: string; credentials?: Record<string, unknown> }):
-  | { status: 'error'; errors: Array<{ field: string; message: string }> }
-  | null {
-  if (auth.mode === 'managed') return null; // OAuth flow already vouched for the token
-
-  const creds = auth.credentials || {};
-  const token = (creds.api_token || creds.content || creds.access_token) as string | undefined;
-  if (!token) {
-    return {
-      status: 'error',
-      errors: [{ field: 'api_token', message: 'API token is required.' }],
-    };
-  }
-
-  try {
-    const response = net.fetch('https://api.notion.com/v1/users/me', {
-      method: 'GET',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-        'Notion-Version': '2026-03-11',
-      },
-      timeout: 15,
-    });
-
-    if (response.status === 401 || response.status === 403) {
-      return {
-        status: 'error',
-        errors: [
-          {
-            field: 'api_token',
-            message: 'Invalid token. Check that your integration token is correct.',
-          },
-        ],
-      };
-    }
-
-    if (response.status >= 400) {
-      return {
-        status: 'error',
-        errors: [
-          {
-            field: 'api_token',
-            message: `Notion API returned error ${response.status}. Please check your token.`,
-          },
-        ],
-      };
-    }
-
-    // Token is valid — extract workspace info from the bot user record
-    try {
-      const data = JSON.parse(response.body) as {
-        results?: Array<{ name?: string; type?: string }>;
-      };
-      const botUser = data.results ? data.results.find(u => u.type === 'bot') : undefined;
-      if (botUser && botUser.name) {
-        getNotionSkillState().config.workspaceName = botUser.name;
-      }
-    } catch {
-      // Non-critical: workspace name extraction failed
-    }
-
-    return null;
-  } catch (err) {
-    return {
-      status: 'error',
-      errors: [{ field: 'api_token', message: `Could not reach Notion API: ${String(err)}` }],
-    };
-  }
-}
-
-function start(args?: NotionStartArgs): StartResult {
-  const s = getNotionSkillState();
-
-  // Pick up account label from the freshly delivered credential bag if we
-  // didn't have it stashed already (e.g. first time after OAuth handoff).
-  if (args && args.oauth) {
-    const oauthCred = args.oauth as { credentialId?: string; accountLabel?: string };
-    if (oauthCred.credentialId) s.config.credentialId = oauthCred.credentialId;
-    if (oauthCred.accountLabel && !s.config.workspaceName) {
-      s.config.workspaceName = oauthCred.accountLabel;
-    }
-    state.set('config', s.config);
-  }
-
-  // Validation phase — only when host explicitly asks (auth handshake).
-  // If validation fails we bail out *before* registering cron so a bad
-  // credential never schedules background work.
-  if (args && args.validate && args.auth) {
-    const validationError = validateNotionAuth(
-      args.auth as { mode?: string; credentials?: Record<string, unknown> }
-    );
-    if (validationError) {
-      console.log('[notion] start(): validation failed');
-      return validationError;
-    }
-    state.set('config', s.config);
-  }
-
-  // The skill activates the moment we have a credential — either from the
-  // bag the host hands us, or from the bridges (oauth.getCredential / auth)
-  // which were already populated by the runtime. We tolerate both so re-calls
-  // from oauth/auth complete and the initial spawn behave identically.
-  const hasCredFromArgs = !!(args && (args.oauth || args.auth));
-  const connected = hasCredFromArgs || isNotionConnected();
-
-  if (!connected) {
-    console.log('[notion] start(): no credential yet — waiting for auth');
-    publishState();
-    return { status: 'complete' };
-  }
-
-  // Register sync cron schedule. Always unregister first so re-calls from
-  // oauth/auth complete don't pile up duplicate timers.
-  cron.unregister('notion-sync');
-  const cronExpr = `0 */${s.config.syncIntervalMinutes} * * * *`;
-  cron.register('notion-sync', cronExpr);
-  console.log(`[notion] start(): scheduled sync every ${s.config.syncIntervalMinutes} minutes`);
-  publishState();
-  return { status: 'complete', message: 'Connected to Notion!' };
 }
 
 function stop(): void {
@@ -397,55 +256,6 @@ function onSetOption(args: { name: string; value: unknown }): void {
 
   state.set('config', s.config);
   publishState();
-}
-
-// ---------------------------------------------------------------------------
-// State publishing
-// ---------------------------------------------------------------------------
-
-function publishState(): void {
-  const s = getNotionSkillState();
-  const isConnected = isNotionConnected();
-
-  // Fetch recent page summaries from local DB (metadata only — no content_text
-  // to avoid raw newlines breaking JSON serialization in the state transport)
-  let pages: Array<{ id: string; title: string; url: string | null; last_edited_time: string }> =
-    [];
-  if (isConnected) {
-    try {
-      const localPages = getLocalPages({ limit: 100 });
-      pages = localPages.map(p => ({
-        id: p.id,
-        title: p.title,
-        url: p.url,
-        last_edited_time: p.last_edited_time,
-      }));
-    } catch (e) {
-      console.error('[notion] publishState: failed to load local pages:', e);
-    }
-  }
-
-  state.setPartial({
-    // Standard SkillHostConnectionState fields
-    connection_status: isConnected ? 'connected' : 'disconnected',
-    auth_status: isConnected ? 'authenticated' : 'not_authenticated',
-    connection_error: s.syncStatus.lastSyncError || null,
-    auth_error: null,
-    is_initialized: isConnected,
-    // Skill-specific fields
-    workspaceName: s.config.workspaceName || null,
-    syncInProgress: s.syncStatus.syncInProgress,
-    lastSyncTime: s.syncStatus.lastSyncTime
-      ? new Date(s.syncStatus.lastSyncTime).toISOString()
-      : null,
-    totalPages: s.syncStatus.totalPages,
-    totalDatabases: s.syncStatus.totalDatabases,
-    totalDatabaseRows: s.syncStatus.totalDatabaseRows,
-    pagesWithContent: s.syncStatus.pagesWithContent,
-    pagesWithSummary: s.syncStatus.pagesWithSummary,
-    lastSyncError: s.syncStatus.lastSyncError,
-    pages,
-  });
 }
 
 // ---------------------------------------------------------------------------
