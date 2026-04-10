@@ -203,13 +203,15 @@ function validateSetupFlow(skillDir, manifest) {
   // Also check tool files and other ts files that might define these
   const allContent = getAllTsContent(join(srcDir, skillDir));
 
-  // Advanced auth skills use onAuthComplete; may also define onOAuthComplete for managed mode
+  // Skills with auth/oauth in their manifest delegate activation to a single
+  // `start({ oauth, auth, validate })` lifecycle hook (see openhuman PR #484
+  // and openhuman-skills PR #12). The legacy `onOAuthComplete` /
+  // `onAuthComplete` hooks no longer exist on the Skill interface.
   if (manifest.setup.auth) {
     validateAdvancedAuthSetup(skillDir, manifest, allContent);
     return;
   }
 
-  // OAuth skills use onOAuthComplete instead of onSetupStart/onSetupSubmit
   if (manifest.setup.oauth) {
     validateOAuthSetup(skillDir, manifest, allContent);
     return;
@@ -226,6 +228,34 @@ function validateSetupFlow(skillDir, manifest) {
   }
   if (hasSetupStart && hasSetupSubmit) {
     pass('Setup flow: onSetupStart and onSetupSubmit defined');
+  }
+}
+
+/**
+ * Skills with auth in their manifest must export a `start` function — that's
+ * the single entry point the Rust runtime calls on instance spawn and after
+ * `oauth/complete` / `auth/complete`. We treat any exported function literally
+ * named `start` (or a re-export from `./start`) as satisfying the contract.
+ */
+function hasStartLifecycle(allContent) {
+  if (/export\s+function\s+start\s*\(/.test(allContent)) return true;
+  if (/export\s*\{[^}]*\bstart\b[^}]*\}/.test(allContent)) return true;
+  if (/from\s+['"]\.\/start['"]/.test(allContent)) return true;
+  return false;
+}
+
+function warnIfLegacyAuthHooks(skillDir, allContent) {
+  if (/\bonOAuthComplete\s*[:(]/.test(allContent)) {
+    warn(
+      skillDir,
+      'Legacy `onOAuthComplete` hook detected — fold its logic into start({ oauth, validate })',
+    );
+  }
+  if (/\bonAuthComplete\s*[:(]/.test(allContent)) {
+    warn(
+      skillDir,
+      'Legacy `onAuthComplete` hook detected — fold its logic into start({ auth, validate })',
+    );
   }
 }
 
@@ -251,13 +281,18 @@ function validateOAuthSetup(skillDir, manifest, allContent) {
     }
   }
 
-  // Check that skill implements onOAuthComplete
-  const hasOAuthComplete = allContent.includes('onOAuthComplete');
-  if (!hasOAuthComplete) {
-    error(skillDir, 'setup.oauth is present but onOAuthComplete is not defined');
+  // Skill must export start() — runtime calls it after oauth/complete with
+  // { oauth, validate: true } so the skill can validate the credential.
+  if (!hasStartLifecycle(allContent)) {
+    error(
+      skillDir,
+      'setup.oauth is present but skill does not export a `start` function (the runtime calls start({ oauth, validate: true }) after oauth/complete)',
+    );
   } else {
-    pass('OAuth lifecycle: onOAuthComplete defined');
+    pass('OAuth lifecycle: start() defined');
   }
+
+  warnIfLegacyAuthHooks(skillDir, allContent);
 
   // Warn if skill still has onSetupStart (likely leftover)
   const hasSetupStart = allContent.includes('onSetupStart');
@@ -285,24 +320,20 @@ function validateAdvancedAuthSetup(skillDir, manifest, allContent) {
     } else {
       pass(`Managed auth provider: "${managedMode.provider}"`);
     }
-
-    // Managed mode should have onOAuthComplete
-    const hasOAuthComplete = allContent.includes('onOAuthComplete');
-    if (!hasOAuthComplete) {
-      warn(skillDir, 'Managed auth mode present but onOAuthComplete not defined');
-    }
   }
 
-  // Non-managed modes should have onAuthComplete
-  const hasNonManaged = authConfig.modes.some(m => m.type !== 'managed');
-  if (hasNonManaged) {
-    const hasAuthComplete = allContent.includes('onAuthComplete');
-    if (!hasAuthComplete) {
-      error(skillDir, 'Non-managed auth modes present but onAuthComplete not defined');
-    } else {
-      pass('Auth lifecycle: onAuthComplete defined');
-    }
+  // Skill must export start() — the Rust runtime calls it after both
+  // oauth/complete and auth/complete with { oauth, auth, validate: true }.
+  if (!hasStartLifecycle(allContent)) {
+    error(
+      skillDir,
+      'setup.auth is present but skill does not export a `start` function (the runtime calls start({ oauth, auth, validate: true }) after auth/complete)',
+    );
+  } else {
+    pass('Auth lifecycle: start() defined');
   }
+
+  warnIfLegacyAuthHooks(skillDir, allContent);
 
   // Self-hosted mode should have fields
   const selfHosted = authConfig.modes.find(m => m.type === 'self_hosted');
