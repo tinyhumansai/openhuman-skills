@@ -859,7 +859,7 @@ var __skill_bundle = (() => {
     threadsTotal: profile.threadsTotal || 0,
     historyId: profile.historyId
    };
-   if (!s2.config.userEmail) {
+   if (profile.emailAddress && s2.config.userEmail !== profile.emailAddress) {
     s2.config.userEmail = profile.emailAddress;
     state.set("config", s2.config);
    }
@@ -6888,6 +6888,248 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
   console.log("[gmail] Database schema initialized successfully");
  }
 
+ // skills-ts-out/core/gmail/publish-state.js
+ init_buffer_inject();
+ function publishSkillState2() {
+  const s2 = getGmailSkillState();
+  const isConnected = isGmailConnected();
+  const profile = isConnected && s2.profile != null ? {
+   email_address: s2.profile.emailAddress,
+   messages_total: s2.profile.messagesTotal,
+   threads_total: s2.profile.threadsTotal,
+   history_id: s2.profile.historyId
+  } : null;
+  state.setPartial({
+   // Standard SkillHostConnectionState fields
+   connection_status: isConnected ? "connected" : "disconnected",
+   auth_status: isConnected ? "authenticated" : "not_authenticated",
+   connection_error: s2.lastApiError || null,
+   auth_error: null,
+   is_initialized: isConnected,
+   // Skill-specific fields
+   userEmail: s2.config.userEmail,
+   syncEnabled: s2.config.syncEnabled,
+   syncInProgress: s2.syncStatus.syncInProgress,
+   lastSyncTime: s2.syncStatus.lastSyncTime ? new Date(s2.syncStatus.lastSyncTime).toISOString() : null,
+   nextSyncTime: s2.syncStatus.nextSyncTime ? new Date(s2.syncStatus.nextSyncTime).toISOString() : null,
+   totalEmails: s2.syncStatus.totalEmails,
+   newEmailsCount: s2.syncStatus.newEmailsCount,
+   activeSessions: s2.activeSessions.length,
+   rateLimitRemaining: s2.rateLimitRemaining,
+   lastError: s2.lastApiError,
+   // For frontend gmail store (gmailSlice)
+   profile
+  });
+ }
+
+ // skills-ts-out/core/gmail/start.js
+ init_buffer_inject();
+ function validateGmailSelfHosted(creds) {
+  const s2 = getGmailSkillState();
+  const clientId = creds.client_id;
+  const clientSecret = creds.client_secret;
+  const refreshToken = creds.refresh_token;
+  if (!clientId || !clientSecret || !refreshToken) {
+   return {
+    status: "error",
+    errors: [{ field: "refresh_token", message: "All three fields are required." }]
+   };
+  }
+  try {
+   const body = `client_id=${encodeURIComponent(clientId)}&client_secret=${encodeURIComponent(clientSecret)}&refresh_token=${encodeURIComponent(refreshToken)}&grant_type=refresh_token`;
+   const response = net.fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body,
+    timeout: 15
+   });
+   if (response.status !== 200) {
+    let errorMsg = "Invalid credentials.";
+    try {
+     const parsed = JSON.parse(response.body);
+     if (parsed.error_description)
+      errorMsg = parsed.error_description;
+    } catch {
+    }
+    return { status: "error", errors: [{ field: "refresh_token", message: errorMsg }] };
+   }
+   const tokenData = JSON.parse(response.body);
+   const profileResp = net.fetch("https://gmail.googleapis.com/gmail/v1/users/me/profile", {
+    method: "GET",
+    headers: {
+     Authorization: `Bearer ${tokenData.access_token}`,
+     "Content-Type": "application/json"
+    },
+    timeout: 10
+   });
+   if (profileResp.status !== 200) {
+    return {
+     status: "error",
+     errors: [
+      {
+       field: "client_id",
+       message: "Token is valid but Gmail API access failed. Ensure Gmail API is enabled in your Google Cloud project."
+      }
+     ]
+    };
+   }
+   try {
+    const profile = JSON.parse(profileResp.body);
+    if (profile.emailAddress)
+     s2.config.userEmail = profile.emailAddress;
+   } catch {
+   }
+   return null;
+  } catch (err) {
+   return {
+    status: "error",
+    errors: [{ field: "client_id", message: `Could not reach Google API: ${String(err)}` }]
+   };
+  }
+ }
+ function validateGmailText(creds) {
+  const s2 = getGmailSkillState();
+  const content = creds.content || "";
+  if (!content.trim()) {
+   return {
+    status: "error",
+    errors: [{ field: "content", message: "Credential content is required." }]
+   };
+  }
+  let token2 = content.trim();
+  try {
+   const parsed = JSON.parse(content);
+   if (parsed.access_token) {
+    token2 = parsed.access_token;
+   } else if (parsed.private_key) {
+    return {
+     status: "error",
+     errors: [
+      {
+       field: "content",
+       message: "Service account JSON with private_key is not yet supported. Use a refresh token or access token instead."
+      }
+     ]
+    };
+   }
+  } catch {
+  }
+  try {
+   const profileResp = net.fetch("https://gmail.googleapis.com/gmail/v1/users/me/profile", {
+    method: "GET",
+    headers: { Authorization: `Bearer ${token2}`, "Content-Type": "application/json" },
+    timeout: 10
+   });
+   if (profileResp.status === 401 || profileResp.status === 403) {
+    return {
+     status: "error",
+     errors: [{ field: "content", message: "Invalid or expired token." }]
+    };
+   }
+   if (profileResp.status !== 200) {
+    const bodyPreview = profileResp.body ? profileResp.body.slice(0, 200) : "";
+    return {
+     status: "error",
+     errors: [
+      {
+       field: "content",
+       message: `Gmail API returned ${profileResp.status}. ${bodyPreview}`.trim()
+      }
+     ]
+    };
+   }
+   try {
+    const profile = JSON.parse(profileResp.body);
+    if (profile.emailAddress)
+     s2.config.userEmail = profile.emailAddress;
+   } catch {
+   }
+   return null;
+  } catch (err) {
+   return {
+    status: "error",
+    errors: [{ field: "content", message: `Could not reach Gmail API: ${String(err)}` }]
+   };
+  }
+ }
+ function validateGmailOAuth() {
+  try {
+   loadGmailProfile();
+   return null;
+  } catch (err) {
+   return {
+    status: "error",
+    errors: [
+     { field: "oauth", message: `Gmail OAuth credential rejected by API: ${String(err)}` }
+    ]
+   };
+  }
+ }
+ function start(args) {
+  console.log("[gmail] start() called");
+  const s2 = getGmailSkillState();
+  let tempOauthCredentialId;
+  let tempOauthAccountLabel;
+  if (args && args.oauth) {
+   const oauthCred = args.oauth;
+   tempOauthCredentialId = oauthCred.credentialId;
+   tempOauthAccountLabel = oauthCred.accountLabel;
+  }
+  if (args && args.validate) {
+   const auth2 = args.auth;
+   let validationError;
+   if (auth2 && auth2.mode === "self_hosted") {
+    validationError = validateGmailSelfHosted(auth2.credentials || {});
+   } else if (auth2 && auth2.mode === "text") {
+    validationError = validateGmailText(auth2.credentials || {});
+   } else if (args.oauth || auth2 && auth2.mode === "managed") {
+    validationError = validateGmailOAuth();
+   } else if (auth2) {
+    validationError = {
+     status: "error",
+     errors: [
+      {
+       field: "mode",
+       message: auth2.mode ? `Unsupported auth mode: ${auth2.mode}` : "Missing auth mode \u2014 expected self_hosted, text, or managed."
+      }
+     ]
+    };
+   }
+   if (validationError) {
+    console.log("[gmail] start(): validation failed");
+    return validationError;
+   }
+  }
+  if (tempOauthCredentialId || tempOauthAccountLabel) {
+   if (tempOauthCredentialId)
+    s2.config.credentialId = tempOauthCredentialId;
+   if (tempOauthAccountLabel)
+    s2.config.userEmail = tempOauthAccountLabel;
+   state.set("config", s2.config);
+  } else if (args && args.validate) {
+   state.set("config", s2.config);
+  }
+  const hasCredFromArgs = !!(args && (args.oauth || args.auth));
+  const connected = hasCredFromArgs || isGmailConnected();
+  if (!connected) {
+   console.log("[gmail] start(): no credential yet \u2014 waiting for auth");
+   publishSkillState2();
+   return { status: "complete" };
+  }
+  if (!s2.config.syncEnabled) {
+   console.log("[gmail] start(): connected but sync disabled");
+   cron.unregister("gmail-sync");
+   publishSkillState2();
+   return { status: "complete" };
+  }
+  cron.unregister("gmail-sync");
+  const cronExpr = `0 */${s2.config.syncIntervalMinutes} * * * *`;
+  cron.register("gmail-sync", cronExpr);
+  console.log(`[gmail] start(): scheduled sync every ${s2.config.syncIntervalMinutes} minutes`);
+  publishSkillState2();
+  return { status: "complete", message: "Connected to Gmail!" };
+ }
+
  // skills-ts-out/core/gmail/sync.js
  init_buffer_inject();
 
@@ -8466,17 +8708,6 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
   const isConnected = isGmailConnected();
   console.log(`[gmail] Initialized. Connected: ${isConnected}`);
  }
- function start() {
-  console.log("[gmail] Starting skill...");
-  const s2 = getGmailSkillState();
-  if (isGmailConnected() && s2.config.syncEnabled) {
-   const cronExpr = `0 */${s2.config.syncIntervalMinutes} * * * *`;
-   cron.register("gmail-sync", cronExpr);
-   publishSkillState2();
-  } else {
-   console.log("[gmail] Not connected or sync disabled");
-  }
- }
  function stop() {
   console.log("[gmail] Skill stopped");
  }
@@ -8498,16 +8729,6 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
    s2.activeSessions.splice(index, 1);
   }
   console.log(`[gmail] Session ended: ${args.sessionId} (${s2.activeSessions.length} active)`);
- }
- function onOAuthComplete(args) {
-  console.log(`[gmail] OAuth complete for provider: ${args.provider}`);
-  const s2 = getGmailSkillState();
-  s2.config.credentialId = args.credentialId;
-  if (args.accountLabel) {
-   s2.config.userEmail = args.accountLabel;
-  }
-  state.set("config", s2.config);
-  publishSkillState2();
  }
  function onOAuthRevoked(args) {
   console.log(`[gmail] OAuth revoked: ${args.reason}`);
@@ -8539,146 +8760,6 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
   cron.unregister("gmail-sync");
   publishSkillState2();
   console.log("[gmail] Disconnected and cleaned up");
- }
- function onAuthComplete(args) {
-  console.log(`[gmail] onAuthComplete \u2014 mode: ${args.mode}`);
-  const s2 = getGmailSkillState();
-  if (args.mode === "managed") {
-   return { status: "complete" };
-  }
-  if (args.mode === "self_hosted") {
-   const clientId = args.credentials.client_id;
-   const clientSecret = args.credentials.client_secret;
-   const refreshToken = args.credentials.refresh_token;
-   if (!clientId || !clientSecret || !refreshToken) {
-    return {
-     status: "error",
-     errors: [{ field: "refresh_token", message: "All three fields are required." }]
-    };
-   }
-   try {
-    const body = `client_id=${encodeURIComponent(clientId)}&client_secret=${encodeURIComponent(clientSecret)}&refresh_token=${encodeURIComponent(refreshToken)}&grant_type=refresh_token`;
-    const response = net.fetch("https://oauth2.googleapis.com/token", {
-     method: "POST",
-     headers: { "Content-Type": "application/x-www-form-urlencoded" },
-     body,
-     timeout: 15
-    });
-    if (response.status !== 200) {
-     let errorMsg = "Invalid credentials.";
-     try {
-      const parsed = JSON.parse(response.body);
-      if (parsed.error_description)
-       errorMsg = parsed.error_description;
-     } catch {
-     }
-     return { status: "error", errors: [{ field: "refresh_token", message: errorMsg }] };
-    }
-    const tokenData = JSON.parse(response.body);
-    const profileResp = net.fetch("https://gmail.googleapis.com/gmail/v1/users/me/profile", {
-     method: "GET",
-     headers: {
-      Authorization: `Bearer ${tokenData.access_token}`,
-      "Content-Type": "application/json"
-     },
-     timeout: 10
-    });
-    if (profileResp.status !== 200) {
-     return {
-      status: "error",
-      errors: [
-       {
-        field: "client_id",
-        message: "Token is valid but Gmail API access failed. Ensure Gmail API is enabled in your Google Cloud project."
-       }
-      ]
-     };
-    }
-    try {
-     const profile = JSON.parse(profileResp.body);
-     if (profile.emailAddress) {
-      s2.config.userEmail = profile.emailAddress;
-     }
-    } catch {
-    }
-   } catch (err) {
-    return {
-     status: "error",
-     errors: [{ field: "client_id", message: `Could not reach Google API: ${String(err)}` }]
-    };
-   }
-  }
-  if (args.mode === "text") {
-   const content = args.credentials.content || "";
-   if (!content.trim()) {
-    return {
-     status: "error",
-     errors: [{ field: "content", message: "Credential content is required." }]
-    };
-   }
-   let token2 = content.trim();
-   try {
-    const parsed = JSON.parse(content);
-    if (parsed.access_token) {
-     token2 = parsed.access_token;
-    } else if (parsed.private_key) {
-     return {
-      status: "error",
-      errors: [
-       {
-        field: "content",
-        message: "Service account JSON with private_key is not yet supported. Use a refresh token or access token instead."
-       }
-      ]
-     };
-    }
-   } catch {
-   }
-   try {
-    const profileResp = net.fetch("https://gmail.googleapis.com/gmail/v1/users/me/profile", {
-     method: "GET",
-     headers: { Authorization: `Bearer ${token2}`, "Content-Type": "application/json" },
-     timeout: 10
-    });
-    if (profileResp.status === 401 || profileResp.status === 403) {
-     return {
-      status: "error",
-      errors: [{ field: "content", message: "Invalid or expired token." }]
-     };
-    }
-    if (profileResp.status !== 200) {
-     const bodyPreview = profileResp.body ? profileResp.body.slice(0, 200) : "";
-     return {
-      status: "error",
-      errors: [
-       {
-        field: "content",
-        message: `Gmail API returned ${profileResp.status}. ${bodyPreview}`.trim()
-       }
-      ]
-     };
-    }
-    try {
-     const profile = JSON.parse(profileResp.body);
-     if (profile.emailAddress) {
-      s2.config.userEmail = profile.emailAddress;
-     }
-    } catch {
-    }
-   } catch (err) {
-    return {
-     status: "error",
-     errors: [{ field: "content", message: `Could not reach Gmail API: ${String(err)}` }]
-    };
-   }
-  }
-  state.set("config", s2.config);
-  if (s2.config.syncEnabled) {
-   const cronExpr = `0 */${s2.config.syncIntervalMinutes} * * * *`;
-   cron.register("gmail-sync", cronExpr);
-  }
-  publishSkillState2();
-  return { status: "complete", message: "Connected to Gmail!" };
  }
  function onAuthRevoked(args) {
   console.log(`[gmail] Auth revoked \u2014 mode: ${args.mode || "unknown"}`);
@@ -8786,37 +8867,6 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
   state.set("config", s2.config);
   publishSkillState2();
  }
- function publishSkillState2() {
-  const s2 = getGmailSkillState();
-  const isConnected = isGmailConnected();
-  const profile = isConnected && s2.profile != null ? {
-   email_address: s2.profile.emailAddress,
-   messages_total: s2.profile.messagesTotal,
-   threads_total: s2.profile.threadsTotal,
-   history_id: s2.profile.historyId
-  } : null;
-  state.setPartial({
-   // Standard SkillHostConnectionState fields
-   connection_status: isConnected ? "connected" : "disconnected",
-   auth_status: isConnected ? "authenticated" : "not_authenticated",
-   connection_error: s2.lastApiError || null,
-   auth_error: null,
-   is_initialized: isConnected,
-   // Skill-specific fields
-   userEmail: s2.config.userEmail,
-   syncEnabled: s2.config.syncEnabled,
-   syncInProgress: s2.syncStatus.syncInProgress,
-   lastSyncTime: new Date(s2.syncStatus.lastSyncTime).toISOString(),
-   nextSyncTime: new Date(s2.syncStatus.nextSyncTime).toISOString(),
-   totalEmails: s2.syncStatus.totalEmails,
-   newEmailsCount: s2.syncStatus.newEmailsCount,
-   activeSessions: s2.activeSessions.length,
-   rateLimitRemaining: s2.rateLimitRemaining,
-   lastError: s2.lastApiError,
-   // For frontend gmail store (gmailSlice)
-   profile
-  });
- }
  var _g = globalThis;
  _g.getGmailSkillState = getGmailSkillState;
  _g.publishSkillState = publishSkillState2;
@@ -8837,9 +8887,7 @@ ${"".padEnd(offset)}${"^".repeat(len)}`;
   onCronTrigger,
   onSessionStart,
   onSessionEnd,
-  onOAuthComplete,
   onOAuthRevoked,
-  onAuthComplete,
   onAuthRevoked,
   onSetupStart,
   onSetupSubmit,

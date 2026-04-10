@@ -608,6 +608,7 @@ var __skill_bundle = (() => {
   const apiVersion = NOTION_API_VERSION;
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
    let response;
+   let loggedPath = path;
    const t0 = Date.now();
    if (notionAuth.type === "token") {
     const url = `https://api.notion.com/v1${path}`;
@@ -623,8 +624,10 @@ var __skill_bundle = (() => {
      timeout: 30
     });
    } else {
-    console.log(`[notion][fetch] ${method} ${path} (oauth.fetch proxy, attempt ${attempt})`);
-    response = oauth.fetch(path, {
+    const proxyPath = `/v1${path}`;
+    loggedPath = proxyPath;
+    console.log(`[notion][fetch] ${method} ${proxyPath} (oauth.fetch proxy, attempt ${attempt})`);
+    response = oauth.fetch(proxyPath, {
      method,
      headers: { "Content-Type": "application/json", "Notion-Version": apiVersion },
      body: options.body ? JSON.stringify(options.body) : void 0,
@@ -633,7 +636,7 @@ var __skill_bundle = (() => {
    }
    const elapsed = Date.now() - t0;
    const bodyLen = response.body ? response.body.length : 0;
-   console.log(`[notion][fetch] ${method} ${path} status=${response.status} (${elapsed}ms, ${bodyLen}b)`);
+   console.log(`[notion][fetch] ${method} ${loggedPath} status=${response.status} (${elapsed}ms, ${bodyLen}b)`);
    if (response.status === 429 && attempt < MAX_RETRIES) {
     const retryAfter = response.headers["retry-after"];
     const waitMs = retryAfter ? parseInt(retryAfter, 10) * 1e3 : DEFAULT_BACKOFF_MS * (attempt + 1);
@@ -1735,6 +1738,183 @@ var __skill_bundle = (() => {
   } catch (e) {
    console.warn(`[notion] migrateCompositePrimaryKey(${tableName}):`, e);
   }
+ }
+
+ // skills-ts-out/core/notion/publish-state.js
+ function publishState() {
+  const s = getNotionSkillState2();
+  const isConnected = isNotionConnected();
+  let pages = [];
+  if (isConnected) {
+   try {
+    const localPages = getLocalPages({ limit: 100 });
+    pages = localPages.map((p) => ({
+     id: p.id,
+     title: p.title,
+     url: p.url,
+     last_edited_time: p.last_edited_time
+    }));
+   } catch (e) {
+    console.error("[notion] publishState: failed to load local pages:", e);
+   }
+  }
+  state.setPartial({
+   // Standard SkillHostConnectionState fields
+   connection_status: isConnected ? "connected" : "disconnected",
+   auth_status: isConnected ? "authenticated" : "not_authenticated",
+   connection_error: s.syncStatus.lastSyncError || null,
+   auth_error: null,
+   is_initialized: isConnected,
+   // Skill-specific fields
+   workspaceName: s.config.workspaceName || null,
+   syncInProgress: s.syncStatus.syncInProgress,
+   lastSyncTime: s.syncStatus.lastSyncTime ? new Date(s.syncStatus.lastSyncTime).toISOString() : null,
+   totalPages: s.syncStatus.totalPages,
+   totalDatabases: s.syncStatus.totalDatabases,
+   totalDatabaseRows: s.syncStatus.totalDatabaseRows,
+   pagesWithContent: s.syncStatus.pagesWithContent,
+   pagesWithSummary: s.syncStatus.pagesWithSummary,
+   lastSyncError: s.syncStatus.lastSyncError,
+   pages
+  });
+ }
+
+ // skills-ts-out/core/notion/start.js
+ function validateNotionOAuth() {
+  try {
+   const user = notionApi.getUser("me");
+   const name = user.name;
+   if (name) {
+    getNotionSkillState2().config.workspaceName = name;
+   }
+   return null;
+  } catch (err) {
+   return {
+    status: "error",
+    errors: [
+     { field: "oauth", message: `Notion OAuth credential rejected by API: ${String(err)}` }
+    ]
+   };
+  }
+ }
+ function validateNotionAuthDirect(auth2) {
+  const creds = auth2.credentials || {};
+  const token = creds.api_token || creds.content || creds.access_token;
+  if (!token) {
+   return { status: "error", errors: [{ field: "api_token", message: "API token is required." }] };
+  }
+  try {
+   const response = net.fetch("https://api.notion.com/v1/users/me", {
+    method: "GET",
+    headers: {
+     Authorization: `Bearer ${token}`,
+     "Content-Type": "application/json",
+     "Notion-Version": "2026-03-11"
+    },
+    timeout: 15
+   });
+   if (response.status === 401 || response.status === 403) {
+    return {
+     status: "error",
+     errors: [
+      {
+       field: "api_token",
+       message: "Invalid token. Check that your integration token is correct."
+      }
+     ]
+    };
+   }
+   if (response.status >= 400) {
+    return {
+     status: "error",
+     errors: [
+      {
+       field: "api_token",
+       message: `Notion API returned error ${response.status}. Please check your token.`
+      }
+     ]
+    };
+   }
+   try {
+    const data = JSON.parse(response.body);
+    let botUser;
+    if (data.type) {
+     botUser = { name: data.name, type: data.type };
+    } else if (data.results) {
+     botUser = data.results.find((u) => u.type === "bot");
+    }
+    if (botUser && botUser.name) {
+     getNotionSkillState2().config.workspaceName = botUser.name;
+    }
+   } catch {
+   }
+   return null;
+  } catch (err) {
+   return {
+    status: "error",
+    errors: [{ field: "api_token", message: `Could not reach Notion API: ${String(err)}` }]
+   };
+  }
+ }
+ var SUPPORTED_AUTH_MODES = /* @__PURE__ */ new Set(["managed", "self_hosted"]);
+ function start(args) {
+  const s = getNotionSkillState2();
+  let tempOauthCredentialId;
+  let tempOauthAccountLabel;
+  if (args && args.oauth) {
+   const oauthCred = args.oauth;
+   tempOauthCredentialId = oauthCred.credentialId;
+   tempOauthAccountLabel = oauthCred.accountLabel;
+  }
+  if (args && args.validate) {
+   const auth2 = args.auth;
+   let validationError;
+   if (auth2) {
+    if (!auth2.mode || !SUPPORTED_AUTH_MODES.has(auth2.mode)) {
+     validationError = {
+      status: "error",
+      errors: [
+       {
+        field: "mode",
+        message: auth2.mode ? `Unsupported auth mode: ${auth2.mode}` : "Missing auth mode \u2014 expected managed or self_hosted."
+       }
+      ]
+     };
+    } else if (auth2.mode === "managed") {
+     validationError = validateNotionOAuth();
+    } else {
+     validationError = validateNotionAuthDirect(auth2);
+    }
+   } else if (args.oauth) {
+    validationError = validateNotionOAuth();
+   }
+   if (validationError) {
+    console.log("[notion] start(): validation failed");
+    return validationError;
+   }
+  }
+  if (tempOauthCredentialId || tempOauthAccountLabel) {
+   if (tempOauthCredentialId)
+    s.config.credentialId = tempOauthCredentialId;
+   if (tempOauthAccountLabel)
+    s.config.workspaceName = tempOauthAccountLabel;
+   state.set("config", s.config);
+  } else if (args && args.validate) {
+   state.set("config", s.config);
+  }
+  const hasCredFromArgs = !!(args && (args.oauth || args.auth));
+  const connected = hasCredFromArgs || isNotionConnected();
+  if (!connected) {
+   console.log("[notion] start(): no credential yet \u2014 waiting for auth");
+   publishState();
+   return { status: "complete" };
+  }
+  cron.unregister("notion-sync");
+  const cronExpr = `0 */${s.config.syncIntervalMinutes} * * * *`;
+  cron.register("notion-sync", cronExpr);
+  console.log(`[notion] start(): scheduled sync every ${s.config.syncIntervalMinutes} minutes`);
+  publishState();
+  return { status: "complete", message: "Connected to Notion!" };
  }
 
  // skills-ts-out/shared/integration-metadata.js
@@ -3412,16 +3592,6 @@ var __skill_bundle = (() => {
   }
   publishState();
  }
- function start() {
-  const s = getNotionSkillState2();
-  if (!isNotionConnected()) {
-   console.log("[notion] No credential \u2014 skill inactive until auth completes");
-   return;
-  }
-  const cronExpr = `0 */${s.config.syncIntervalMinutes} * * * *`;
-  cron.register("notion-sync", cronExpr);
-  console.log(`[notion] Scheduled sync every ${s.config.syncIntervalMinutes} minutes`);
- }
  function stop() {
   console.log("[notion] Stopping");
   const s = getNotionSkillState2();
@@ -3447,18 +3617,6 @@ var __skill_bundle = (() => {
    s.activeSessions.splice(index, 1);
   }
  }
- function onOAuthComplete(args) {
-  const s = getNotionSkillState2();
-  s.config.credentialId = args.credentialId;
-  console.log(`[notion] OAuth complete \u2014 credential: ${args.credentialId}, account: ${args.accountLabel || "(unknown)"}`);
-  if (args.accountLabel) {
-   s.config.workspaceName = args.accountLabel;
-  }
-  state.set("config", s.config);
-  const cronExpr = `0 */${s.config.syncIntervalMinutes} * * * *`;
-  cron.register("notion-sync", cronExpr);
-  publishState();
- }
  function onOAuthRevoked(args) {
   console.log(`[notion] OAuth revoked \u2014 reason: ${args.reason}`);
   const s = getNotionSkillState2();
@@ -3477,68 +3635,6 @@ var __skill_bundle = (() => {
   state.delete("config");
   cron.unregister("notion-sync");
   publishState();
- }
- function onAuthComplete(args) {
-  console.log(`[notion] onAuthComplete \u2014 mode: ${args.mode}`);
-  const s = getNotionSkillState2();
-  if (args.mode === "managed") {
-   return { status: "complete" };
-  }
-  const token = args.credentials.api_token || args.credentials.content || args.credentials.access_token;
-  if (!token) {
-   return { status: "error", errors: [{ field: "api_token", message: "API token is required." }] };
-  }
-  try {
-   const response = net.fetch("https://api.notion.com/v1/users/me", {
-    method: "GET",
-    headers: {
-     Authorization: `Bearer ${token}`,
-     "Content-Type": "application/json",
-     "Notion-Version": "2026-03-11"
-    },
-    timeout: 15
-   });
-   if (response.status === 401 || response.status === 403) {
-    return {
-     status: "error",
-     errors: [
-      {
-       field: "api_token",
-       message: "Invalid token. Check that your integration token is correct."
-      }
-     ]
-    };
-   }
-   if (response.status >= 400) {
-    return {
-     status: "error",
-     errors: [
-      {
-       field: "api_token",
-       message: `Notion API returned error ${response.status}. Please check your token.`
-      }
-     ]
-    };
-   }
-   try {
-    const data = JSON.parse(response.body);
-    const botUser = data.results ? data.results.find((u) => u.type === "bot") : void 0;
-    if (botUser && botUser.name) {
-     s.config.workspaceName = botUser.name;
-    }
-   } catch {
-   }
-  } catch (err) {
-   return {
-    status: "error",
-    errors: [{ field: "api_token", message: `Could not reach Notion API: ${String(err)}` }]
-   };
-  }
-  state.set("config", s.config);
-  const cronExpr = `0 */${s.config.syncIntervalMinutes} * * * *`;
-  cron.register("notion-sync", cronExpr);
-  publishState();
-  return { status: "complete", message: "Connected to Notion!" };
  }
  function onAuthRevoked(args) {
   console.log(`[notion] Auth revoked \u2014 mode: ${args.mode || "unknown"}`);
@@ -3632,43 +3728,6 @@ var __skill_bundle = (() => {
   state.set("config", s.config);
   publishState();
  }
- function publishState() {
-  const s = getNotionSkillState2();
-  const isConnected = isNotionConnected();
-  let pages = [];
-  if (isConnected) {
-   try {
-    const localPages = getLocalPages({ limit: 100 });
-    pages = localPages.map((p) => ({
-     id: p.id,
-     title: p.title,
-     url: p.url,
-     last_edited_time: p.last_edited_time
-    }));
-   } catch (e) {
-    console.error("[notion] publishState: failed to load local pages:", e);
-   }
-  }
-  state.setPartial({
-   // Standard SkillHostConnectionState fields
-   connection_status: isConnected ? "connected" : "disconnected",
-   auth_status: isConnected ? "authenticated" : "not_authenticated",
-   connection_error: s.syncStatus.lastSyncError || null,
-   auth_error: null,
-   is_initialized: isConnected,
-   // Skill-specific fields
-   workspaceName: s.config.workspaceName || null,
-   syncInProgress: s.syncStatus.syncInProgress,
-   lastSyncTime: s.syncStatus.lastSyncTime ? new Date(s.syncStatus.lastSyncTime).toISOString() : null,
-   totalPages: s.syncStatus.totalPages,
-   totalDatabases: s.syncStatus.totalDatabases,
-   totalDatabaseRows: s.syncStatus.totalDatabaseRows,
-   pagesWithContent: s.syncStatus.pagesWithContent,
-   pagesWithSummary: s.syncStatus.pagesWithSummary,
-   lastSyncError: s.syncStatus.lastSyncError,
-   pages
-  });
- }
  function onPing() {
   if (!isNotionConnected()) {
    return { ok: false, errorType: "auth", errorMessage: "No credential" };
@@ -3693,9 +3752,7 @@ var __skill_bundle = (() => {
   onCronTrigger,
   onSessionStart,
   onSessionEnd,
-  onOAuthComplete,
   onOAuthRevoked,
-  onAuthComplete,
   onAuthRevoked,
   onSetupStart,
   onSetupSubmit,
