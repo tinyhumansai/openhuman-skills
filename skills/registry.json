@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generated_at": "2026-04-08T20:39:41.604Z",
+  "generated_at": "2026-04-10T05:11:52.602Z",
   "skills": {
     "core": [
       {
@@ -125,7 +125,7 @@
         "ignore_in_production": false,
         "download_url": "https://raw.githubusercontent.com/tinyhumansai/openhuman-skills/refs/heads/build/skills/notion/index.js",
         "manifest_url": "https://raw.githubusercontent.com/tinyhumansai/openhuman-skills/refs/heads/build/skills/notion/manifest.json",
-        "checksum_sha256": "41be7e6d39441c47b6ea7d4b4b6d35e2fbe86279ddd207c28cfff4816e3f3249"
+        "checksum_sha256": "f396f30ab2340d2c4bbcaef769cc2764b2966e541699ee82e3dd2e0150611bce"
       }
     ],
     "third_party": []

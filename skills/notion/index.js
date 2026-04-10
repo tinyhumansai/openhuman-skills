@@ -3152,99 +3152,6 @@ var __skill_bundle = (() => {
   }
  };
 
- // skills-ts-out/core/notion/tools/summarize-pages.js
- var summarizePagesTool = {
-  name: "summarize-pages",
-  description: "AI summarization of Notion pages is now handled by the backend server. Synced page content is submitted to the server which runs summarization.",
-  input_schema: { type: "object", properties: {} },
-  execute() {
-   return JSON.stringify({
-    success: false,
-    error: "AI summarization has been moved to the backend server. Page content is synced and summaries are generated server-side."
-   });
-  }
- };
-
- // skills-ts-out/core/notion/tools/sync-now.js
- var syncNowTool = {
-  name: "sync-now",
-  description: "Trigger an immediate Notion sync to refresh local data. Returns sync results including counts of synced pages and databases.",
-  input_schema: { type: "object", properties: {} },
-  execute() {
-   try {
-    const s = getNotionSkillState2();
-    if (!oauth.getCredential()) {
-     return JSON.stringify({
-      success: false,
-      error: "Notion not connected. Complete OAuth setup first."
-     });
-    }
-    if (s.syncStatus.syncInProgress) {
-     return JSON.stringify({
-      success: false,
-      message: "Sync already in progress",
-      sync_in_progress: true,
-      last_sync_time: s.syncStatus.lastSyncTime ? new Date(s.syncStatus.lastSyncTime).toISOString() : null
-     });
-    }
-    performSync();
-    return JSON.stringify({
-     success: !s.syncStatus.lastSyncError,
-     duration_ms: s.syncStatus.lastSyncDurationMs,
-     last_sync_time: s.syncStatus.lastSyncTime ? new Date(s.syncStatus.lastSyncTime).toISOString() : null,
-     error: s.syncStatus.lastSyncError,
-     totals: {
-      pages: s.syncStatus.totalPages,
-      databases: s.syncStatus.totalDatabases,
-      pages_with_content: s.syncStatus.pagesWithContent
-     }
-    });
-   } catch (e) {
-    return JSON.stringify({ success: false, error: e instanceof Error ? e.message : String(e) });
-   }
-  }
- };
-
- // skills-ts-out/core/notion/tools/sync-status.js
- var syncStatusTool = {
-  name: "sync-status",
-  description: "Get the current Notion sync status including last sync time, total synced pages/databases, sync progress, and any errors.",
-  input_schema: { type: "object", properties: {} },
-  execute() {
-   try {
-    const s = getNotionSkillState2();
-    return JSON.stringify({
-     connected: !!oauth.getCredential(),
-     workspace_name: s.config.workspaceName || null,
-     sync_in_progress: s.syncStatus.syncInProgress,
-     sync_phase: s.syncStatus.syncPhase,
-     sync_progress: s.syncStatus.syncProgress,
-     sync_message: s.syncStatus.syncMessage,
-     last_sync_time: s.syncStatus.lastSyncTime ? new Date(s.syncStatus.lastSyncTime).toISOString() : null,
-     next_sync_time: s.syncStatus.nextSyncTime ? new Date(s.syncStatus.nextSyncTime).toISOString() : null,
-     last_sync_duration_ms: s.syncStatus.lastSyncDurationMs,
-     last_sync_error: s.syncStatus.lastSyncError,
-     totals: {
-      pages: s.syncStatus.totalPages,
-      databases: s.syncStatus.totalDatabases,
-      database_rows: s.syncStatus.totalDatabaseRows,
-      pages_with_content: s.syncStatus.pagesWithContent,
-      pages_with_summary: s.syncStatus.pagesWithSummary,
-      summaries_total: s.syncStatus.summariesTotal,
-      summaries_pending: s.syncStatus.summariesPending
-     },
-     config: {
-      sync_interval_minutes: s.config.syncIntervalMinutes,
-      content_sync_enabled: s.config.contentSyncEnabled,
-      max_pages_per_content_sync: s.config.maxPagesPerContentSync
-     }
-    });
-   } catch (e) {
-    return JSON.stringify({ error: e instanceof Error ? e.message : String(e) });
-   }
-  }
- };
-
  // skills-ts-out/core/notion/tools/update-block.js
  var updateBlockTool = {
   name: "update-block",
@@ -3464,9 +3371,6 @@ var __skill_bundle = (() => {
   listUsersTool,
   queryDatabaseTool,
   searchTool,
-  summarizePagesTool,
-  syncNowTool,
-  syncStatusTool,
   updateBlockTool,
   updateDatabaseTool,
   updatePageTool
