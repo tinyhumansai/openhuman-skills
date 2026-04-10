@@ -198,17 +198,16 @@ export function start(args?: SkillStartArgs): SkillStartResult {
   console.log('[gmail] start() called');
   const s = getGmailSkillState();
 
-  // Pick up oauth metadata if present (credentialId / userEmail). Always
-  // overwrite userEmail when the OAuth bag carries an accountLabel so a
-  // re-auth against a different Google account replaces the stored email
-  // instead of leaking the previous account's identity.
+  // Stash incoming oauth metadata in temporaries — we only commit them to
+  // s.config (and persist via state.set) *after* any requested validation
+  // succeeds, so a rejected OAuth credential never overwrites the previously
+  // stored account identity.
+  let tempOauthCredentialId: string | undefined;
+  let tempOauthAccountLabel: string | undefined;
   if (args && args.oauth) {
     const oauthCred = args.oauth as { credentialId?: string; accountLabel?: string };
-    if (oauthCred.credentialId) s.config.credentialId = oauthCred.credentialId;
-    if (oauthCred.accountLabel) {
-      s.config.userEmail = oauthCred.accountLabel;
-    }
-    state.set('config', s.config);
+    tempOauthCredentialId = oauthCred.credentialId;
+    tempOauthAccountLabel = oauthCred.accountLabel;
   }
 
   // Validation phase — only when host explicitly asks (auth/oauth handshake).
@@ -254,6 +253,18 @@ export function start(args?: SkillStartArgs): SkillStartResult {
       console.log('[gmail] start(): validation failed');
       return validationError;
     }
+  }
+
+  // Validation passed (or wasn't requested) — now it's safe to commit the
+  // oauth metadata onto s.config and persist it. We do this *after* the
+  // validation block so a rejected credential is never written to disk.
+  if (tempOauthCredentialId || tempOauthAccountLabel) {
+    if (tempOauthCredentialId) s.config.credentialId = tempOauthCredentialId;
+    if (tempOauthAccountLabel) s.config.userEmail = tempOauthAccountLabel;
+    state.set('config', s.config);
+  } else if (args && args.validate) {
+    // Direct-token validators (self_hosted / text) update s.config.userEmail
+    // in-place on success, so persist whatever they discovered.
     state.set('config', s.config);
   }
 

@@ -235,18 +235,33 @@ function validateSetupFlow(skillDir, manifest) {
  * Skills with auth in their manifest must export a `start` function — that's
  * the single entry point the Rust runtime calls on instance spawn and after
  * `oauth/complete` / `auth/complete`. We treat any exported function literally
- * named `start` (or a re-export from `./start`) as satisfying the contract.
+ * named `start` (or a re-export from `./start` *in the entry file*) as
+ * satisfying the contract. A private helper file that imports from `./start`
+ * does not count, since the host only calls into the entry module.
  */
-function hasStartLifecycle(allContent) {
+function hasStartLifecycle(allContent, skillDir) {
+  // 1. Any source file may define `export function start(...)` directly.
   if (/export\s+function\s+start\s*\(/.test(allContent)) return true;
-  if (/export\s*\{[^}]*\bstart\b[^}]*\}/.test(allContent)) return true;
-  // Re-exports / imports from `./start` only count when they actually
-  // mention `start` (as a named specifier or default import) or wildcard
-  // re-export everything from that module.
-  if (/import\s+(?:start\b|\{[^}]*\bstart\b[^}]*\})\s+from\s+['"]\.\/start['"]/.test(allContent))
-    return true;
-  if (/export\s*\{[^}]*\bstart\b[^}]*\}\s*from\s+['"]\.\/start['"]/.test(allContent)) return true;
-  if (/export\s*\*\s*from\s+['"]\.\/start['"]/.test(allContent)) return true;
+  // 2. `export { start }` (with no `from`) re-exports a local binding —
+  // also fine, regardless of which file declares it.
+  if (/export\s*\{[^}]*\bstart\b[^}]*\}(?!\s*from)/.test(allContent)) return true;
+
+  // 3. Re-exports / imports from `./start` only count when the *entry file*
+  // pulls them in — otherwise a private helper that happens to import from
+  // `./start` would falsely satisfy the contract even though the runtime
+  // never sees that helper.
+  if (skillDir) {
+    const entryCandidates = ['index.ts', 'index.tsx', 'index.js', 'index.jsx'];
+    for (const name of entryCandidates) {
+      const entryPath = join(srcDir, skillDir, name);
+      if (!existsSync(entryPath)) continue;
+      const entry = readFileSync(entryPath, 'utf-8');
+      if (/import\s+(?:start\b|\{[^}]*\bstart\b[^}]*\})\s+from\s+['"]\.\/start['"]/.test(entry))
+        return true;
+      if (/export\s*\{[^}]*\bstart\b[^}]*\}\s*from\s+['"]\.\/start['"]/.test(entry)) return true;
+      if (/export\s*\*\s*from\s+['"]\.\/start['"]/.test(entry)) return true;
+    }
+  }
   return false;
 }
 
@@ -289,7 +304,7 @@ function validateOAuthSetup(skillDir, manifest, allContent) {
 
   // Skill must export start() — runtime calls it after oauth/complete with
   // { oauth, validate: true } so the skill can validate the credential.
-  if (!hasStartLifecycle(allContent)) {
+  if (!hasStartLifecycle(allContent, skillDir)) {
     error(
       skillDir,
       'setup.oauth is present but skill does not export a `start` function (the runtime calls start({ oauth, validate: true }) after oauth/complete)',
@@ -330,7 +345,7 @@ function validateAdvancedAuthSetup(skillDir, manifest, allContent) {
 
   // Skill must export start() — the Rust runtime calls it after both
   // oauth/complete and auth/complete with { oauth, auth, validate: true }.
-  if (!hasStartLifecycle(allContent)) {
+  if (!hasStartLifecycle(allContent, skillDir)) {
     error(
       skillDir,
       'setup.auth is present but skill does not export a `start` function (the runtime calls start({ oauth, auth, validate: true }) after auth/complete)',

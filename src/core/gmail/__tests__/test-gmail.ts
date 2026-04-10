@@ -53,7 +53,9 @@ describe('Lifecycle', () => {
   afterAll(async () => {
     try {
       await stopSkill(SKILL_ID);
-    } catch {}
+    } catch {
+      // ignore errors during cleanup
+    }
   });
 });
 
@@ -65,7 +67,9 @@ describe('Setup flow', () => {
   beforeAll(async () => {
     try {
       await stopSkill(SKILL_ID);
-    } catch {}
+    } catch {
+      // ignore errors during cleanup
+    }
     await startSkill(SKILL_ID);
   });
 
@@ -80,7 +84,9 @@ describe('Setup flow', () => {
   afterAll(async () => {
     try {
       await stopSkill(SKILL_ID);
-    } catch {}
+    } catch {
+      // ignore errors during cleanup
+    }
   });
 });
 
@@ -92,7 +98,9 @@ describe('Tools - without credentials', () => {
   beforeAll(async () => {
     try {
       await stopSkill(SKILL_ID);
-    } catch {}
+    } catch {
+      // ignore errors during cleanup
+    }
     await startSkill(SKILL_ID);
   });
 
@@ -137,7 +145,9 @@ describe('Tools - without credentials', () => {
   afterAll(async () => {
     try {
       await stopSkill(SKILL_ID);
-    } catch {}
+    } catch {
+      // ignore errors during cleanup
+    }
   });
 });
 

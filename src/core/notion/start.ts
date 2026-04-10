@@ -128,27 +128,29 @@ function validateNotionAuthDirect(auth: {
   }
 }
 
+/** Auth modes Notion explicitly supports — see manifest.json `setup.auth.modes`. */
+const SUPPORTED_AUTH_MODES = new Set(['managed', 'self_hosted']);
+
 export function start(args?: SkillStartArgs): SkillStartResult {
   const s = getNotionSkillState();
 
-  // Pick up account label from the freshly delivered credential bag if we
-  // didn't have it stashed already (e.g. first time after OAuth handoff).
+  // Stash incoming oauth metadata in temporaries — we only commit them to
+  // s.config (and persist via state.set) *after* any requested validation
+  // succeeds, so a rejected OAuth credential never overwrites the previously
+  // stored workspace identity.
+  let tempOauthCredentialId: string | undefined;
+  let tempOauthAccountLabel: string | undefined;
   if (args && args.oauth) {
     const oauthCred = args.oauth as { credentialId?: string; accountLabel?: string };
-    if (oauthCred.credentialId) s.config.credentialId = oauthCred.credentialId;
-    // Always overwrite — re-auth against a different workspace must replace
-    // the stored label rather than keep the previous account's name.
-    if (oauthCred.accountLabel) {
-      s.config.workspaceName = oauthCred.accountLabel;
-    }
-    state.set('config', s.config);
+    tempOauthCredentialId = oauthCred.credentialId;
+    tempOauthAccountLabel = oauthCred.accountLabel;
   }
 
   // Validation phase — only when host explicitly asks (auth/oauth handshake).
-  // We validate OAuth and direct-token (self_hosted / text) creds the same
-  // way: hit the Notion API and confirm the credential is accepted. If
-  // validation fails we bail out *before* registering cron so a bad
-  // credential never schedules background work.
+  // We validate OAuth and direct-token (self_hosted) creds the same way:
+  // hit the Notion API and confirm the credential is accepted. If validation
+  // fails we bail out *before* registering cron so a bad credential never
+  // schedules background work.
   //
   // Auth `mode === 'managed'` is the OAuth handoff arriving via auth/complete
   // — its credentials live in the `oauth` bridge by the time start() runs,
@@ -158,12 +160,33 @@ export function start(args?: SkillStartArgs): SkillStartResult {
       | { mode?: string; credentials?: Record<string, unknown> }
       | null
       | undefined;
-    const validatesViaProxy = !!args.oauth || !auth || auth.mode === 'managed';
 
     let validationError;
-    if (auth && auth.mode && auth.mode !== 'managed') {
-      validationError = validateNotionAuthDirect(auth);
-    } else if (validatesViaProxy) {
+    if (auth) {
+      // `auth` was provided — its mode dictates the validator. Reject any
+      // mode that isn't on the supported list (or is missing entirely)
+      // before scheduling work, so unknown modes can't slip past validation.
+      if (!auth.mode || !SUPPORTED_AUTH_MODES.has(auth.mode)) {
+        validationError = {
+          status: 'error' as const,
+          errors: [
+            {
+              field: 'mode',
+              message: auth.mode
+                ? `Unsupported auth mode: ${auth.mode}`
+                : 'Missing auth mode — expected managed or self_hosted.',
+            },
+          ],
+        };
+      } else if (auth.mode === 'managed') {
+        validationError = validateNotionOAuth();
+      } else {
+        // self_hosted (the only other supported mode at present)
+        validationError = validateNotionAuthDirect(auth);
+      }
+    } else if (args.oauth) {
+      // Pure oauth/complete handoff — no `auth` bag, credential lives in
+      // the oauth bridge.
       validationError = validateNotionOAuth();
     }
 
@@ -171,6 +194,18 @@ export function start(args?: SkillStartArgs): SkillStartResult {
       console.log('[notion] start(): validation failed');
       return validationError;
     }
+  }
+
+  // Validation passed (or wasn't requested) — now it's safe to commit the
+  // oauth metadata onto s.config and persist it. We do this *after* the
+  // validation block so a rejected credential is never written to disk.
+  if (tempOauthCredentialId || tempOauthAccountLabel) {
+    if (tempOauthCredentialId) s.config.credentialId = tempOauthCredentialId;
+    if (tempOauthAccountLabel) s.config.workspaceName = tempOauthAccountLabel;
+    state.set('config', s.config);
+  } else if (args && args.validate) {
+    // Direct-token validators may have stashed a workspace name discovered
+    // during validation — persist whatever they found.
     state.set('config', s.config);
   }
 
