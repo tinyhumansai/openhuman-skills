@@ -15,6 +15,7 @@
 //   3. registering the periodic sync cron
 //   4. publishing connection state to the host
 
+import { notionApi } from './api/index';
 import { isNotionConnected } from './helpers';
 import { publishState } from './publish-state';
 import { getNotionSkillState } from './state';
@@ -29,14 +30,43 @@ export type StartResult =
   | { status: 'complete'; message?: string }
   | { status: 'error'; errors: Array<{ field: string; message: string }> };
 
-// Hit the Notion API with the supplied auth credentials and confirm they work.
-// Returns null on success (and stashes the discovered workspace name into
-// state); returns a populated StartResult on failure.
-function validateNotionAuth(auth: { mode?: string; credentials?: Record<string, unknown> }):
+// Validate the OAuth credential by hitting the Notion API through the proxy
+// (`oauth.fetch`, exposed via notionApi). The proxy uses whatever credential
+// the runtime currently has injected into the `oauth` bridge — that's the
+// fresh credential the host injected before calling start().
+function validateNotionOAuth():
   | { status: 'error'; errors: Array<{ field: string; message: string }> }
   | null {
-  if (auth.mode === 'managed') return null; // OAuth flow already vouched for the token
+  try {
+    const user = notionApi.getUser('me') as Record<string, unknown>;
+    // Best-effort: stash workspace/user name from the bot user record
+    const name = user.name as string | undefined;
+    if (name && !getNotionSkillState().config.workspaceName) {
+      getNotionSkillState().config.workspaceName = name;
+    }
+    return null;
+  } catch (err) {
+    return {
+      status: 'error',
+      errors: [
+        {
+          field: 'oauth',
+          message: `Notion OAuth credential rejected by API: ${String(err)}`,
+        },
+      ],
+    };
+  }
+}
 
+// Hit the Notion API directly with the token from a self_hosted/text auth
+// credential. Returns null on success (and stashes the discovered workspace
+// name into state); returns a populated StartResult on failure.
+function validateNotionAuthDirect(auth: {
+  mode?: string;
+  credentials?: Record<string, unknown>;
+}):
+  | { status: 'error'; errors: Array<{ field: string; message: string }> }
+  | null {
   const creds = auth.credentials || {};
   const token = (creds.api_token || creds.content || creds.access_token) as string | undefined;
   if (!token) {
@@ -117,13 +147,29 @@ export function start(args?: NotionStartArgs): StartResult {
     state.set('config', s.config);
   }
 
-  // Validation phase — only when host explicitly asks (auth handshake).
-  // If validation fails we bail out *before* registering cron so a bad
+  // Validation phase — only when host explicitly asks (auth/oauth handshake).
+  // We validate OAuth and direct-token (self_hosted / text) creds the same
+  // way: hit the Notion API and confirm the credential is accepted. If
+  // validation fails we bail out *before* registering cron so a bad
   // credential never schedules background work.
-  if (args && args.validate && args.auth) {
-    const validationError = validateNotionAuth(
-      args.auth as { mode?: string; credentials?: Record<string, unknown> }
-    );
+  //
+  // Auth `mode === 'managed'` is the OAuth handoff arriving via auth/complete
+  // — its credentials live in the `oauth` bridge by the time start() runs,
+  // so it goes through the OAuth validator just like a pure oauth/complete.
+  if (args && args.validate) {
+    const auth = args.auth as
+      | { mode?: string; credentials?: Record<string, unknown> }
+      | null
+      | undefined;
+    const validatesViaProxy = !!args.oauth || !auth || auth.mode === 'managed';
+
+    let validationError;
+    if (auth && auth.mode && auth.mode !== 'managed') {
+      validationError = validateNotionAuthDirect(auth);
+    } else if (validatesViaProxy) {
+      validationError = validateNotionOAuth();
+    }
+
     if (validationError) {
       console.log('[notion] start(): validation failed');
       return validationError;

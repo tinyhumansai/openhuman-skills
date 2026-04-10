@@ -15,6 +15,7 @@
 //   3. registering the periodic sync cron (when sync is enabled)
 //   4. publishing connection state to the host
 
+import { loadGmailProfile } from './api/helpers';
 import { isGmailConnected } from './api/index';
 import { publishSkillState } from './publish-state';
 import { getGmailSkillState } from './state';
@@ -182,14 +183,27 @@ function validateGmailText(creds: Record<string, unknown>):
   }
 }
 
-function validateGmailAuth(auth: { mode?: string; credentials?: Record<string, unknown> }):
+// Validate the OAuth credential by hitting the Gmail API through the proxy
+// (`oauth.fetch`, exposed via gmailFetch / loadGmailProfile). The proxy uses
+// whatever credential the runtime currently has injected into the `oauth`
+// bridge — that's the fresh credential the host injected before calling start().
+function validateGmailOAuth():
   | { status: 'error'; errors: Array<{ field: string; message: string }> }
   | null {
-  if (auth.mode === 'managed') return null; // OAuth flow already vouched for the token
-  const creds = auth.credentials || {};
-  if (auth.mode === 'self_hosted') return validateGmailSelfHosted(creds);
-  if (auth.mode === 'text') return validateGmailText(creds);
-  return null;
+  try {
+    loadGmailProfile();
+    return null;
+  } catch (err) {
+    return {
+      status: 'error',
+      errors: [
+        {
+          field: 'oauth',
+          message: `Gmail OAuth credential rejected by API: ${String(err)}`,
+        },
+      ],
+    };
+  }
 }
 
 export function start(args?: GmailStartArgs): StartResult {
@@ -206,13 +220,30 @@ export function start(args?: GmailStartArgs): StartResult {
     state.set('config', s.config);
   }
 
-  // Validation phase — only when host explicitly asks (auth handshake).
-  // If validation fails we bail out *before* registering cron so a bad
+  // Validation phase — only when host explicitly asks (auth/oauth handshake).
+  // We validate OAuth and direct-token (self_hosted / text) creds the same
+  // way: hit the Gmail API and confirm the credential is accepted. If
+  // validation fails we bail out *before* registering cron so a bad
   // credential never schedules background work.
-  if (args && args.validate && args.auth) {
-    const validationError = validateGmailAuth(
-      args.auth as { mode?: string; credentials?: Record<string, unknown> }
-    );
+  //
+  // Auth `mode === 'managed'` is the OAuth handoff arriving via auth/complete
+  // — its credentials live in the `oauth` bridge by the time start() runs,
+  // so it goes through the OAuth validator just like a pure oauth/complete.
+  if (args && args.validate) {
+    const auth = args.auth as
+      | { mode?: string; credentials?: Record<string, unknown> }
+      | null
+      | undefined;
+
+    let validationError;
+    if (auth && auth.mode === 'self_hosted') {
+      validationError = validateGmailSelfHosted(auth.credentials || {});
+    } else if (auth && auth.mode === 'text') {
+      validationError = validateGmailText(auth.credentials || {});
+    } else if (args.oauth || (auth && auth.mode === 'managed')) {
+      validationError = validateGmailOAuth();
+    }
+
     if (validationError) {
       console.log('[gmail] start(): validation failed');
       return validationError;
