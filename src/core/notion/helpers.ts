@@ -104,9 +104,15 @@ export function notionFetch<T>(
         timeout: 30,
       });
     } else {
-      // Path is relative to manifest `apiBaseUrl` (https://api.notion.com/v1), same as Gmail.
-      console.log(`[notion][fetch] ${method} ${path} (oauth.fetch proxy, attempt ${attempt})`);
-      response = oauth.fetch(path, {
+      // Server-side OAuth proxy. The backend's encrypted/by-id proxy routes
+      // forward the request path verbatim to api.notion.com — they do *not*
+      // prepend the manifest's `apiBaseUrl`. So we have to include the `/v1`
+      // prefix here. Sending `/users/me` reaches Notion as `/users/me` and
+      // gets a 400 "Invalid request URL" back, which oauth/complete then
+      // surfaces as a validation failure.
+      const proxyPath = `/v1${path}`;
+      console.log(`[notion][fetch] ${method} ${proxyPath} (oauth.fetch proxy, attempt ${attempt})`);
+      response = oauth.fetch(proxyPath, {
         method,
         headers: { 'Content-Type': 'application/json', 'Notion-Version': apiVersion },
         body: options.body ? JSON.stringify(options.body) : undefined,

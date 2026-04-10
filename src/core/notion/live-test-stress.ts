@@ -20,6 +20,7 @@ import 'dotenv/config';
 
 import {
   callToolRaw,
+  getSkillStatus,
   oauthComplete,
   setSetupComplete,
   startSkill,
@@ -206,12 +207,34 @@ async function main() {
 
   t0 = Date.now();
   process.stdout.write(`  oauthComplete... `);
-  await oauthComplete(SKILL_ID, {
+  const oauthResult = (await oauthComplete(SKILL_ID, {
     credentialId: INTEGRATION_ID,
     provider: 'notion',
     grantedScopes: [],
     clientKeyShare: CLIENT_KEY,
-  });
+  })) as { status?: string; errors?: Array<{ field: string; message: string }> };
+
+  // Inspect the validation result. The Rust host calls `start({validate:true})`
+  // inside oauth/complete and only persists credentials when validation passes;
+  // a stale credentialId or clientKeyShare comes back as `{status:'error',errors:[...]}`
+  // and silently returning OK here was the original reason this script ran the
+  // whole stress phase against an unauthenticated skill.
+  if (oauthResult && oauthResult.status === 'error') {
+    console.log(`${C.red}FAIL${C.reset} ${C.dim}${Date.now() - t0}ms${C.reset}`);
+    const errs = (oauthResult.errors || []).map(e => `${e.field}: ${e.message}`).join('\n      ');
+    console.error(
+      `\n${C.red}  oauth/complete validation failed:${C.reset}\n      ${errs}\n` +
+        `\n${C.dim}  Your NOTION_INTEGRATION_ID / NOTION_CLIENT_KEY_SHARE are likely stale.\n` +
+        `  Re-run the interactive OAuth flow to mint fresh credentials:\n` +
+        `      npx tsx src/core/notion/live-test.ts${C.reset}\n`
+    );
+    try {
+      await stopSkill(SKILL_ID);
+    } catch {
+      /* ignore */
+    }
+    process.exit(1);
+  }
   console.log(`${C.green}OK${C.reset} ${C.dim}${Date.now() - t0}ms${C.reset}`);
 
   t0 = Date.now();
@@ -221,6 +244,32 @@ async function main() {
 
   // Wait for init
   await new Promise(r => setTimeout(r, 2000));
+
+  // Verify the skill is actually authenticated before kicking off the stress
+  // phase. publishState() inside start() reports `connection_status:connected`
+  // once `oauth.getCredential()` returns a value — if we still see
+  // `disconnected` here something else cleared the credential between
+  // oauth/complete and now (e.g. a follow-up auth-error in the proxy that
+  // resets `__oauthCredential`).
+  t0 = Date.now();
+  process.stdout.write(`  Verifying connection... `);
+  const verify = await getSkillStatus(SKILL_ID);
+  const connState = (verify.state as { connection_status?: string } | undefined)?.connection_status;
+  if (connState !== 'connected') {
+    console.log(`${C.red}FAIL${C.reset} ${C.dim}${Date.now() - t0}ms${C.reset}`);
+    console.error(
+      `\n${C.red}  Skill is not connected (state.connection_status=${connState}).${C.reset}\n` +
+        `${C.dim}  oauth/complete returned OK but the credential never made it into the bridge.\n` +
+        `  Inspect the skills runtime logs for the failing API call.${C.reset}\n`
+    );
+    try {
+      await stopSkill(SKILL_ID);
+    } catch {
+      /* ignore */
+    }
+    process.exit(1);
+  }
+  console.log(`${C.green}OK${C.reset} ${C.dim}${Date.now() - t0}ms (${connState})${C.reset}`);
 
   // ── Direct Proxy Baseline ─────────────────────────────────────────────
 

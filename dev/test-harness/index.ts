@@ -25,7 +25,13 @@
 // RPC Client
 // ---------------------------------------------------------------------------
 
-const RUNTIME_URL = process.env.SKILLS_RUNTIME_URL || 'http://127.0.0.1:7788';
+// Re-evaluated on every call so callers can flip `SKILLS_RUNTIME_URL` after
+// import (e.g. live-test scripts that set it from a CLI flag). Default 7799
+// matches the port the openhuman-core skills runtime listens on
+// (`openhuman-core skills run --port 7799`).
+function runtimeUrl(): string {
+  return process.env.SKILLS_RUNTIME_URL || 'http://127.0.0.1:7799';
+}
 
 let rpcId = 0;
 
@@ -36,7 +42,7 @@ export async function rpc(method: string, params: Record<string, unknown> = {}):
   const id = ++rpcId;
   const body = JSON.stringify({ jsonrpc: '2.0', id, method, params });
 
-  const response = await fetch(`${RUNTIME_URL}/rpc`, {
+  const response = await fetch(`${runtimeUrl()}/rpc`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body,
@@ -58,7 +64,7 @@ export async function rpc(method: string, params: Record<string, unknown> = {}):
  * GET a REST endpoint on the skills runtime.
  */
 export async function httpGet(path: string): Promise<unknown> {
-  const response = await fetch(`${RUNTIME_URL}${path}`);
+  const response = await fetch(`${runtimeUrl()}${path}`);
   return response.json();
 }
 
