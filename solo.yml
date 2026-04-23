@@ -1,0 +1,13 @@
+processes:
+
+  skills-watch:
+    command: yarn watch
+
+  typecheck-watch:
+    command: yarn exec tsc --noEmit --watch --preserveWatchOutput
+
+  validate:
+    command: yarn validate
+
+  core-run:
+    command: yarn core:run
